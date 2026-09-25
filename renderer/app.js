@@ -127,12 +127,12 @@ const EF_DESC_PT = {
 // esforço com que TODA conversa nova nasce (não muda quando você mexe na barra de um painel)
 const EF_NOVO = 'xhigh';
 /* O que toda conversa NOVA do Claude e do Codex traz marcado (pedido do Homero, 15/09/2026):
-   Codex no Sol, Claude no Opus 5 SEM o 1M, os dois no Alto. Vale para aba nova, "nova
+   Codex no Sol, Claude no Opus 5.5 SEM o 1M, os dois no Alto (22/09/2026). Vale para aba nova, "nova
    conversa" e troca de motor no mesmo chat; conversa restaurada mantém o que estava salvo.
    Se o modelo sumir da lista do motor, cai no padrão dele (fillModels). */
 const PADRAO_NOVO = {
-  claude: { model: 'claude-opus-5', effort: 'high' },
-  codex: { model: 'gpt-5.6-sol', effort: 'high' },
+  claude: { model: 'claude-opus-5-5', effort: 'high' },
+  codex: { model: 'gpt-6-sol', effort: 'high' },
 };
 const modeloNovo = (eng) => (PADRAO_NOVO[eng] && PADRAO_NOVO[eng].model) || '';
 const esforcoNovo = (eng) => (PADRAO_NOVO[eng] && PADRAO_NOVO[eng].effort) || EF_NOVO;
@@ -148,18 +148,22 @@ const ENTRA_MSG = 'ATENÇÃO: esta mensagem chegou enquanto você já estava tra
   + 'Nesse caso termine primeiro e, ASSIM QUE TERMINAR, faça isto sem que eu precise repetir.\n'
   + 'Não pergunte qual eu prefiro: escolha e siga.\n\n--- o que eu pedi ---\n';
 
-const ULTRACODE_MSG = 'MODO ULTRACODE LIGADO PELO USUÁRIO: eu autorizo explicitamente, para esta e para todas as tarefas substantivas desta conversa, o uso da ferramenta Workflow (orquestração multi-agente) e de subagentes em paralelo. Busque a resposta mais completa e correta, não a mais rápida ou barata. Isso substitui qualquer regra em contrário sobre não usar workflows sem eu pedir. Continue pedindo meu aval apenas para gastar dinheiro, publicar/enviar para fora, ou apagar o que já funciona.\n\n---\n\n';
+const ULTRACODE_MSG = 'MODO ULTRACODE LIGADO PELO USUÁRIO: eu autorizo explicitamente, para esta e para todas as tarefas substantivas desta conversa, o uso da ferramenta Workflow (orquestração multi-agente) e de subagentes em paralelo. Busque a resposta mais completa e correta, não a mais rápida ou barata. Isso substitui qualquer regra em contrário sobre não usar workflows sem eu pedir. Continue pedindo meu aval apenas para gastar dinheiro, publicar/enviar para fora, ou apagar o que já funciona.\n\nMODELO POR TAREFA (ao delegar a subagentes ou workflow, passe sempre o parâmetro model conforme a tarefa, para economizar sem perder qualidade): use Haiku (model: "haiku") para triagem, classificação, roteamento e leituras/extrações curtas; Sonnet (model: "sonnet") para execução mecânica — escrever/editar código, produzir conteúdo, buscas amplas em arquivos; reserve Opus para o planejamento e as decisões difíceis (que você, o orquestrador, já faz). Nunca rode em Opus um subagente que só classifica ou lê.\n\n---\n\n';
 
 const MODELOS_CLAUDE = [
-  { id: 'claude-opus-5[1m]', nome: 'Opus 5 (1M)', desc: 'O mais forte, com memória gigante',
+  { id: 'claude-opus-5-5[1m]', nome: 'Opus 5.5 (1M)', desc: 'O mais forte de todos, com memória gigante',
     efforts: ['low','medium','high','xhigh','max'], padraoEffort: 'xhigh', padrao: true },
+  { id: 'claude-opus-5-5', nome: 'Opus 5.5', desc: 'O mais forte de todos',
+    efforts: ['low','medium','high','xhigh','max'], padraoEffort: 'xhigh' },
+  { id: 'claude-opus-5[1m]', nome: 'Opus 5 (1M)', desc: 'A geração anterior, com memória gigante',
+    efforts: ['low','medium','high','xhigh','max'], padraoEffort: 'xhigh' },
   // Fable 5.1 so existe do CLI 2.1.251 para cima. Com o CLI velho o modelo devolve erro 400
   // pedindo 'claude update' — o app copia a versao nova para o caminho fixo no arranque.
   { id: 'claude-fable-5-1[1m]', nome: 'Fable 5.1', desc: 'O mais novo, com memória gigante',
     efforts: ['low','medium','high','xhigh','max'], padraoEffort: 'xhigh' },
   { id: 'claude-fable-5', nome: 'Fable 5', desc: 'A geração anterior do Fable',
     efforts: ['low','medium','high','xhigh','max'], padraoEffort: 'xhigh' },
-  { id: 'claude-opus-5', nome: 'Opus 5', desc: 'O mais forte',
+  { id: 'claude-opus-5', nome: 'Opus 5', desc: 'A geração anterior',
     efforts: ['low','medium','high','xhigh','max'], padraoEffort: 'xhigh' },
   { id: 'claude-sonnet-5', nome: 'Sonnet 5', desc: 'Rápido e bom para o dia a dia',
     efforts: ['low','medium','high','xhigh','max'], padraoEffort: 'xhigh' },
@@ -167,6 +171,22 @@ const MODELOS_CLAUDE = [
     efforts: ['low','medium','high'], padraoEffort: 'high' },
 ];
 let MODELOS_CODEX = null;   // vem do proprio Codex
+/* O Codex manda nome e descrição em inglês ("GPT-6-Astra", "Frontier intelligence…").
+   Aqui eles viram português, igual à lista do Claude. Modelo que não estiver no mapa continua
+   aparecendo com o nome que o Codex mandou — nunca some da lista. (23/09/2026) */
+const CODEX_PT = {
+  'gpt-6-astra': { nome: 'Astra 6', desc: 'O mais forte de todos, para o trabalho mais pesado' },
+  'gpt-6-sol':   { nome: 'Sol 6',   desc: 'O cavalo de batalha: código e dia a dia' },
+  'gpt-6-luna':  { nome: 'Luna 6',  desc: 'Rápido e barato, para tarefas mais fáceis' },
+  'gpt-5.6-sol':   { nome: 'Sol 5.6',   desc: 'A geração anterior para trabalho complexo' },
+  'gpt-5.6-terra': { nome: 'Terra 5.6', desc: 'A geração anterior, equilibrada' },
+  'gpt-5.6-luna':  { nome: 'Luna 5.6',  desc: 'A geração anterior, rápida e econômica' },
+  'gpt-5.5':       { nome: 'GPT-5.5',   desc: 'Modelo antigo de código' },
+};
+const traduzCodex = (ms) => (ms || []).map((m) => {
+  const pt = CODEX_PT[m.id];
+  return pt ? { ...m, nome: pt.nome, desc: pt.desc } : m;
+});
 /* O "Astra por créditos" (chave da API da OpenAI) saiu da tela em 11/09/2026. Ninguém mais
    escolhe um modelo 'api:…', então estas duas ficam só para um painel antigo que ainda o traga
    salvo não mandar o prefixo para o Codex. */
@@ -3556,7 +3576,7 @@ async function send(P) {
   // Máximo no Claude = ultracode: uma vez por processo, a liberação vai grudada na mensagem
   if (P.engine === 'claude' && esforcoDe(P) === 'max' && !P.ultraAvisado) {
     envio = ULTRACODE_MSG + envio; P.ultraAvisado = true;
-    avisoEnvio(P, 'Esforço máximo: liberei os workflows (vários agentes em paralelo).');
+    avisoEnvio(P, 'Esforço máximo: liberei os workflows (vários agentes em paralelo) e o modelo por tarefa (Haiku triagem · Sonnet execução · Opus planejamento).');
   }
   try {
     if (escolhasDoEnvio) escolhasDoEnvio.phase = 'sending';
@@ -4758,7 +4778,7 @@ async function menuModelos(P) {
   };
   pintar();
   if (P.engine === 'codex' && !MODELOS_CODEX) {
-    MODELOS_CODEX = (await window.api.codexModels()) || null;
+    MODELOS_CODEX = traduzCodex(await window.api.codexModels()) || null;
     if (MODELOS_CODEX && MODELOS_CODEX.length) { fillModels(P); pintar(); }
   }
 }
@@ -9657,7 +9677,7 @@ document.addEventListener('keydown', (e) => {
     naPintar();
   }).catch(() => {});
   if (!noTelefone) window.api.codexModels().then(ms => {
-    if (ms && ms.length) { MODELOS_CODEX = ms; for (const P of panes.values()) if (P.engine === 'codex') fillModels(P); }
+    if (ms && ms.length) { MODELOS_CODEX = traduzCodex(ms); for (const P of panes.values()) if (P.engine === 'codex') fillModels(P); }
   });
   // icones da tela de conversa nova
   for (const eng of MOTORES_VISIVEIS) $('#naIc' + CAIXA_MOTOR[eng]).innerHTML = svgMotor(eng);

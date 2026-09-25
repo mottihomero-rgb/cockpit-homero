@@ -1,5 +1,5 @@
 'use strict';
-/* Toda conversa nova: Codex no Sol, Claude no Opus 5 sem o 1M, os dois no Alto
+/* Toda conversa nova: Codex no Sol, Claude no Opus 5.5 sem o 1M, os dois no Alto
    (pedido do Homero em 15/09/2026). Este teste segura a regra e confere que o modelo do
    Claude existe na lista do app, senao o fillModels cairia calado em outro. */
 const test = require('node:test');
@@ -20,17 +20,17 @@ vm.runInNewContext(trecho('const EF_NOVO', "PADRAO_NOVO[eng].effort) || EF_NOVO;
   + '\nthis.r = { PADRAO_NOVO, MODELOS_CLAUDE, modeloNovo, esforcoNovo };', ctx);
 const { PADRAO_NOVO, MODELOS_CLAUDE, modeloNovo, esforcoNovo } = ctx.r;
 
-test('Codex nasce no Sol, no Alto', () => {
-  assert.equal(modeloNovo('codex'), 'gpt-5.6-sol');
+test('Codex nasce no Sol 6, no Alto', () => {
+  assert.equal(modeloNovo('codex'), 'gpt-6-sol');
   assert.equal(esforcoNovo('codex'), 'high');
 });
 
-test('Claude nasce no Opus 5 sem o 1M, no Alto, e o modelo existe na lista', () => {
-  assert.equal(modeloNovo('claude'), 'claude-opus-5');
+test('Claude nasce no Opus 5.5 sem o 1M, no Alto, e o modelo existe na lista', () => {
+  assert.equal(modeloNovo('claude'), 'claude-opus-5-5');
   assert.doesNotMatch(modeloNovo('claude'), /\[1m\]/);
   assert.equal(esforcoNovo('claude'), 'high');
   const m = MODELOS_CLAUDE.find((x) => x.id === PADRAO_NOVO.claude.model);
-  assert.ok(m, 'Opus 5 sumiu da lista do Claude');
+  assert.ok(m, 'Opus 5.5 sumiu da lista do Claude');
   assert.ok(m.efforts.includes('high'));
 });
 

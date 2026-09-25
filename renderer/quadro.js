@@ -104,6 +104,9 @@
     enviado: false,          // o desenho de agora ja foi mandado pro chat?
     tema: {},
     rascunho: { timer: null, ultimo: '', ultimoEnviadoEm: 0, enviadoEm: 0, gravando: false, promessa: null, sujo: false },
+    /* desenho que o Claude grava pela skill planejar-sistema: 'visto' e o carimbo ja carregado,
+       'cena' e a foto do jeito que chegou (se ele mexer, o Claude nao passa mais por cima) */
+    claude: { visto: 0, cena: '', timer: null },
     setasTimer: null,        // junta uma rajada de setas do teclado num passo so
     ultimoToque: { t: 0, x: 0, y: 0 },
     limparArmado: 0,
@@ -1629,6 +1632,23 @@
     return Q.rascunho.promessa;
   }
 
+  function desenhoDoClaudeIntocado() {
+    return !!Q.claude.visto && JSON.stringify(limparCena(Q.cena)) === Q.claude.cena;
+  }
+
+  /* enquanto o quadro esta aberto, olha o rascunho a cada 2 s: se o Claude gravou um desenho
+     novo e ele nao mexeu no anterior, o quadro se redesenha sozinho (conversa ao vivo) */
+  function vigiarClaude() {
+    clearTimeout(Q.claude.timer);
+    const abertura = Q.abertura;
+    const volta = () => {
+      if (!Q.aberto || Q.abertura !== abertura) return;   // fechou: o vigia morre junto
+      if (!Q.gesto && !Q.editando && (cenaVazia() || desenhoDoClaudeIntocado())) recuperarRascunho();
+      Q.claude.timer = setTimeout(volta, 2000);
+    };
+    Q.claude.timer = setTimeout(volta, 2000);
+  }
+
   /* volta direto, sem perguntar: um dialogo "quer recuperar?" e o tipo de parada que ele odeia */
   async function recuperarRascunho() {
     if (!temApi('quadroRascunhoLer')) return;
@@ -1637,8 +1657,11 @@
     try { r = await window.api.quadroRascunhoLer(); } catch (_) { return; }
     // A leitura no telefone pode demorar: ele pode ter desenhado, limpado ou
     // fechado o quadro nesse tempo. O rascunho antigo não passa por cima disso.
-    if (!Q.aberto || Q.abertura !== abertura || Q.revisao !== revisao || !cenaVazia()) return;
+    if (!Q.aberto || Q.abertura !== abertura || Q.revisao !== revisao || !(cenaVazia() || desenhoDoClaudeIntocado())) return;
     if (!r || !r.cena) return;
+    const doClaude = Number(r.cena.doClaude) || 0;
+    // com o desenho do Claude na tela, so troca se o arquivo tiver um desenho NOVO dele
+    if (!cenaVazia() && (!doClaude || doClaude === Q.claude.visto)) return;
     /* desenho que ja foi mandado pro chat nao ressuscita: dias depois ele voltaria na tela
        e seria mandado de novo, colado no fluxo novo (o Claude receberia A+B como um so) */
     if (r.enviadoEm) return;
@@ -1651,7 +1674,11 @@
     Q.rascunho.ultimo = JSON.stringify(limparCena(Q.cena));
     iniciarPilha();
     ajustarNaTela();
-    toast('Voltei o seu último rascunho.', 'Começar do zero', () => limpar(true));
+    if (doClaude) {
+      Q.claude.visto = doClaude;
+      Q.claude.cena = JSON.stringify(limparCena(Q.cena));
+      toast('O Claude atualizou o desenho.', 'Começar do zero', () => limpar(true));
+    } else toast('Voltei o seu último rascunho.', 'Começar do zero', () => limpar(true));
   }
 
   /* ---------------- exportar PNG ---------------- */
@@ -2179,10 +2206,11 @@
     document.addEventListener('keydown', aoTeclar, true);
     document.addEventListener('keyup', aoSoltarTecla, true);
     redimensionar();
-    if (cenaVazia()) {
-      Q.cam = { x: -Q.larg / 2, y: -Q.alt / 2, z: 1 };
+    if (cenaVazia() || desenhoDoClaudeIntocado()) {
+      if (cenaVazia()) Q.cam = { x: -Q.larg / 2, y: -Q.alt / 2, z: 1 };
       await recuperarRascunho();
     }
+    vigiarClaude();
     if (!Q.aberto || Q.abertura !== abertura) return;
     if (!Q.pilha.passos.length) iniciarPilha();
     setFerramenta(Q.ferramenta || 'selecionar');
@@ -2199,6 +2227,7 @@
     if (el) el.classList.add('hidden');
     document.removeEventListener('keydown', aoTeclar, true);
     document.removeEventListener('keyup', aoSoltarTecla, true);
+    clearTimeout(Q.claude.timer);
     clearTimeout(Q.rascunho.timer);
     /* empurrar a peca com as setinhas e fechar deixava a cena mexida e a pilha desatualizada:
        o proximo ⌘Z pulava um passo. Descarrega antes de matar o relogio. */

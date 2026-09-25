@@ -3964,6 +3964,21 @@ handle('quadro:rascunhoGravar', (_e, { cena, enviadoEm } = {}) => {
   } catch (e) { return { error: e.message }; }
 });
 
+/* pedido do Claude pra abrir o quadro: a skill planejar-sistema grava o desenho no rascunho e
+   cria o arquivo "pedido-abrir". Aqui o app abre o quadro no chat da frente e apaga o pedido.
+   Sem janela nenhuma aberta, o pedido fica esperando a janela voltar. */
+function vigiarPedidoDoQuadro() {
+  setInterval(() => {
+  try {
+    const pedido = path.join(PASTA_QUADROS(), 'pedido-abrir');
+    if (!fs.existsSync(pedido) || !win || win.isDestroyed()) return;
+    fs.unlinkSync(pedido);
+    win.webContents.send('menu', 'quadro');
+    anota('quadro aberto a pedido do Claude', pedido);
+  } catch {}
+  }, 1500);
+}
+
 handle('quadro:rascunhoLer', () => {
   try {
     const arq = path.join(PASTA_QUADROS(), 'rascunho.json');
@@ -6195,7 +6210,7 @@ ipcMain.handle('inbox:consumir', (_e, { arquivo, apagar } = {}) => {
 });
 ipcMain.handle('inbox:pasta', () => PASTA_INBOX());
 
-app.whenReady().then(() => { anota('app iniciou'); usarClaudeDeCaminhoFixo(); menu(); createWindow(); montarIndiceDeFundo();
+app.whenReady().then(() => { anota('app iniciou'); usarClaudeDeCaminhoFixo(); menu(); createWindow(); vigiarPedidoDoQuadro(); montarIndiceDeFundo();
   limparColadosAntigos();
   /* Atualiza os motores sozinho: 60s depois de abrir (para nao brigar com o arranque) e de
      6 em 6 horas, para quem deixa o Cockpit aberto a semana inteira. */

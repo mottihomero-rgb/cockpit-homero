@@ -84,6 +84,10 @@ function contextoContaAcao() {
   const ctx = {
     console, panes: new Map(), window: { api: {} },
     agTrabalhando: () => false, nomeDoMotor: () => 'Codex',
+    // R3-004 fez contaAcao ignorar painel da VPS ao contar ocupados/desligar, igual
+    // trocarParaConta ja fazia (ver R2-020 acima); sem este global o teste quebrava so por
+    // faltar o stub, nao porque o comportamento afirmado ficou errado
+    NA_VPS: (cwd) => /^vps:/i.test(String(cwd || '')),
     document: { body: { classList: { remove: () => {} } } },
   };
   vm.createContext(ctx);

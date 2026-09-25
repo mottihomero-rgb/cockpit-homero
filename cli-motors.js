@@ -307,13 +307,16 @@ function eventoAntigravity(st, ev) {
 }
 function parar(paneId, manter) {
   const st = paineis.get(paneId);
-  if (!st) return;
+  if (!st) return Promise.resolve();
   const proc = st.proc;
   st.proc = null;
   fecharFala(st);
-  if (proc) matarGrupo(proc);
+  // R3-009: devolve a Promise do matarGrupo (so' resolve quando o processo morre de
+  // verdade), pra shutdown() esperar em vez de deixar o Electron fechar antes da hora
+  const espera = proc ? matarGrupo(proc) : Promise.resolve();
   if (!manter) paineis.delete(paneId);
   else if (proc) emit(paneId, 'turn-end', {});
+  return espera;
 }
 function start(paneId, opts) {
   if (String(opts.cwd || '').startsWith('vps:')) throw new Error('O Gemini deste painel roda somente em uma pasta do Mac.');
@@ -469,6 +472,11 @@ function historico(file) {
 return { start, enviar, parar, sessoes, historico,
   vivo: paneId => paineis.has(paneId),
   trabalhando: () => [...paineis.values()].filter(st => !!st.proc).length,
-  comandos: () => comandosDoCli('gemini'), fechar: () => { for (const id of [...paineis.keys()]) parar(id); } };
+  // R3-010: pane:estado (reconexao do celular) so enxergava Claude/Codex; sem isto um
+  // turno de Gemini em andamento era relido como "terminou" ao reconectar
+  ocupado: paneId => !!paineis.get(paneId)?.proc,
+  comandos: () => comandosDoCli('gemini'),
+  // R3-009: shutdown() precisa esperar o kill de verdade, nao so' disparar e seguir
+  fechar: () => Promise.all([...paineis.keys()].map(id => parar(id))) };
 }
 module.exports = { criarCli };

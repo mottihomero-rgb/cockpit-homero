@@ -163,6 +163,14 @@ function loadConfig() {
    gravacao — e o savePanes grava a cada chat aberto, fechado ou redimensionado — custaria
    mais caro do que o problema que estamos evitando. So o caminho da perda (raro) le o disco. */
 let abasNoDisco = -1;
+/* R3-003: saveConfig roda em ~37 pontos do app.js (trocar de aba, redimensionar coluna, mudar
+   modelo...) e antes chamava podarPorPasta(cfg) TODA VEZ — uma rodada de fs.existsSync sincrono
+   por chave de cfg.porPasta, no processo principal que atende todos os paineis. Com centenas de
+   chaves acumuladas em meses de uso, isso travava a interface inteira a cada clique. Agora a
+   poda so roda a cada PODA_A_CADA gravacoes; a limpeza em si (podarPorPasta) continua igual, so
+   fica mais rara — efeito cosmetico, ja que so remove entrada ausente ha 3 dias seguidos. */
+const PODA_A_CADA = 20;
+let saveConfigCount = 0;
 const listaDeAbas = (d) => (Array.isArray(d && d.abas) ? d.abas : []);
 /* R2-040: cfg.porPasta guarda modelo/esforco por PASTA COMPLETA e ninguem nunca podava — o
    proprio jeito dele trabalhar (CLAUDE.md: "demanda nova = subpasta do cliente") cria uma
@@ -187,7 +195,8 @@ function podarPorPasta(cfg) {
   cfg.porPastaAusenteDesde = depois;
 }
 function saveConfig(cfg, origem) {
-  podarPorPasta(cfg);
+  saveConfigCount++;
+  if (saveConfigCount % PODA_A_CADA === 0) podarPorPasta(cfg);   // R3-003: so de vez em quando, nao a cada save
   const nAgora = listaDeAbas(cfg).length;
   if (abasNoDisco < 0) abasNoDisco = listaDeAbas(loadConfig()).length;
   let aGravar = cfg, devolvidas = 0;
@@ -685,8 +694,10 @@ function codexNotification(method, params, destino = 'local') {
         if (it.delivery === 'async' && it.questions && it.questions.length) {
           const key = 'async_' + destino + '_' + it.id;
           const questions = it.questions.map((q, i) => ({ id: q.id || 'q' + i, header: 'Pergunta ' + (i + 1), question: q.title || q.question || '', options: (q.options || []).map(o => typeof o === 'string' ? { label: o, description: '' } : o) }));
-          pendingApprovals.set(key, { kind: 'async', paneId: pane, destino, questions, threadId: params.threadId, itemId: it.id });
-          emit(pane, 'question', { key, questionKind: 'async', questions, isBlocking: false });
+          // guarda o MESMO payload do emit: e o que 'pane:estado' devolve pro celular reconectar sem perder a pergunta
+          const dadosEvento = { key, questionKind: 'async', questions, isBlocking: false };
+          pendingApprovals.set(key, { kind: 'async', paneId: pane, destino, questions, threadId: params.threadId, itemId: it.id, evento: { tipo: 'question', dados: dadosEvento } });
+          emit(pane, 'question', dadosEvento);
         }
       } else if (it.type === 'commandExecution') {
         emit(pane, 'tool-end', {
@@ -959,6 +970,7 @@ function marcarDonoDoFio(paneId, fio, engine) {
 /* ======================= motor CLAUDE ======================= */
 /* um processo `claude` por painel, protocolo stream-json */
 const claudePanes = new Map();  // paneId -> {proc, buf, blocks}
+const avisoSinteticoAnterior = new Map();  // R3-013: paneId -> ultimo texto de erro sintetico avisado, evita nota repetida
 
 const claudeCwd = new Map();
 /* O Claude Code nomeia a pasta da sessao trocando TODO caractere que nao e letra nem numero
@@ -1155,6 +1167,7 @@ function claudeStop(paneId) {
   if (delta) { clearTimeout(delta.timer); filaDelta.delete(paneId); }
   for (const [key, pending] of pendingApprovals) if (pending.paneId === paneId && pending.kind === 'claude') pendingApprovals.delete(key);
   claudeCwd.delete(paneId);   // R2-036: senao fica crescendo pra sempre, um chat fechado atras do outro
+  avisoSinteticoAnterior.delete(paneId);   // R3-013: mesma razao, senao cresce pra sempre
   return matando;   // R2-034: shutdown() espera este SIGKILL de garantia antes de fechar o app
 }
 
@@ -1239,7 +1252,22 @@ function claudeMessage(paneId, m) {
   }
   if (m.type === 'assistant' && m.message) {
     (m.message.content || []).forEach((c, i) => {
-      if (c.type === 'text') emit(paneId, 'text-final', { id: 'b' + i, text: c.text || '' });
+      if (c.type === 'text') {
+        emit(paneId, 'text-final', { id: 'b' + i, text: c.text || '' });
+        /* R3-013: quando a API recusa por limite de sessao (ou outro erro sintetico: 529,
+           sem internet, deslogado), o CLI nao cai — devolve isso como texto de assistente
+           comum (m.message.model === '<synthetic>'). Sem checagem nenhuma, o Cockpit tratava
+           igual resposta de verdade: nao avisava nada, e cada 'Continue' so duplicava a mesma
+           instrucao no historico, sem nenhum trabalho acontecendo. Reaproveita o canal 'note'
+           (generico, ja chega no Mac e no iPhone) com o texto ORIGINAL do CLI — nao inventa
+           frase fixa de 'limite de sessao' porque o mesmo caminho cobre outros erros sinteticos
+           tambem. Dedupe: so avisa de novo se o texto mudar, senao cada retentativa ('Continue')
+           enche a tela com o mesmo aviso repetido. */
+        if (m.message.model === '<synthetic>' && c.text && avisoSinteticoAnterior.get(paneId) !== c.text) {
+          avisoSinteticoAnterior.set(paneId, c.text);
+          emit(paneId, 'note', { text: c.text, error: true });
+        }
+      }
       /* O agente te chamou (PushNotification). Sem terminal, o CLI descarta a notificacao e
          responde "not sent": a chamada passa por aqui ANTES disso e o Cockpit entrega ele
          mesmo — tambem quando vem de um sub-agente, porque quem chamou foi ele do mesmo jeito.
@@ -1910,32 +1938,6 @@ handle('sessao:nomeCurto', async (_e, { texto, mensagens, pasta }) => {
   return nome.length >= 3 && nome.length <= 40 ? nome.charAt(0).toUpperCase() + nome.slice(1) : '';
 });
 
-/* procura um pedaço de texto dentro da conversa e devolve o trecho achado */
-function acharNaConversa(file, alvo, engine) {
-  try {
-    const st = fs.statSync(file);
-    const dados = st.size > 8 * 1024 * 1024 ? tailRead(file, 8 * 1024 * 1024) : fs.readFileSync(file, 'utf8');
-    const baixo = dados.toLowerCase();
-    const i = baixo.indexOf(alvo);
-    if (i < 0) return null;
-    // acha a linha inteira e tenta extrair um texto legivel
-    const ini = dados.lastIndexOf('\n', i) + 1;
-    const fim = dados.indexOf('\n', i);
-    const linha = dados.slice(ini, fim < 0 ? dados.length : fim);
-    let trecho = '';
-    try {
-      const d = JSON.parse(linha);
-      const pega = (c) => typeof c === 'string' ? c
-        : Array.isArray(c) ? c.map(x => x && (x.text || x.thinking || '')).join(' ') : '';
-      trecho = pega(d.message && d.message.content) || pega(d.payload && d.payload.content) || '';
-    } catch {}
-    if (!trecho) trecho = linha.replace(/\\[nrt]/g, ' ').replace(/[{}"\[\]]/g, ' ');
-    const j = trecho.toLowerCase().indexOf(alvo);
-    const de = Math.max(0, (j < 0 ? 0 : j) - 45);
-    return (de > 0 ? '…' : '') + trecho.slice(de, de + 150).replace(/\s+/g, ' ').trim() + '…';
-  } catch { return null; }
-}
-
 /* ---------- indice de busca ----------
    Buscar abria conversa por conversa (mais de 600 arquivos, varios GB) e desistia em 4
    segundos dizendo "olhei so as mais recentes". Agora cada conversa e lida UMA vez e o texto
@@ -1974,8 +1976,10 @@ function gravarCarimbosDepois() {
     if (!carimbosSujos) return;
     try {
       fs.mkdirSync(path.dirname(IND_CARIMBOS), { recursive: true });
-      gravarSeguro(IND_CARIMBOS, JSON.stringify(indCarimbos));
-      carimbosSujos = false;
+      // R3-021: gravarSeguro devolve false quando a gravacao falha (disco cheio, sem
+      // permissao) em vez de lancar excecao — so zera a flag quando gravou de verdade,
+      // senao o app achava que estava salvo e o indice ficava desatualizado em disco
+      if (gravarSeguro(IND_CARIMBOS, JSON.stringify(indCarimbos))) carimbosSujos = false;
     } catch {}
   }, 4000);
 }
@@ -3162,7 +3166,10 @@ handle('term:resize', (_e, { id, cols, rows }) => {
 });
 handle('term:kill', (_e, { id }) => termMatar(id));
 
-app.on('before-quit', () => { for (const id of [...terms.keys()]) termMatar(id); });
+// R3-009: este before-quit rodava ANTES do de shutdown() (registrado mais abaixo) e ja
+// esvaziava `terms` sem esperar nada — o laco de terminais dentro de shutdown() achava o
+// mapa vazio e o Promise.all nunca chegava a esperar o pty morrer de verdade. Removido:
+// shutdown() agora mata e espera os terminais sozinho (ver mais abaixo).
 
 function alvoDoTransporte(t) {
   if (!t) return '';
@@ -3274,7 +3281,9 @@ async function credClaude(denovo) {
    Agora: a leitura vale 90s, pedidos ao mesmo tempo viram um so, no 429 espera o prazo que
    ela manda (retry-after) e, enquanto isso, devolve o ultimo numero bom com a hora dele. */
 const USO_VALE_MS = 90 * 1000;
-const usoClaude = { dados: null, quando: 0, pausaAte: 0, pausa: 0, voando: null };
+// R3-018: geracao sobe a cada troca de conta (esquecerUso); uma leitura que comecou ANTES da
+// troca so grava no cache se a geracao ainda for a mesma — senao e numero da conta que saiu.
+const usoClaude = { dados: null, quando: 0, pausaAte: 0, pausa: 0, voando: null, geracao: 0 };
 const ultimoBomClaude = () => (usoClaude.dados ? { ...usoClaude.dados, velho: usoClaude.quando } : null);
 
 async function usoDoClaude() {
@@ -3286,6 +3295,9 @@ async function usoDoClaude() {
 }
 
 async function buscarUsoDoClaude(segundaTentativa) {
+  // R3-018: guarda a geracao de ANTES do fetch. Se a conta trocar enquanto isso viaja, essa
+  // leitura e da conta velha e nao pode sujar o cache (que ja e da conta nova).
+  const minhaGeracao = usoClaude.geracao;
   const t = await credClaude(false);
   if (!t) return null;
   try {
@@ -3304,7 +3316,7 @@ async function buscarUsoDoClaude(segundaTentativa) {
     }
     if (!r.ok) return ultimoBomClaude();
     const j = await r.json();
-    Object.assign(usoClaude, { dados: j, quando: Date.now(), pausa: 0, pausaAte: 0 });
+    if (usoClaude.geracao === minhaGeracao) Object.assign(usoClaude, { dados: j, quando: Date.now(), pausa: 0, pausaAte: 0 });
     return j;
   } catch { return ultimoBomClaude(); }
 }
@@ -3313,7 +3325,8 @@ async function buscarUsoDoClaude(segundaTentativa) {
    mais (o 97% da sessao de ontem nao e o de agora): vira "sem dado". */
 function janelaClaude(x, velho) {
   if (!x) return null;
-  const reseta = x.resets_at ? Date.parse(x.resets_at) : 0;
+  // R3-020: data que o Date.parse nao entende vira NaN sem o '|| 0' — igual ao janelasDoGemini
+  const reseta = (x.resets_at && Date.parse(x.resets_at)) || 0;
   if (velho && reseta && reseta < Date.now()) return null;
   return { pct: Math.round(x.utilization || 0), reseta };
 }
@@ -3321,25 +3334,35 @@ function janelaClaude(x, velho) {
 /* Limite do Codex, com o mesmo ultimo-numero-bom do Claude. O plano Pro de hoje so tem a
    janela da SEMANA (primary de 10080 min, secondary vazio): a "Sessão" vazia e verdade, nao
    defeito, e a tela precisa saber disso (semSessao) para nao mostrar "—" como se tivesse falhado. */
-const usoCodex = { dados: null, quando: 0 };
-// trocou de conta: o ultimo numero bom era da conta ANTERIOR e nao pode aparecer como desta
+// R3-019: mesmo padrao de cache/single-flight dos outros 3 motores (ver comentario da UMA
+// leitura, acima) — antes cada painel do Codex pedia account/rateLimits/read direto, sem
+// aproveitar leitura recente nem juntar pedidos simultaneos num so.
+const usoCodex = { dados: null, quando: 0, voando: null };
+// trocou de conta: o ultimo numero bom era da conta ANTERIOR e nao pode aparecer como desta.
+// R3-018: sobe a geracao e zera 'voando' — sem isso uma leitura ja em voo da conta antiga
+// podia terminar DEPOIS da troca e gravar o numero errado por cima do cache da conta nova.
 function esquecerUso(engine) {
-  if (engine === 'claude') { credGuardada = null; credQuando = 0; Object.assign(usoClaude, { dados: null, quando: 0, pausaAte: 0, pausa: 0 }); }
-  if (engine === 'codex') Object.assign(usoCodex, { dados: null, quando: 0 });
-  if (engine === 'grok') Object.assign(usoGrok, { dados: null, quando: 0, pausaAte: 0, pausa: 0 });
-  if (engine === 'gemini') Object.assign(usoGemini, { dados: null, quando: 0, pausaAte: 0, pausa: 0 });
+  if (engine === 'claude') { credGuardada = null; credQuando = 0; usoClaude.geracao++; Object.assign(usoClaude, { dados: null, quando: 0, pausaAte: 0, pausa: 0, voando: null }); }
+  if (engine === 'codex') Object.assign(usoCodex, { dados: null, quando: 0, voando: null });
+  if (engine === 'grok') { usoGrok.geracao++; Object.assign(usoGrok, { dados: null, quando: 0, pausaAte: 0, pausa: 0, voando: null }); }
+  if (engine === 'gemini') { usoGemini.geracao++; Object.assign(usoGemini, { dados: null, quando: 0, pausaAte: 0, pausa: 0, voando: null }); }
 }
 async function limitesDoCodex() {
-  try {
-    await codexStart();
-    const lim = await codexReq('local', 'account/rateLimits/read', {});
-    const rl = (lim && lim.rateLimits) || null;
-    if (!rl) throw new Error('sem rateLimits');
-    Object.assign(usoCodex, { dados: rl, quando: Date.now() });
-    return { rl, velho: 0 };
-  } catch {
-    return usoCodex.dados ? { rl: usoCodex.dados, velho: usoCodex.quando } : { rl: null, velho: 0 };
-  }
+  const agora = Date.now();
+  if (usoCodex.dados && agora - usoCodex.quando < USO_VALE_MS) return { rl: usoCodex.dados, velho: 0 };
+  if (!usoCodex.voando) usoCodex.voando = (async () => {
+    try {
+      await codexStart();
+      const lim = await codexReq('local', 'account/rateLimits/read', {});
+      const rl = (lim && lim.rateLimits) || null;
+      if (!rl) throw new Error('sem rateLimits');
+      Object.assign(usoCodex, { dados: rl, quando: Date.now() });
+      return { rl, velho: 0 };
+    } catch {
+      return usoCodex.dados ? { rl: usoCodex.dados, velho: usoCodex.quando } : { rl: null, velho: 0 };
+    }
+  })().finally(() => { usoCodex.voando = null; });
+  return usoCodex.voando;
 }
 function janelasDoCodex(rl, velho) {
   const jan = (x) => {
@@ -3361,7 +3384,7 @@ function janelasDoCodex(rl, velho) {
 
 /* Limite do Grok: o mesmo backend do `/usage` no terminal. Semana no SuperGrok;
    a "Sessão" vazia é o plano, não falha. Token só neste processo. */
-const usoGrok = { dados: null, quando: 0, pausaAte: 0, pausa: 0, voando: null };
+const usoGrok = { dados: null, quando: 0, pausaAte: 0, pausa: 0, voando: null, geracao: 0 };
 const ultimoBomGrok = () => (usoGrok.dados ? { ...usoGrok.dados, velho: usoGrok.quando } : null);
 function nomePlanoGrok(tier) {
   if (!tier) return '';
@@ -3401,6 +3424,8 @@ async function usoDoGrok() {
   return usoGrok.voando;
 }
 async function buscarUsoDoGrok() {
+  // R3-018: mesma guarda de geracao do Claude, ver comentario em buscarUsoDoClaude
+  const minhaGeracao = usoGrok.geracao;
   const t = contasCli.tokenGrok ? contasCli.tokenGrok() : '';
   if (!t) return null;
   const headers = { Authorization: 'Bearer ' + t, Accept: 'application/json', 'x-xai-token-auth': 'xai-grok-cli' };
@@ -3423,14 +3448,15 @@ async function buscarUsoDoGrok() {
         if (user && user.subscriptionTier) plano = nomePlanoGrok(user.subscriptionTier);
       }
     } catch {}
-    Object.assign(usoGrok, { dados: { cfg, plano }, quando: Date.now(), pausa: 0, pausaAte: 0 });
-    return usoGrok.dados;
+    const dados = { cfg, plano };
+    if (usoGrok.geracao === minhaGeracao) Object.assign(usoGrok, { dados, quando: Date.now(), pausa: 0, pausaAte: 0 });
+    return dados;
   } catch { return ultimoBomGrok(); }
 }
 
 /* Limite do Gemini: o mesmo `/usage` do Antigravity (agy -p /usage --output-format json).
    Só aceita resposta com command.name === "usage" — senão seria um prompt cobrado. */
-const usoGemini = { dados: null, quando: 0, pausaAte: 0, pausa: 0, voando: null, versao: null };
+const usoGemini = { dados: null, quando: 0, pausaAte: 0, pausa: 0, voando: null, versao: null, geracao: 0 };
 const ultimoBomGemini = () => (usoGemini.dados ? { ...usoGemini.dados, velho: usoGemini.quando } : null);
 function fracRestanteGemini(b) {
   if (!b || typeof b !== 'object') return null;
@@ -3489,6 +3515,8 @@ function rodarUsoAgy() {
 }
 async function buscarUsoDoGemini() {
   if (!temBin('agy')) return null;
+  // R3-018: mesma guarda de geracao do Claude, ver comentario em buscarUsoDoClaude
+  const minhaGeracao = usoGemini.geracao;
   try {
     // 1.1.11 passou a devolver /usage em JSON; antes o agy mandava o texto pro modelo e cobrava
     if (await versaoDoAgy() < 10111) return ultimoBomGemini();
@@ -3500,8 +3528,9 @@ async function buscarUsoDoGemini() {
     if (!cmd || cmd.name !== 'usage' || !cmd.data) return ultimoBomGemini();
     const groups = cmd.data.groups;
     if (!Array.isArray(groups) || !groups.length) return ultimoBomGemini();
-    Object.assign(usoGemini, { dados: { groups }, quando: Date.now(), pausa: 0, pausaAte: 0 });
-    return usoGemini.dados;
+    const dados = { groups };
+    if (usoGemini.geracao === minhaGeracao) Object.assign(usoGemini, { dados, quando: Date.now(), pausa: 0, pausaAte: 0 });
+    return dados;
   } catch { return ultimoBomGemini(); }
 }
 
@@ -4527,12 +4556,19 @@ let saindoDoApp = false;
 
 async function shutdown() {
   paneStarts.clear();
-  cli.fechar(); acp.fechar();
-  fecharMestresSsh();   // o mestre do ControlPersist nao fica pendurado depois do app
   const espera = [];   // R2-034: promessas do SIGKILL de garantia de cada processo filho
+  espera.push(cli.fechar());   // R3-009: antes rodava solto (fire-and-forget), sem esperar Gemini morrer
+  espera.push(acp.fechar());   // R3-009: idem para ACP/Grok
+  fecharMestresSsh();   // o mestre do ControlPersist nao fica pendurado depois do app
   for (const id of [...claudePanes.keys()]) espera.push(claudeStop(id));
   for (const id of [...vozAtiva.keys()]) vozMatar(id);
-  for (const id of [...terms.keys()]) termMatar(id);
+  // R3-009: nao reusa termMatar aqui (so' devolve {ok:true} sincrono) — pega o pty direto
+  // e empurra a Promise de matar() pra `espera`, senao o terminal nunca era aguardado
+  for (const id of [...terms.keys()]) {
+    const p = terms.get(id);
+    terms.delete(id);
+    if (p) espera.push(Promise.resolve(p.matar()));
+  }
   for (const c of codexConns.values()) {
     const proc = c.proc;
     c.proc = null; c.ready = null; c.buf = '';
@@ -4703,16 +4739,22 @@ handle('voz:transcrever', async (_e, { audio }) => {
     // paineis, ou Mac + celular) escreviam/apagavam o MESMO arquivo temporario uma por cima
     // da outra e um chat recebia o texto ditado no outro. Um id por chamada resolve.
     const base = path.join(os.tmpdir(), 'ck-voz-' + process.pid + '-' + crypto.randomUUID());
-    fs.writeFileSync(base + '.webm', Buffer.from(audio, 'base64'));
-    // o whisper so aceita wav de 16 kHz mono: o navegador grava em webm/opus
-    const conv = await rodar(ff, ['-y', '-i', base + '.webm', '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', base + '.wav'], 60000);
-    if (!fs.existsSync(base + '.wav')) return { error: 'não converti o áudio' + (conv.errout ? ': ' + String(conv.errout).slice(-120) : '') };
-    await rodar(whisper, ['-m', VOZ_MODELO, '-l', 'pt', '-nt', '-otxt', '-of', base, base + '.wav'], 180000);
     const saida = base + '.txt';
-    const texto = fs.existsSync(saida) ? fs.readFileSync(saida, 'utf8').trim() : '';
-    for (const f of [base + '.webm', base + '.wav', saida]) { try { fs.unlinkSync(f); } catch {} }
-    if (!texto) return { error: 'não saiu texto nenhum' };
-    return { texto };
+    // R3-023: limpeza em finally — antes, se o ffmpeg falhasse na conversao, o retorno antecipado
+    // pulava o unlinkSync e o .webm ficava pra sempre em os.tmpdir() (ditado com audio ruim acumula lixo)
+    const arquivos = [base + '.webm', base + '.wav', saida];
+    try {
+      fs.writeFileSync(base + '.webm', Buffer.from(audio, 'base64'));
+      // o whisper so aceita wav de 16 kHz mono: o navegador grava em webm/opus
+      const conv = await rodar(ff, ['-y', '-i', base + '.webm', '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', base + '.wav'], 60000);
+      if (!fs.existsSync(base + '.wav')) return { error: 'não converti o áudio' + (conv.errout ? ': ' + String(conv.errout).slice(-120) : '') };
+      await rodar(whisper, ['-m', VOZ_MODELO, '-l', 'pt', '-nt', '-otxt', '-of', base, base + '.wav'], 180000);
+      const texto = fs.existsSync(saida) ? fs.readFileSync(saida, 'utf8').trim() : '';
+      if (!texto) return { error: 'não saiu texto nenhum' };
+      return { texto };
+    } finally {
+      for (const f of arquivos) { try { fs.unlinkSync(f); } catch {} }
+    }
   } catch (e) { return { error: e.message }; }
 });
 
@@ -4812,12 +4854,24 @@ function ligarAtalhosGlobais(ligado) {
       if (!win || win.isDestroyed()) {
         if (criandoJanelaPeloAtalho) return;
         criandoJanelaPeloAtalho = true;
-        createWindow();
-        win.webContents.once('did-finish-load', () => {
-          criandoJanelaPeloAtalho = false;
-          win.show(); win.focus();
-          win.webContents.send('menu', 'ditar');
-        });
+        // R3-002: se a janela nunca terminar de carregar (erro ao criar, did-fail-load), a
+        // flag ficava travada em true pra sempre e o atalho morria ate reiniciar o app.
+        // Reseta nos dois eventos possiveis, no catch e num timeout de rede extra.
+        const destravar = () => { criandoJanelaPeloAtalho = false; };
+        const tempoExtra = setTimeout(destravar, 10000);
+        try {
+          createWindow();
+          win.webContents.once('did-finish-load', () => {
+            clearTimeout(tempoExtra);
+            destravar();
+            win.show(); win.focus();
+            win.webContents.send('menu', 'ditar');
+          });
+          win.webContents.once('did-fail-load', () => { clearTimeout(tempoExtra); destravar(); });
+        } catch {
+          clearTimeout(tempoExtra);
+          destravar();
+        }
         return;
       }
       if (win.isMinimized()) win.restore();
@@ -5145,11 +5199,13 @@ const acp = acpMod.criarAcp({
   // pedido de permissão do agente vira o MESMO cartão Permitir/Negar que já existe
   aoPedirPermissao: (paneId, rpcId, info) => {
     const key = 'acp_' + paneId + '_' + rpcId;
-    pendingApprovals.set(key, { kind: 'acp', paneId, rpcId });
-    emit(paneId, 'approval', {
+    // guarda o MESMO payload do emit: e o que 'pane:estado' devolve pro celular reconectar sem perder o cartão
+    const dadosEvento = {
       key, title: info.title || 'O agente quer usar uma ferramenta', detail: info.detail || '', reason: '',
       tool: info.tool || '', rotulo: info.rotulo || '', mudanca: edicaoDoAcp(info.mudanca),
-    });
+    };
+    pendingApprovals.set(key, { kind: 'acp', paneId, rpcId, evento: { tipo: 'approval', dados: dadosEvento } });
+    emit(paneId, 'approval', dadosEvento);
   },
   aoCair: (paneId) => descartarPermissoesAcp(paneId),
   // turno acabou com pedido pendurado: mesmo caminho do 'result' do Claude
@@ -5544,7 +5600,9 @@ handle('pane:approve', (_e, { key, allow, paneId }) => {
    a pagina inteira. */
 function estadoPane(paneId) {
   const st = claudePanes.get(paneId);
-  const busy = !!(st && st.rodando) || codex.paneTurn.has(paneId);
+  // R3-010: faltava Gemini (cli) e ACP/Grok (acp) — so' Claude e Codex eram vistos,
+  // e o celular reconectava achando que o turno tinha acabado
+  const busy = !!(st && st.rodando) || codex.paneTurn.has(paneId) || cli.ocupado(paneId) || acp.ocupado(paneId);
   let aprovacao = null;
   for (const a of pendingApprovals.values()) {
     if (a.paneId === paneId && a.evento) { aprovacao = a.evento; break; }
@@ -5709,9 +5767,14 @@ handle('git:status', async (_e, o) => {
     let nome = l.slice(3).trim();
     // caminho unico entre aspas (inclusive um chamado literalmente "a -> b.txt")
     const inteiro = gitCitado(nome);
+    // nome ANTIGO citado (porque tem espaco) pode ter ' -> ' DENTRO das aspas: procurar a
+    // seta na string inteira acha essa primeiro e corta o nome no meio (bug real, git 2.54).
+    // Por isso: se comeca com aspas, pula o nome citado inteiro antes de procurar a seta.
+    const citado = nome[0] === '"' ? nome.match(/^"(?:[^"\\]|\\.)*"/) : null;
+    const restoBusca = citado ? nome.slice(citado[0].length) : nome;
     // arquivo renomeado vem como "antigo -> novo": quem interessa e o novo
-    const seta = nome.indexOf(' -> ');
-    if (seta > 0) nome = nome.slice(seta + 4);
+    const seta = restoBusca.indexOf(' -> ');
+    if (seta >= 0) nome = restoBusca.slice(seta + 4);
     // tira as aspas do git: o nome inteiro citado ganha da seta; senao, tira do lado que sobrou
     nome = inteiro || gitCitado(nome) || nome;
     if (nome) arquivos.push({ estado, nome });
@@ -6402,6 +6465,9 @@ function limparColadosAntigos() {
    marcado como visto — a mensagem se perderia para sempre. */
 const PASTA_INBOX = () => path.join(app.getPath('userData'), 'inbox');
 const inboxVistos = new Set();
+// R3-025: bases de .txt anunciado SOZINHO (a foto ainda nao tinha chegado). Quando a
+// imagem chegar depois, usa isto pra avisar o renderer a trocar a tarja em vez de duplicar.
+const inboxTextoSoltoBase = new Set();
 let inboxOuvinte = false;   // a tela DESTA carga ja registrou o onInbox (senao o aviso vai pro vazio)
 ipcMain.handle('inbox:ouvindo', () => { inboxOuvinte = true; setTimeout(varrerInbox, 100); return { ok: true }; });
 function varrerInbox() {
@@ -6437,24 +6503,34 @@ function varrerInbox() {
         for (const k of [...inboxVistos]) if (k.startsWith(base + img + ':')) inboxVistos.delete(k);
         continue;
       }
+      // R3-025: legenda chegou ANTES da foto (ordem inversa do comentario acima). Vai ser
+      // anunciada sozinha agora; guarda a marca pra, quando a imagem chegar, trocar a
+      // tarja em vez de duplicar o mesmo texto na tela.
+      inboxTextoSoltoBase.add(base);
     }
     inboxVistos.add(n + ':' + Math.round(st.mtimeMs));
     let texto = '';
     if (!ehImagem) { try { texto = fs.readFileSync(f, 'utf8').trim().slice(0, 20000); } catch {} }
     let legenda = '';
+    let substituiuNome = '';
     if (ehImagem) {
       for (const e of ['.txt', '.md']) {
         if (!conjunto.has(base + e)) continue;
         try { legenda = fs.readFileSync(path.join(PASTA_INBOX(), base + e), 'utf8').trim().slice(0, 4000); } catch {}
         try { inboxVistos.add(base + e + ':' + Math.round(fs.statSync(path.join(PASTA_INBOX(), base + e)).mtimeMs)); } catch {}
+        // R3-025: esse .txt ja tinha sido anunciado sozinho antes da foto chegar — avisa o
+        // renderer a apagar aquela tarja (senao a mesma legenda fica duas vezes na tela)
+        if (inboxTextoSoltoBase.has(base)) { substituiuNome = base + e; inboxTextoSoltoBase.delete(base); }
       }
     }
-    win.webContents.send('inbox', { arquivo: f, nome: n, tipo: ehImagem ? 'imagem' : 'texto', texto, legenda, quando: st.mtimeMs });
+    win.webContents.send('inbox', { arquivo: f, nome: n, tipo: ehImagem ? 'imagem' : 'texto', texto, legenda, quando: st.mtimeMs, ...(substituiuNome ? { substituiuNome } : {}) });
   }
   // R1-014: limpar tudo de uma vez reabria como "novo" um arquivo que ainda esta pendente
   // na pasta (o Homero nao clicou "usar"). Poda so o que ja sumiu da pasta (`conjunto`).
   if (inboxVistos.size > 500) {
     for (const k of [...inboxVistos]) if (!conjunto.has(k.slice(0, k.lastIndexOf(':')))) inboxVistos.delete(k);
+    // R3-025: mesma poda pro Set irmao, senao uma base que nunca ganha imagem fica presa pra sempre
+    for (const base of [...inboxTextoSoltoBase]) if (!['.txt', '.md'].some((e) => conjunto.has(base + e))) inboxTextoSoltoBase.delete(base);
   }
 }
 function ligarInbox() {

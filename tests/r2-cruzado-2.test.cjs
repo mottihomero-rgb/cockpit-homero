@@ -70,6 +70,10 @@ test('R2-023 app.js: closePane só fecha o quadro quando o painel fechado é o D
       agTrabalhando: () => false,
       nomeDoMotor: () => 'Claude',
       confirm: () => confirmaSim,
+      // R3-039 (outro defeito, rodada 3) fez closePane checar tambem o painel de agentes, igual
+      // ja fazia com o Quadro; sem estes dois globais o teste quebrava so por faltar o stub
+      agPaneAberto: null,
+      fecharPainelAgentes: () => {},
     });
     vm.runInContext(guardaSrc, ctx);
     const closePane = vm.runInContext('closePane', ctx);

@@ -102,6 +102,10 @@ test('Codex: falha depois de uma leitura boa devolve o ultimo numero bom', async
   });
   await h.call('uso:ler', 'codex');
   falhar = true;
+  // R3-019: limitesDoCodex ganhou o mesmo cache de 90s que Claude/Grok/Gemini ja tinham (o
+  // teste deles logo acima usa o mesmo truque) — sem "andar" o relogio a leitura seguinte
+  // vinha do cache e nem chegava a bater no backend (que agora falharia de propósito aqui)
+  h.evaluate('usoCodex.quando = Date.now() - 300000');
   const r = await h.call('uso:ler', 'codex');
   assert.equal(r.semana.pct, 88); assert.ok(r.velho > 0);
 });

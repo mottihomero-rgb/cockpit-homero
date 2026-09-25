@@ -153,7 +153,11 @@
     const P = focusPane;
     // Um painel com motor próprio recebe os eventos em tempo real. Nunca substituir
     // sua resposta por uma leitura parcial de disco, nem reiniciar esse motor.
-    if (!P || P.busy || !sessao(P) || restaurando) return;
+    // R3-005: com P.started true, P.busy preso em true (turn-end perdido na queda do
+    // WebSocket) não pode mais barrar aqui — senão o pane:estado do R2-012 nunca é chamado
+    // e a tela fica presa em "trabalhando…" pra sempre. Só bloqueia por P.busy quando o
+    // painel NÃO está em P.started (aí não tem como perguntar ao Mac o estado real).
+    if (!P || (P.busy && !P.started) || !sessao(P) || restaurando) return;
     const id = sessao(P), engine = P.engine;
     atualizando = true;
     try {
@@ -163,8 +167,11 @@
         // Mac o estado real antes de desistir; sem isso a tela fica presa em "trabalhando…"
         // pra sempre. So LEITURA: nao mexe em nada, so decide se pode seguir abaixo.
         if (!window.api.paneEstado) return;
+        // R3-005: guarda o P.busy de ANTES do await pra distinguir "estava preso" (segue)
+        // de "uma resposta ao vivo chegou durante a espera" (aí sim tem que barrar embaixo).
+        const busyAntes = P.busy;
         const estado = await window.api.paneEstado({ paneId: P.id }).catch(() => null);
-        if (!estado || estado.busy || P.busy || !panes.has(P.id) || focusPane !== P || sessao(P) !== id) return;
+        if (!estado || estado.busy || (P.busy && !busyAntes) || !panes.has(P.id) || focusPane !== P || sessao(P) !== id) return;
         if (estado.aprovacao) receberEventoPane({ paneId: P.id, kind: estado.aprovacao.tipo, ...estado.aprovacao.dados });
         // segue pra releitura do historico abaixo mesmo com P.started true: o Mac confirmou que acabou
       }

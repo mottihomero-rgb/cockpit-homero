@@ -216,6 +216,11 @@ test('R2-038: web:ligar não apaga config gravado durante a espera do Tailscale/
 // ===================== R2-040 =====================
 // cfg.porPasta so' pode ser podado quando a pasta ja sumiu do disco HA' DIAS — nunca no
 // primeiro boot sem ela (HD externo desligado, pasta do Drive ainda nao montada).
+// R3-003 (25/09): saveConfig passou a so' chamar podarPorPasta a cada PODA_A_CADA gravacoes
+// (senao vira fs.existsSync sincrono a cada clique). Estes 3 testes chamavam saveConfig UMA
+// vez so' e esperavam a poda na hora — errado agora por desenho: ajustado para repetir a
+// gravacao PODA_A_CADA vezes (como aconteceria de verdade, ao longo do uso), sem mudar o que
+// cada teste prova.
 
 test('R2-040: pasta sumida do disco HÁ DIAS é podada de cfg.porPasta; pasta que existe fica', () => {
   const h = loadMain();
@@ -233,7 +238,8 @@ test('R2-040: pasta sumida do disco HÁ DIAS é podada de cfg.porPasta; pasta qu
     porPastaAusenteDesde: { [pastaSumida + '|claude']: quatroDiasAtras },
   };
   h.put(cfgPath, JSON.stringify(cfgInicial));
-  h.evaluate(`saveConfig(${JSON.stringify(cfgInicial)})`);
+  const N = h.evaluate('PODA_A_CADA');
+  for (let i = 0; i < N; i++) h.evaluate(`saveConfig(${JSON.stringify(cfgInicial)})`);
 
   const final = JSON.parse(h.files.get(cfgPath).toString());
   assert.ok(final.porPasta[pastaViva + '|claude'], 'pasta que ainda existe no disco nao pode perder a preferencia de modelo');
@@ -246,7 +252,8 @@ test('R2-040: pasta sumida pela PRIMEIRA vez não é podada na hora (HD externo,
   const pastaSumida = path.join(h.HOME, 'projeto-novo-sumido');
   const cfgInicial = { abas: [], porPasta: { [pastaSumida + '|claude']: { model: 'opus', effort: 'alto' } } };
   h.put(cfgPath, JSON.stringify(cfgInicial));
-  h.evaluate(`saveConfig(${JSON.stringify(cfgInicial)})`);
+  const N = h.evaluate('PODA_A_CADA');
+  for (let i = 0; i < N; i++) h.evaluate(`saveConfig(${JSON.stringify(cfgInicial)})`);
 
   const final = JSON.parse(h.files.get(cfgPath).toString());
   assert.ok(final.porPasta[pastaSumida + '|claude'],
@@ -260,7 +267,8 @@ test('R2-040: pasta remota (vps:/...) nunca conta como "sumida" — fs.existsSyn
   const cfgPath = path.join(h.HOME, 'app-data', 'config.json');
   const cfgInicial = { abas: [], porPasta: { 'vps:/home/homero/projeto|codex': { model: 'gpt-6', effort: 'alto' } } };
   h.put(cfgPath, JSON.stringify(cfgInicial));
-  h.evaluate(`saveConfig(${JSON.stringify(cfgInicial)})`);
+  const N = h.evaluate('PODA_A_CADA');
+  for (let i = 0; i < N; i++) h.evaluate(`saveConfig(${JSON.stringify(cfgInicial)})`);
 
   const final = JSON.parse(h.files.get(cfgPath).toString());
   assert.ok(final.porPasta['vps:/home/homero/projeto|codex'],

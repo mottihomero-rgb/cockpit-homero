@@ -154,7 +154,9 @@ function contextoFechados() {
   ctx.setFocus = () => {};
   const chamadas = { openSession: null, mostrarPastaNoPainel: null };
   ctx.mostrarPastaNoPainel = (P) => { chamadas.mostrarPastaNoPainel = P; };
-  ctx.openSession = async (s) => { chamadas.openSession = s; return { id: 'novoPainel', worktree: '', cwd: s.cwd }; };
+  // R3-008: o openSession de verdade marca `_painelNovoDeAbertura` no ramo que CRIA um painel
+  // (nunca no ramo "ja aberta"); este mock representa esse ramo, entao carrega a marca tambem.
+  ctx.openSession = async (s) => { chamadas.openSession = s; return { id: 'novoPainel', worktree: '', cwd: s.cwd, _painelNovoDeAbertura: true }; };
   vm.runInContext(
     pegarConst('NA_VPS') + '\n'
     + pegarConst('fechadosRecentes') + '\n'

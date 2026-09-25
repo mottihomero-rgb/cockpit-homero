@@ -120,9 +120,15 @@
   /* Cano antigo: o arquivo vira texto (data URL) e sobe pelo MESMO WebSocket da camera. So serve
      para imagem pequena — o Mac recusa o que nao for png/jpg/webp — e fica de reserva enquanto
      o servidor do Mac nao tiver a rota /upload. */
-  async function mandarPeloWebSocket(f) {
+  async function mandarPeloWebSocket(f, motivo) {
     if (/^video\//.test(f.type || '')) {
-      return { error: 'Mandar vídeo daqui só funciona com o Cockpit do Mac atualizado. Reinicie o Cockpit no Mac e tente de novo.' };
+      // R3-045: so culpa "Mac desatualizado" quando de fato falta a rota /upload; se foi a
+      // rede que caiu no meio do envio, o Mac pode ja ter a rota nova — mensagem certa evita
+      // ele ir reiniciar o Mac atras de um problema que e so da conexao.
+      const msg = motivo === 'rede'
+        ? 'A conexão caiu no meio do envio do vídeo. Tente de novo com uma rede mais estável.'
+        : 'Mandar vídeo daqui só funciona com o Cockpit do Mac atualizado. Reinicie o Cockpit no Mac e tente de novo.';
+      return { error: msg };
     }
     if (f.size > TETO_CANO_ANTIGO) {
       return { error: 'Este arquivo tem ' + Math.round(f.size / MB) + ' MB e por aqui só passam 5 MB. Reinicie o Cockpit no Mac para mandar arquivo grande.' };
@@ -137,14 +143,16 @@
   }
 
   async function mandarProMac(f) {
+    let motivo = 'semRota';   // R3-045: por que caiu no cano antigo — o Mac decide a mensagem certa
     if (temUpload !== false) {
       const r = await mandarPeloUpload(f);
       if (r === SEM_ROTA) temUpload = false;         // este Mac nao tem a rota: nao insiste mais
       else if (r) { temUpload = true; return r; }    // respondeu: a resposta dela e que vale
-      // r === null: so esta tentativa falhou. O cano antigo assume desta vez, e na proxima
-      // foto a gente tenta o /upload de novo.
+      // r === null: so esta tentativa falhou (rede). O cano antigo assume desta vez, e na
+      // proxima foto a gente tenta o /upload de novo — mas sem culpar o Mac por isso.
+      else motivo = 'rede';
     }
-    return mandarPeloWebSocket(f);
+    return mandarPeloWebSocket(f, motivo);
   }
 
   function escolherArquivo() {
@@ -223,6 +231,11 @@
   ];
   const GAVETA = 'cockpit:ajustes-do-telefone';
   let comoOMacEstava = {};   // as preferencias como o Mac mandou no ultimo config:get
+  // R3-044: retrato do que ESTA aba considera "atual" desde a ultima vez que ELA MESMA leu ou
+  // gravou a gaveta. Com duas abas abertas (Safari deixa reabrir sem fechar), guardarConfig so
+  // pode reagir a uma chave que mudou aqui — senao ela recalcula TODAS a partir do retrato
+  // congelado do boot e apaga a mudanca que a OUTRA aba acabou de salvar.
+  let ultimoCfgLocal = {};
 
   const mesmoValor = (a, b) =>
     JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
@@ -259,18 +272,26 @@
       doMac[k] = meuAjuste.meu;
     }
     if (limpou) gravarGaveta(g);
+    // R3-044: a partir de agora, "mudou" para esta aba e a partir DESTE retrato, nao do boot
+    ultimoCfgLocal = {};
+    for (const k of AJUSTES_DO_TELEFONE) if (doMac[k] !== undefined) ultimoCfgLocal[k] = copiar(doMac[k]);
     return doMac;
   }
 
   function guardarConfig(cfg) {
-    const g = lerGaveta();
+    const g = lerGaveta();   // fresca do disco: pode ter chave que OUTRA aba acabou de gravar
     for (const k of AJUSTES_DO_TELEFONE) {
       const meu = cfg ? cfg[k] : undefined;
+      // R3-044: chave que esta aba nao tocou desde a ultima leitura/gravacao dela mesma fica
+      // como esta na gaveta — so recalcula (e talvez apague) a que ELA de fato mudou.
+      if (mesmoValor(meu, ultimoCfgLocal[k])) continue;
       // igual ao que o Mac ja tem: nao ha o que guardar aqui
       if (meu === undefined || mesmoValor(meu, comoOMacEstava[k])) delete g[k];
       else g[k] = { meu, base: comoOMacEstava[k] === undefined ? null : comoOMacEstava[k] };
     }
     gravarGaveta(g);
+    ultimoCfgLocal = {};
+    for (const k of AJUSTES_DO_TELEFONE) if (cfg && cfg[k] !== undefined) ultimoCfgLocal[k] = copiar(cfg[k]);
     return Promise.resolve(true);
   }
 

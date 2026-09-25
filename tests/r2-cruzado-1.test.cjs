@@ -174,7 +174,11 @@ test('R2-025 main.js: confirmação positiva do renderer apaga o pedido e loga s
 });
 
 test('R2-025 renderer/app.js: acaoDeMenu("quadro") avisa main.js se abriu (focusPane) ou não (null)', () => {
-  const m = appSrc.match(/if \(a === 'quadro'\) \{\s*\n\s*\/\/ R2-025[^\n]*\n\s*const abriu = !!\(focusPane && window\.Quadro && window\.Quadro\.abrir\(focusPane\)\);\s*\n\s*if \(window\.api && window\.api\.quadroAbriu\) window\.api\.quadroAbriu\(abriu\);/);
+  // R3-007: Quadro.abrir() é assíncrona (Promise sempre truthy) — o regex antigo só
+  // conferia que a LINHA existia, não o comportamento; agora casa com o fluxo por
+  // Promise/.then que espera o valor booleano de verdade antes de avisar main.js
+  // (o comportamento em si tem teste próprio em tests/r3-cruzado-2.test.cjs)
+  const m = appSrc.match(/if \(a === 'quadro'\) \{[\s\S]*?window\.Quadro\.abrir\(focusPane\)\)\.then\(\(abriu\) => \{[\s\S]*?window\.api\.quadroAbriu\(!!abriu\);/);
   assert.ok(m, 'acaoDeMenu não está mais confirmando pro main.js se o quadro abriu de verdade — atualizar main.js/preload.js junto');
 });
 

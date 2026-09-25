@@ -155,10 +155,14 @@ function imagensDoConteudo(valor) {
   const lista = Array.isArray(valor) ? valor
     : (valor && Array.isArray(valor.content) ? valor.content : []);
   const out = [];
+  // conta quantas sumiram por tamanho, igual a imagensDoResultado do main.js, pra nao
+  // sumir calado quando reabre uma conversa antiga
+  out.descartadas = 0;
   for (const x of lista) {
     if (!x || x.type !== 'image') continue;
     const dados = (x.source && x.source.type === 'base64' && x.source.data) || x.data || '';
-    if (!dados || typeof dados !== 'string' || dados.length > LIM_IMG_HIST) continue;
+    if (!dados || typeof dados !== 'string') continue;
+    if (dados.length > LIM_IMG_HIST) { out.descartadas++; continue; }
     out.push({ mime: (x.source && x.source.media_type) || x.mimeType || 'image/png', dados });
     if (out.length >= 4) break;
   }
@@ -188,13 +192,20 @@ function historyItem(item) {
     const imagens = imagensDoConteudo(conteudo);
     const blocos = Array.isArray(conteudo) ? conteudo : (conteudo && Array.isArray(conteudo.content) ? conteudo.content : []);
     const texto = blocos.filter(x => x && x.type === 'text' && typeof x.text === 'string').map(x => x.text).join('\n');
-    if (imagens.length) return {
-      role: 'tool',
-      name: [item.server, item.tool].filter(Boolean).join(' · '),
-      arg: typeof item.arguments === 'string' ? item.arguments : JSON.stringify(item.arguments || {}),
-      output: texto || (imagens.length === 1 ? '(1 imagem)' : '(' + imagens.length + ' imagens)'),
-      imagens,
-    };
+    if (imagens.length || imagens.descartadas) {
+      // mesmo padrao do main.js (partes.join): junta as contagens em vez de deixar
+      // '(0 imagens)' passar quando a unica imagem foi cortada por tamanho e nao sobrou texto
+      const partes = [];
+      if (imagens.length) partes.push(imagens.length === 1 ? '1 imagem' : imagens.length + ' imagens');
+      if (imagens.descartadas) partes.push((imagens.descartadas === 1 ? '1 imagem' : imagens.descartadas + ' imagens') + ' grande(s) demais para mostrar');
+      return {
+        role: 'tool',
+        name: [item.server, item.tool].filter(Boolean).join(' · '),
+        arg: typeof item.arguments === 'string' ? item.arguments : JSON.stringify(item.arguments || {}),
+        output: texto || '(' + partes.join(', ') + ')',
+        ...(imagens.length ? { imagens } : {}),
+      };
+    }
   }
   if (item.type === 'mcpToolCall' || item.type === 'dynamicToolCall') return { role: 'tool', name: [item.server, item.tool].filter(Boolean).join(' · '), arg: typeof item.arguments === 'string' ? item.arguments : JSON.stringify(item.arguments || {}), output: item.result != null ? JSON.stringify(item.result) : (item.contentItems ? JSON.stringify(item.contentItems) : '') };
   if (item.type === 'collabAgentToolCall') return { role: 'tool', name: 'Time de agentes', arg: item.prompt || item.tool || '' };

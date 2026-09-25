@@ -38,6 +38,9 @@ const LIM_IMG = 4 * 1024 * 1024;            // imagem que VOCE manda (bytes)
 const LIM_IMG_PASSO = 3 * 1024 * 1024;      // imagem que o agente devolve (base64) - mesmo teto do Claude
 const MAX_IMG_PASSO = 4;
 const LIM_LEITURA = 20 * 1024 * 1024;       // fs/read_text_file: acima disto trava a janela
+// R3-046: uma linha de stdout sem '\n' cresce pra sempre e o indexOf a cada pedaco
+// fica cada vez mais caro (sincrono no processo principal) - acima disto, corta.
+const LIM_BUF_SEM_QUEBRA = 24 * 1024 * 1024;
 const MIME_IMG = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
 
 /* Quebra a linha de comando em programa + argumentos, respeitando aspas.
@@ -95,6 +98,7 @@ function conteudoDaFerramenta(itens) {
   let texto = '';
   let mudanca = null;
   const imagens = [];
+  let descartadas = 0;   // R3-047: imagem grande demais (>3MB) ou alem da 4a sumia calada
   for (const it of (Array.isArray(itens) ? itens : [])) {
     if (!it) continue;
     if (it.type === 'content') {
@@ -102,6 +106,7 @@ function conteudoDaFerramenta(itens) {
       if (b && b.type === 'image' && b.data) {
         const dados = String(b.data);
         if (dados.length <= LIM_IMG_PASSO && imagens.length < MAX_IMG_PASSO) imagens.push({ mime: b.mimeType || 'image/png', dados });
+        else descartadas++;
       } else { const t = textoDoBloco(b); if (t) texto += (texto ? '\n' : '') + t; }
     } else if (it.type === 'diff') {
       mudanca = {
@@ -114,6 +119,7 @@ function conteudoDaFerramenta(itens) {
       texto += (texto ? '\n' : '') + '[terminal ' + (it.terminalId || '') + ']';
     }
   }
+  imagens.descartadas = descartadas;
   return { texto, mudanca, imagens };
 }
 
@@ -185,7 +191,10 @@ function traduzirUpdate(st, upd) {
     st.ferramentas.set(id, { name: p.name, arg: p.arg, kind: p.kind, temMudanca: !!c.mudanca, mudanca: c.mudanca, bruto: enxuto(upd), fim: false });
     out.push({ kind: 'tool-start', id, name: p.name, arg: p.arg, mudanca: c.mudanca || null });
     if (upd.status === 'completed' || upd.status === 'failed') {
-      out.push({ kind: 'tool-end', id, output: corta(c.texto, LIM_SAIDA), error: upd.status === 'failed', imagens: c.imagens });
+      let saida = c.texto;
+      // R3-047: imagem grande demais sumia sem aviso; entra no texto ANTES do corta() de LIM_SAIDA
+      if (c.imagens.descartadas) saida = (saida ? saida + '\n' : '') + '(' + (c.imagens.descartadas === 1 ? '1 imagem' : c.imagens.descartadas + ' imagens') + ' grande(s) demais para mostrar)';
+      out.push({ kind: 'tool-end', id, output: corta(saida, LIM_SAIDA), error: upd.status === 'failed', imagens: c.imagens });
       st.ferramentas.get(id).fim = true;
     }
     return out;
@@ -218,6 +227,8 @@ function traduzirUpdate(st, upd) {
     if (status === 'completed' || status === 'failed') {
       let saida = c.texto;
       if (!saida && upd.rawOutput != null) saida = typeof upd.rawOutput === 'string' ? upd.rawOutput : seguroJson(upd.rawOutput);
+      // R3-047: imagem grande demais sumia sem aviso; entra no texto ANTES do corta() de LIM_SAIDA
+      if (c.imagens.descartadas) saida = (saida ? saida + '\n' : '') + '(' + (c.imagens.descartadas === 1 ? '1 imagem' : c.imagens.descartadas + ' imagens') + ' grande(s) demais para mostrar)';
       out.push({ kind: 'tool-end', id, output: corta(saida, LIM_SAIDA), error: status === 'failed', imagens: c.imagens });
       f.fim = true;
     } else if (c.texto) {
@@ -619,6 +630,18 @@ function criarAcp(dep) {
     proc.stdout.on('data', (chunk) => {
       if (paineis.get(paneId) !== st) return;
       st.buf += decoder.write(chunk);
+      // R3-046: uma linha de protocolo sem '\n' (ex.: imagem grande em base64 numa
+      // unica mensagem) crescia pra sempre - cada pedaco novo refazia o indexOf sobre
+      // um buffer cada vez maior e travava o processo principal do Electron inteiro.
+      // Sem '\n' ainda, nao da pra descartar so' o excesso (quebraria o JSON-RPC no
+      // meio): mata o processo e deixa o proc.on('close', caiu) avisar como qualquer
+      // outra queda.
+      if (st.buf.length > LIM_BUF_SEM_QUEBRA) {
+        st.erro = 'resposta do agente grande demais sem quebra de linha';
+        st.buf = '';
+        matarProcesso(proc);
+        return;
+      }
       let i;
       while ((i = st.buf.indexOf('\n')) >= 0) {
         const linha = st.buf.slice(0, i).trim(); st.buf = st.buf.slice(i + 1);
@@ -863,7 +886,7 @@ function criarAcp(dep) {
   function parar(paneId) {
     iniciando.delete(paneId);
     const st = paineis.get(paneId);
-    if (!st) return;
+    if (!st) return Promise.resolve();
     st.parandoDeProposito = true;
     pararFala(st);
     if (st.timerFila) { clearTimeout(st.timerFila); st.timerFila = null; }
@@ -872,8 +895,12 @@ function criarAcp(dep) {
     cancelarPedidos(st);
     for (const [, q] of [...st.pend]) q.rej(new Error('painel parado'));
     st.pend.clear();
-    if (st.proc) { try { st.proc.stdout.removeAllListeners('data'); } catch {} matarProcesso(st.proc); st.proc = null; }
+    // R3-009: devolve a Promise do matarProcesso (so' resolve quando o processo morre de
+    // verdade), pra shutdown() esperar em vez de deixar o Electron fechar antes da hora
+    let espera = Promise.resolve();
+    if (st.proc) { try { st.proc.stdout.removeAllListeners('data'); } catch {} espera = matarProcesso(st.proc); st.proc = null; }
     paineis.delete(paneId);
+    return espera;
   }
 
   function responderPermissao(paneId, rpcId, allow) {
@@ -907,8 +934,12 @@ function criarAcp(dep) {
   return {
     start, enviar, interromper, parar, responderPermissao, setModelo, comandos,
     trabalhando: () => [...paineis.values()].filter(st => st.ocupado).length,
+    // R3-010: pane:estado (reconexao do celular) so enxergava Claude/Codex; sem isto um
+    // turno de ACP/Grok em andamento era relido como "terminou" ao reconectar
+    ocupado: paneId => !!paineis.get(paneId)?.ocupado,
     vivo: paneId => !!paineis.get(paneId)?.proc,
-    fechar: () => { for (const id of [...paineis.keys()]) parar(id); },
+    // R3-009: shutdown() precisa esperar o kill de verdade, nao so' disparar e seguir
+    fechar: () => Promise.all([...paineis.keys()].map(id => parar(id))),
     sessoes: () => listarSessoes(pastaDados),
     historico: (id, file, max) => historicoDaSessao(file && fs.existsSync(file) ? file : arquivoDaSessao(pastaDados, id), max || 60),
     arquivoDe: (id) => arquivoDaSessao(pastaDados, id),

@@ -159,6 +159,10 @@ test('R1-025: fechar a aba inteira guarda cada painel em fechadosRecentes', asyn
     telaNovaAba: () => {},
     ativarAbaProjeto: () => {},
     savePanes: () => {},
+    // R3-039 fez fecharAba checar o painel de agentes tambem, igual ja fazia com o Quadro;
+    // sem estes dois globais o teste quebrava so por faltar o stub, nao por comportamento errado
+    agPaneAberto: null,
+    fecharPainelAgentes: () => {},
   });
   c.window.api.paneStop = async () => ({});
   vm.runInContext(src, c);

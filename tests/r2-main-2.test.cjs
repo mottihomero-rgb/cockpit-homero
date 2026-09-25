@@ -65,6 +65,10 @@ test('R2-026: atalho global recria a janela quando ela foi fechada, e so manda d
     var criandoJanelaPeloAtalho = false;
     var createWindowCalls = 0;
     var eventos = [];
+    // R3-002: o callback agora arma um timeout de rede extra (ver main.js) — este contexto
+    // isolado nao tem setTimeout/clearTimeout do Node, so' precisa nao explodir ao chamar
+    function setTimeout() { return 0; }
+    function clearTimeout() {}
     function createWindow() {
       createWindowCalls++;
       win = {

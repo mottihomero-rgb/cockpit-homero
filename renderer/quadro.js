@@ -1640,6 +1640,13 @@
     return !!Q.claude.visto && JSON.stringify(limparCena(Q.cena)) === Q.claude.cena;
   }
 
+  /* R3-043: desenho HUMANO (sem doClaude) parado desde a ultima leitura/gravacao — sem isso,
+     so o desenho do Claude tinha esse "intocado" e o vigia parava de reler o disco assim que
+     um desenho a mao chegava de outro aparelho, perdendo tudo que fosse desenhado depois */
+  function cenaIntocada() {
+    return JSON.stringify(limparCena(Q.cena)) === Q.rascunho.ultimo;
+  }
+
   /* enquanto o quadro esta aberto, olha o rascunho: se o Claude gravou um desenho novo e ele
      nao mexeu no anterior, o quadro se redesenha sozinho (conversa ao vivo). Sem novidade,
      o intervalo cresce (2s -> 5s -> 15s) pra nao ficar lendo disco a troco de nada com a
@@ -1651,7 +1658,7 @@
     const proximoIntervalo = () => (Q.claude.semNovidade >= 15 ? 15000 : Q.claude.semNovidade >= 5 ? 5000 : 2000);
     const volta = async () => {
       if (!Q.aberto || Q.abertura !== abertura) return;   // fechou: o vigia morre junto
-      if (!Q.gesto && !Q.editando && (cenaVazia() || desenhoDoClaudeIntocado())) {
+      if (!Q.gesto && !Q.editando && (cenaVazia() || desenhoDoClaudeIntocado() || cenaIntocada())) {
         const trouxeNovidade = await recuperarRascunho();
         Q.claude.semNovidade = trouxeNovidade ? 0 : Q.claude.semNovidade + 1;
       } else {
@@ -1673,15 +1680,20 @@
     try { r = await window.api.quadroRascunhoLer(); } catch (_) { return; }
     // A leitura no telefone pode demorar: ele pode ter desenhado, limpado ou
     // fechado o quadro nesse tempo. O rascunho antigo não passa por cima disso.
-    if (!Q.aberto || Q.abertura !== abertura || Q.revisao !== revisao || !(cenaVazia() || desenhoDoClaudeIntocado())) return;
+    // R3-043: cenaIntocada() entra aqui tambem — sem ela, o quadro parava de reler o disco
+    // assim que um desenho HUMANO (sem doClaude) chegasse de outro aparelho, e o proximo
+    // fechar/tocar sobrescrevia o rascunho com a cena velha, apagando o que o Mac fez depois
+    if (!Q.aberto || Q.abertura !== abertura || Q.revisao !== revisao || !(cenaVazia() || desenhoDoClaudeIntocado() || cenaIntocada())) return;
     if (!r || !r.cena) return;
     const doClaude = Number(r.cena.doClaude) || 0;
     // desenho do Claude ja visto nao volta sozinho, MESMO com a tela vazia: senao o
     // "Limpar" (que so grava a tela vazia no disco ~2s depois) podia ser desfeito pelo
     // proprio vigia relendo o rascunho.json antigo nesse intervalo
     if (doClaude && doClaude === Q.claude.visto) return;
-    // com o desenho do Claude na tela, so troca se o arquivo tiver um desenho NOVO dele
-    if (!cenaVazia() && !doClaude) return;
+    // com o desenho do Claude na tela, so troca se o arquivo tiver um desenho NOVO dele;
+    // mas se o que esta na tela e humano e continua intocado, um desenho humano NOVO
+    // (de outro aparelho) ainda pode substituir (R3-043)
+    if (!cenaVazia() && !doClaude && !cenaIntocada()) return;
     /* desenho que ja foi mandado pro chat nao ressuscita: dias depois ele voltaria na tela
        e seria mandado de novo, colado no fluxo novo (o Claude receberia A+B como um so) */
     if (r.enviadoEm) return;
@@ -1690,6 +1702,7 @@
     // desenho gravado pela versao antiga podia ter texto escondido dentro da forma;
     // ao voltar, a forma cresce ate caber (o que ele escreveu nao pode sumir)
     for (const f of c.formas) ajustarAltura(f);
+    const cenaEstavaVazia = cenaVazia();   // R3-043: so pra escolher o texto do toast
     Q.cena = c;
     Q.rascunho.ultimo = JSON.stringify(limparCena(Q.cena));
     iniciarPilha();
@@ -1698,7 +1711,10 @@
       Q.claude.visto = doClaude;
       Q.claude.cena = JSON.stringify(limparCena(Q.cena));
       toast('O Claude atualizou o desenho.', 'Começar do zero', () => limpar(true));
-    } else toast('Voltei o seu último rascunho.', 'Começar do zero', () => limpar(true));
+    } else if (cenaEstavaVazia) toast('Voltei o seu último rascunho.', 'Começar do zero', () => limpar(true));
+    // R3-043: quando ja tinha desenho intocado na tela e trocou, nao e "o rascunho dele" —
+    // veio de outro aparelho, e dizer o contrario esconde que o desenho mudou
+    else toast('Atualizei com o desenho de outro aparelho.', 'Começar do zero', () => limpar(true));
     return true;   // trouxe algo novo pra tela: o vigia (vigiarClaude) volta a checar rapido
   }
 
@@ -2210,10 +2226,14 @@
   async function abrir(P) {
     const el = caixa();
     const jaAberto = Q.aberto;
+    // R3-007: boolean de verdade pra quem chama saber se ABRIU de fato (antes so tinha
+    // "return;" em todo canto, e a Promise em si e sempre truthy pra quem so faz !!)
+    let bloqueado = false;
     // reabrir apontando pra outro chat com desenho ainda nao mandado trocaria o dono
     // escondido, e o "Mandar pro chat" iria pro lugar errado; so troca se nao ha nada a perder
     if (jaAberto && P && P !== Q.P && !cenaVazia()) {
       toast('Esse desenho ainda não foi mandado. Mande ou limpe antes de abrir noutro chat.');
+      bloqueado = true;
     } else {
       Q.P = P || Q.P || null;
     }
@@ -2225,7 +2245,7 @@
       Q.el.sub.textContent = [pasta, Q.P.engine === 'codex' ? 'Codex' : 'Claude'].filter(Boolean).join(' · ');
     } else Q.el.sub.textContent = '';
 
-    if (jaAberto) { agendar(); return; }
+    if (jaAberto) { agendar(); return !bloqueado; }
 
     el.classList.remove('hidden');
     Q.aberto = true;
@@ -2238,10 +2258,11 @@
       await recuperarRascunho();
     }
     vigiarClaude();
-    if (!Q.aberto || Q.abertura !== abertura) return;
+    if (!Q.aberto || Q.abertura !== abertura) return false;
     if (!Q.pilha.passos.length) iniciarPilha();
     setFerramenta(Q.ferramenta || 'selecionar');
     agendar();
+    return true;
   }
 
   function fechar() {

@@ -76,7 +76,8 @@ const nomeDoMotor = (eng) => NOME_MOTOR[eng] || 'Claude';
 const MOTORES = ['claude', 'codex', 'acp', 'gemini', 'grok'];
 // ACP continua no histórico antigo; as escolhas novas são marcas, não protocolos.
 const MOTORES_VISIVEIS = ['claude', 'codex', 'gemini', 'grok'];
-const motorVisivel = (eng) => MOTORES_VISIVEIS.includes(eng) ? eng : 'codex';
+// sem motor salvo (1º boot ou config resetado), o padrão é Claude, não Codex.
+const motorVisivel = (eng) => MOTORES_VISIVEIS.includes(eng) ? eng : 'claude';
 const CAIXA_MOTOR = { claude: 'Claude', codex: 'Codex', acp: 'Acp', gemini: 'Gemini', grok: 'Grok' };
 const caixaHist = (eng) => document.getElementById('hist' + (CAIXA_MOTOR[eng] || 'Claude'));
 /* estado guardado por motor: nascendo com os três, um "++" numa chave que não existe deixa de
@@ -430,6 +431,10 @@ async function fecharAba(A) {
     if (P.fecharTerminal) { try { P.fecharTerminal(); } catch {} }
     paraParar.push({ pid, engine: P.engine });
     guardarFechado(P);   // fechar a aba tambem alimenta o "Reabrir o ultimo chat fechado"
+    // mesma regra do closePane: o quadro branco nao pode sobreviver ao painel dono
+    if (window.Quadro && window.Quadro.aberto && window.Quadro.aberto() && window.Quadro.donoEh && window.Quadro.donoEh(P)) { try { window.Quadro.fechar(); } catch (_) {} }
+    // idem pro painel "Time de agentes": a aba inteira sai, o painel de agentes dela nao pode sobrar
+    if (agPaneAberto === P) { try { fecharPainelAgentes(); } catch (_) {} }
     P.el.remove(); panes.delete(pid);
   }
   A.ordem = [];
@@ -486,6 +491,13 @@ async function trocarPastaDaAba(A) {
 // move TODOS os chats da aba pra pasta nova (local ou VPS) — usado pelo Finder e pelo campo da VPS
 async function aplicarPastaNaAba(A, p) {
   if (!p || p === A.cwd) return;
+  // mesma regra do fechar aba: mudar a pasta mata o motor de cada chat da aba — pergunta uma vez
+  // só, agregado, e a aba muda inteira ou não muda (evita ficar com metade numa pasta e metade noutra)
+  const ocupados = A.ordem.map(id => panes.get(id)).filter(q => q && (q.busy || agTrabalhando(q))).length;
+  if (ocupados) {
+    const q = ocupados === 1 ? 'um chat desta aba está trabalhando' : ocupados + ' chats desta aba estão trabalhando';
+    if (!confirm('Tem ' + q + '.\n\nMudar a pasta joga fora o que eles estão fazendo. Mudar mesmo assim?')) return;
+  }
   A.cwd = p;
   pintarAba(A);
   // os chats dessa aba passam a viver na pasta nova
@@ -542,6 +554,13 @@ function pedirCaminhoVpsDaAba(A) {
 // tira o chat de onde esta e coloca em outra posicao (ou em outra aba)
 function moverPane(P, A, indice) {
   const antiga = abaDe(P);
+  // pasta vai mudar: motor que nao roda no destino bloqueia, e trabalho em andamento pergunta
+  // antes de matar — TUDO antes de mexer em ordem/aid, senao um "nao" deixa o painel numa aba errada
+  if (antiga && antiga !== A && P.cwd !== A.cwd) {
+    const motivo = motorIndisponivelNaPasta(P.engine, A.cwd);
+    if (motivo) { avisoTemp(P, motivo, true); return; }
+    if (!confirmarCorte(P, 'Mudar de pasta')) return;
+  }
   // este chat vai sair de onde esta: os que ficam alargam na hora e o texto reflui.
   // as DUAS abas mudam de largura, e o proprio chat que se muda tambem precisa ser anotado.
   guardarAntesDeMexer([antiga, A], null);
@@ -640,6 +659,7 @@ async function levarChatPara(P, escolhida) {
   const jaExiste = abaDoCaminho(escolhida, false);
 
   if (jaExiste && jaExiste === A0) {   // ja e a aba certa: so a subpasta do chat muda
+    if (!confirmarCorte(P, 'Mudar de pasta')) return;
     await desligarMotor(P);
     if (panes.get(P.id) !== P) return;
     P.cwd = escolhida; P.started = false; setDot(P, 'off');
@@ -653,6 +673,7 @@ async function levarChatPara(P, escolhida) {
   // este chat esta sozinho na aba e nao ha outra aba com essa pasta:
   // e mais simples a propria aba mudar de pasta do que criar outra
   if (!jaExiste && A0 && A0.ordem.length === 1) {
+    if (!confirmarCorte(P, 'Mudar de pasta')) return;
     A0.cwd = escolhida;
     await desligarMotor(P);
     if (panes.get(P.id) !== P) return;
@@ -925,7 +946,7 @@ function newPane(opts = {}) {
     if (mm) menuArquivos(P, mm[1]);
     // apagou o "@": fecha o menu e cancela a busca que ainda vinha pela rede (senao ela
     // abriria o menu sozinha segundos depois, por cima do que estivesse na tela)
-    else { if (menuDeArquivosNaTela(P)) fecharMenus(); pararBuscaEmVoo(); }
+    else { if (menuDeArquivosNaTela(P)) fecharMenus(); pararBuscaEmVoo(P); }
   });
   // apagou o campo na mao com o quadro colado e sem anexo: o metadado do quadro tem que
   // sair junto, senao send() acha que ainda ha algo pra mandar e envia mensagem vazia
@@ -1228,8 +1249,9 @@ async function restaurarAbasCorpo(salvas) {
   let remontadas = 0;   // R2-002: conta quantas abas voltaram de verdade, pra restaurarAbas() saber se falhou tudo
   for (const a of salvas) {
     // cada aba isolada: uma aba com problema nao pode derrubar as seguintes
+    let A;
     try {
-    const A = novaAbaProjeto(a.cwd || HOME);
+    A = novaAbaProjeto(a.cwd || HOME);
     a.chats.forEach((c, i) => {
       const P = newPane({
         engine: c.engine, aba: A, cwd: c.cwd || a.cwd,
@@ -1264,6 +1286,18 @@ async function restaurarAbasCorpo(salvas) {
     remontadas++;   // R2-002: conta a aba que remontou de verdade
     } catch (e) {
       console.error('nao consegui remontar a aba', a && a.cwd, e);
+      // a aba quebrou no meio: desfaz o que ela ja criou. Sem isto ela fica viva pela metade
+      // NA TELA e, como abasQueNaoVoltaram guarda a copia crua intacta, a mesma pasta sai
+      // duplicada no proximo config.json (savePanes concatena as duas sem checar)
+      if (A) {
+        for (const [pid, P] of panes) {
+          if (P.aid !== A.id) continue;
+          P.el.remove();
+          panes.delete(pid);
+        }
+        A.ordem = [];
+        removerAbaVazia(A);
+      }
     }
   }
 
@@ -1436,6 +1470,9 @@ function montarContexto(P, retomada, motivo) {
   if (retomada) {
     // o motivo muda so a PRIMEIRA frase: trocar de plano para créditos nao e queda nenhuma,
     // e dizer que caiu fazia o motor pedir desculpas por um problema que nao existiu
+    // primeira-tentativa: a conversa NUNCA chegou a começar (nenhuma resposta real ainda),
+    // então não existe "queda" pra avisar nem "conversa até aqui" pra fingir — é só reenviar.
+    if (motivo === 'primeira-tentativa') return 'A primeira tentativa não chegou a começar. Mandando de novo.\n\n';
     const abertura = motivo === 'troca-de-cobranca'
       ? 'ATENÇÃO: esta conversa está continuando numa sessão nova (a forma de cobrança/modelo mudou). '
       : 'ATENÇÃO: esta conversa caiu (limite de uso ou internet) e voltou como sessão nova. ';
@@ -1560,6 +1597,9 @@ async function closePane(id, semPerguntar) {
   const P = panes.get(id); if (!P) return;
   // o quadro branco e dono de UM painel so: fechar outro painel nao pode derrubar o desenho dele
   if (window.Quadro && window.Quadro.aberto && window.Quadro.aberto() && window.Quadro.donoEh && window.Quadro.donoEh(P)) { try { window.Quadro.fechar(); } catch (_) {} }
+  // mesma regra do Quadro: o painel "Time de agentes" e' dono de UM painel so; fechar esse
+  // painel nao pode deixar a janela de agentes aberta mostrando um chat que ja nem existe mais
+  if (agPaneAberto === P) { try { fecharPainelAgentes(); } catch (_) {} }
   if ((P.busy || agTrabalhando(P)) && !semPerguntar) {
     const nome = (P.titulo || '').trim().slice(0, 40) || 'este chat';
     if (!confirm('O ' + nomeDoMotor(P.engine) + ' está trabalhando em “' + nome + '”.\n\nFechar agora joga fora o que ele está fazendo. Fechar mesmo assim?')) return;
@@ -2004,6 +2044,19 @@ function editarMinhaMensagem(P, d, texto) {
        sobram duas iguais na tela e duas no P.hist. Em mensagem normal a antiga fica de
        proposito — ali mostrar as duas versoes e o esperado. */
     if (d.classList.contains('naoenviada')) tirarBolha(P, d);
+    /* R3-029: bolha ainda "esperando" na fila (motor ocupado, ainda vai sair) — se nao tirar
+       o texto velho de P.queued antes do send() de baixo, juntarNaFila GRUDA o corrigido em
+       cima do errado (join '\n\n') e cria bolha nova, e o anexo original se perde porque
+       P.anexos ja foi esvaziado no 1o envio. So da pra zerar P.queued com seguranca quando a
+       fila tem SO essa mensagem: com 2+ na fila o texto de cada uma ja esta misturado dentro
+       do mesmo P.queued, e apagar tudo perderia as outras — ai so tira a bolha mesmo. */
+    else if (d.classList.contains('esperando') && P.filaMsgs && P.filaMsgs.length === 1 && P.filaMsgs[0].el === d) {
+      if (P.queued && P.queued.attachments) reporAnexos(P, P.queued.attachments);
+      P.queued = null;
+      tirarBolha(P, d);
+    } else if (d.classList.contains('esperando')) {
+      tirarBolha(P, d);
+    }
     const inp = $('.p-input', P.el);
     inp.value = novo;
     inp.dispatchEvent(new Event('input'));
@@ -2552,7 +2605,12 @@ async function alternarDitado(P) {
   // ja esta ditando ao vivo aqui? entao o clique e para PARAR (e o texto fica)
   if (VIVO.P === P) { window.api.vozParar({ paneId: P.id }); return; }
   if (VIVO.P) { window.api.vozParar({ paneId: VIVO.P.id }); VIVO.P = null; }
-  if (DITADO.rec) { pararDitado(); return; }
+  // R3-031: mesmo painel gravando = toggle de verdade (para e sai). Painel DIFERENTE grava-
+  // dor de outro painel: para o antigo mas NAO sai, cai para ligar o novo aqui embaixo —
+  // igual ja acontecia no bloco do VIVO.P acima. Sem isto o clique no microfone de B so
+  // calava A e B nunca acendia.
+  if (DITADO.rec && DITADO.P === P) { pararDitado(); return; }
+  if (DITADO.rec) pararDitado();
   if (window.api.vozVivo) {
     VIVO.P = P; VIVO.base = $('.p-input', P.el).value || ''; VIVO.firme = ''; VIVO.parcial = '';
     // ditado novo comeca sem lembranca do que foi escrito no anterior, senao a guarda de
@@ -2928,9 +2986,14 @@ function linkarArquivos(P, el) {
   /* Painel da VPS fala de caminho de LINUX (/home, /opt, /var…), que aqui no Mac nem existe.
      Por isso a peneira muda com o painel: raizes do Mac num painel local, raizes do Linux num
      painel da VPS. Sem isso, ou o link nem aparecia, ou apontava para o arquivo errado. */
+  /* R3-032: pasta com espaço no nome (ex.: "Copy Lançamentos") nunca fechava o ".ext" sem
+     espaço no meio, entao o caminho inteiro ficava cru, sem virar link. Corpo aceita espaço
+     ENTRE palavras (olhando que o char seguinte nao e espaço/aspas/fecha-parenteses), mas o
+     `?` deixa a busca PREGUIÇOSA: para no PRIMEIRO ".ext" que achar, nao no ULTIMO da frase
+     (testado: greedy sem o `?` atravessava frase inteira até um número tipo "2.5" mais adiante). */
   const re = NA_VPS(P.cwd)
-    ? /(\/(?:home|root|opt|srv|var|etc|usr|mnt|media|data|tmp)\/[^\s"'<>)]+\.[A-Za-z0-9]{1,6})/g
-    : /(\/(?:Users|tmp|private|Volumes)\/[^\s"'<>)]+\.[A-Za-z0-9]{1,6})/g;
+    ? /(\/(?:home|root|opt|srv|var|etc|usr|mnt|media|data|tmp)\/(?:[^\s"'<>)]|\s(?=[^\s"'<>)])){1,200}?\.[A-Za-z0-9]{1,6})(?![A-Za-z0-9])/g
+    : /(\/(?:Users|tmp|private|Volumes)\/(?:[^\s"'<>)]|\s(?=[^\s"'<>)])){1,200}?\.[A-Za-z0-9]{1,6})(?![A-Za-z0-9])/g;
   const andar = (no) => {
     for (const filho of [...no.childNodes]) {
       if (filho.nodeType === 3) {
@@ -2961,7 +3024,12 @@ function textFinal(P, key, text) {
   if (!text || !text.trim()) return;
   let b = P.blocks.get('resp');
   const depoisDeComando = P.execEl && P.execEl.isConnected;
-  if (!b || P.blocks.get('respKey') !== key || depoisDeComando) {
+  // R3-030: texto que nasce um bloco visual NOVO (id/key trocou, ou veio depois de uma
+  // ferramenta) tem de virar entrada NOVA em P.hist; so redesenho do MESMO bloco pode
+  // sobrescrever a ultima. Sem isso, texto+ferramenta+texto no mesmo turno perdia o 1o
+  // texto do historico (a 2a chamada sobrescrevia em cima, mesmo os dois ficando na tela).
+  const blocoNovo = !b || P.blocks.get('respKey') !== key || depoisDeComando;
+  if (blocoNovo) {
     if (b && !depoisDeComando) { b.raw = ''; b.el.innerHTML = ''; b.corte = 0; b.fixos = 0; }
     else { b = botBlock(P, 'resp', depoisDeComando); }
     P.blocks.set('respKey', key); P.blocks.set('resp', b);
@@ -2975,7 +3043,7 @@ function textFinal(P, key, text) {
   scroll(P);
   const quem = nomeDoMotor(P.engine);
   const ult = P.hist[P.hist.length - 1];
-  if (ult && ult.quem === quem) ult.texto = text; else P.hist.push({ quem, texto: text });
+  if (!blocoNovo && ult && ult.quem === quem) ult.texto = text; else P.hist.push({ quem, texto: text });
 }
 /* ============ antes e depois de cada edição ============
    O motor mexe no arquivo e a tela mostrava só o nome dele. Aqui a mudança aparece pintada:
@@ -3609,7 +3677,12 @@ async function send(P) {
       // O contexto vai junto em silencio: a tarja vermelha aparecia no comeco de quase todo chat
       // e nao pedia nada dele. O comportamento continua igual, so o recado saiu da tela.
       if (!fio && historicoAnterior && !P.passarContexto) {
-        P.passarContexto = montarContexto({ ...P, hist: P.hist.slice(0, historicoAnterior) }, true);
+        const pedaco = P.hist.slice(0, historicoAnterior);
+        // R3-012: só existe queda de verdade se ALGUMA resposta do motor tiver chegado antes.
+        // Sem isso, a 1a tentativa que nem chegou a começar (processo caiu antes de responder)
+        // virava "ATENÇÃO: esta conversa caiu" pra uma conversa que nunca existiu.
+        const motivoContexto = pedaco.some(h => h.quem !== 'Você') ? undefined : 'primeira-tentativa';
+        P.passarContexto = montarContexto({ ...P, hist: pedaco }, true, motivoContexto);
         console.log('[cockpit] sem fio: mandei o contexto desta conversa junto');
       }
       const inicio = await window.api.paneStart({
@@ -3642,7 +3715,9 @@ async function send(P) {
       // Uma versao antiga podia guardar aqui o numero da conversa do outro motor. O processo
       // principal se recupera abrindo outra; antes de mandar a fala, esta tela repoe o contexto.
       if (inicio && inicio.nova && historicoAnterior && !P.passarContexto) {
-        P.passarContexto = montarContexto({ ...P, hist: P.hist.slice(0, historicoAnterior) }, true);
+        const pedaco = P.hist.slice(0, historicoAnterior);
+        const motivoContexto = pedaco.some(h => h.quem !== 'Você') ? undefined : 'primeira-tentativa';
+        P.passarContexto = montarContexto({ ...P, hist: pedaco }, true, motivoContexto);
       }
       P.started = true; P.ultraAvisado = false;   // processo novo: liberar o ultracode de novo
       P.forkPendente = false;   // o ramo já nasceu no start; não pode forkar de novo
@@ -4395,7 +4470,9 @@ function barraEsforco(P) {
 
   let valor = Math.max(0, lista.findIndex(e => e.id === P.effort));
   let ix = Math.round(valor);
-  let arrastando = false, amostras = [], frameMola = 0, framePx = 0, revelar = 0, ultraDesde = 0;
+  // aplicando trava reentrancia: segurar a seta do teclado dispara keydown em fila, e sem
+  // essa trava cada tecla abria seu proprio confirm() de "vai perder o trabalho" (R3-035)
+  let arrastando = false, aplicando = false, amostras = [], frameMola = 0, framePx = 0, revelar = 0, ultraDesde = 0;
 
   const nome = (i) => EF_PT[lista[i].id] || lista[i].id;
 
@@ -4453,10 +4530,17 @@ function barraEsforco(P) {
   }
 
   async function aplicar(i) {
-    const antes = ix;
-    pintar(i);
-    // cancelou (trabalho rodando e ele desistiu): o slider não pode mentir sobre o esforço atual
-    if (await trocarEsforco(P, lista[i].id) === false) pintar(antes);
+    // trava de reentrancia: teclado em repeticao ou 2 chamadas em fila nao empilham confirm() (R3-035)
+    if (aplicando) return;
+    aplicando = true;
+    try {
+      const antes = ix;
+      pintar(i);
+      // cancelou (trabalho rodando e ele desistiu): o slider não pode mentir sobre o esforço atual
+      if (await trocarEsforco(P, lista[i].id) === false) pintar(antes);
+    } finally {
+      aplicando = false;
+    }
   }
 
   const valorDoX = (clientX) => {
@@ -4608,7 +4692,10 @@ function barraEsforco(P) {
 async function trocarEsforco(P, id) {
   // trocar de esforço desliga o motor: com trabalho rodando, pergunta antes (igual ao modo/motor)
   const estavaRodando = !!P.busy || agTrabalhando(P);
-  if (!confirmarCorte(P, 'Trocar de esforço')) return false;
+  // Codex por mudarEscolhasCodex nunca derruba o turno (aplica ao vivo ou fica pendente pra
+  // proxima mensagem); so o Claude em curso e destruido aqui — o aviso so pode mentir pro Codex (R3-006)
+  const destroi = P.engine === 'claude' && P.started;
+  if (destroi && !confirmarCorte(P, 'Trocar de esforço')) return false;
   // vale só para este painel: conversa nova continua nascendo no esforço de PADRAO_NOVO
   P.effort = id; P.ultraAvisado = false;
   lembrarEscolhaDaPasta(P);
@@ -4845,6 +4932,10 @@ function menuModos(P) {
 /* ---- menu de modelos (no cabeçalho) ---- */
 async function menuModelos(P) {
   const m = novoMenu(P);
+  // marca esta janelinha: se a resposta atrasada de codexModels() chegar depois que o
+  // usuario ja fechou o menu e abriu outra coisa (terminal, foto...), nao repinta por cima (R3-033)
+  const modal = $('.p-modal', P.el);
+  const geracao = modal.dataset.geracaoMenu = 'md' + Date.now() + Math.random();
   const pintar = () => {
     m.innerHTML = '';
     /* [EDITA leva 12.4, só o texto] no painel ACP este menu não escolhe cérebro: escolhe o
@@ -4857,11 +4948,15 @@ async function menuModelos(P) {
       // leva 12.5: no ACP o menu diz o que está e o que NÃO está instalado nesta máquina
       const faltando = P.engine === 'acp' && !agenteAcpTem(mo);
       m.appendChild(elItem({ nome: mo.nome, desc: mo.desc + (faltando ? ' · não está instalado neste Mac' : ''), on: mo.id === P.model }, async () => {
-        // trocar de modelo desliga o motor: pergunta ANTES de mexer em P.model, senão a UI já
-        // muda visualmente antes dele confirmar/cancelar
-        if (mo.id !== P.model && !confirmarCorte(P, 'Trocar de modelo')) return;
         const vaiPorCreditos = modeloPorCreditos(mo.id);
         const mudouOrigem = modeloPorCreditos(P.model) !== vaiPorCreditos;
+        // Codex sem mudar de cobrança segue por mudarEscolhasCodex, que nunca derruba o turno
+        // (aplica ao vivo ou fica pendente); so os outros casos de fato matam o motor — o aviso
+        // so pode ameacar perder trabalho quando isso e verdade (R3-006)
+        const destroi = !(P.engine === 'codex' && !mudouOrigem && !vaiPorCreditos);
+        // trocar de modelo desliga o motor: pergunta ANTES de mexer em P.model, senão a UI já
+        // muda visualmente antes dele confirmar/cancelar
+        if (mo.id !== P.model && destroi && !confirmarCorte(P, 'Trocar de modelo')) return;
         P.model = mo.id;
         const ef = esforcosDe(P);
         if (ef.length && !ef.find(e => e.id === P.effort)) P.effort = mo.padraoEffort || ef[0].id;
@@ -4908,6 +5003,9 @@ async function menuModelos(P) {
     // NAO gravar array vazio em MODELOS_CODEX: [] e verdadeiro em JS, entao o "!MODELOS_CODEX"
     // acima nunca mais buscaria de novo mesmo com o Codex de volta ao ar (mesmo padrao do boot)
     const ms = await window.api.codexModels();
+    // a janelinha pode ter virado terminal/foto/conta/outro menu enquanto isso demorava
+    if (modal.classList.contains('hidden') || !modal.classList.contains('como-menu')
+      || modal.dataset.codexSurface !== 'menu' || modal.dataset.geracaoMenu !== geracao) return;
     if (ms && ms.length) { MODELOS_CODEX = traduzCodex(ms); fillModels(P); pintar(); }
   }
 }
@@ -5028,7 +5126,13 @@ async function reabrirUltimoFechado() {
   if (f.resumeId) {
     const P = await openSession({ id: f.resumeId, engine: f.engine, cwd: f.cwd, title: f.titulo || '', file: f.arquivo }, null);
     // R2-033: openSession sempre zera P.worktree — repõe aqui, igual o boot faz em restaurarAbasCorpo
-    if (P && f.worktree && !NA_VPS(f.cwd)) { P.worktree = f.worktree; mostrarPastaNoPainel(P); }
+    // Só reaplica se o painel nasceu agora (R3-008): se openSession devolveu um painel que já
+    // estava aberto e em uso, sobrescrever o worktree dele em silêncio muda a pasta por baixo dele.
+    if (P && f.worktree && !NA_VPS(f.cwd)) {
+      if (P._painelNovoDeAbertura) { P.worktree = f.worktree; mostrarPastaNoPainel(P); }
+      else avisoTemp(P, 'Esta conversa já estava aberta com outra pasta: o worktree salvo não foi aplicado.');
+    }
+    if (P) delete P._painelNovoDeAbertura;
     return;
   }
   const A = abas.get(f.aid) || abaAtiva;
@@ -5107,10 +5211,11 @@ async function menuSkills(P, filtroInicial, focar) {
     // a memoria, os agentes e os hooks sao arquivos do MAC: no telefone a janela so abria para
     // dizer que nao conseguiu ler. Fora da lista, como o "Recortar a tela".
     ...(window.SEM_ELECTRON ? [] : [{ sec: 'Painel', ic: 'sliders-horizontal', nome: 'Configurar o Claude', desc: 'memória, agentes, hooks e permissões', act: () => janelaConfiguracao(P) }]),
-    { sec: 'Painel', ic: 'terminal', nome: 'terminal', desc: 'rodar comandos aqui dentro, sem abrir o Terminal do Mac', act: () => janelaTerminal(P, 'cd ' + JSON.stringify(P.cwd) + ' 2>/dev/null; exec ${SHELL:-/bin/zsh} -l', 'Terminal — ' + nomePasta(P.cwd)) },
+    // terminal abre um shell de verdade no Mac: term:run é bloqueado do celular, então o item some de lá (R3-024)
+    ...(window.SEM_ELECTRON ? [] : [{ sec: 'Painel', ic: 'terminal', nome: 'terminal', desc: 'rodar comandos aqui dentro, sem abrir o Terminal do Mac', act: () => janelaTerminal(P, 'cd ' + JSON.stringify(P.cwd) + ' 2>/dev/null; exec ${SHELL:-/bin/zsh} -l', 'Terminal — ' + nomePasta(P.cwd)) }]),
     /* Item NOVO, ao lado do terminal de sempre (que continua abrindo aqui no Mac). So aparece
        em painel da VPS. Quem monta a linha do ssh e o main: host e usuario nao saem de la. */
-    ...(NA_VPS(P.cwd) ? [{ sec: 'Painel', ic: 'terminal', nome: 'terminal na VPS', desc: 'shell de verdade lá dentro, na pasta deste painel', act: () => abrirTerminalVps(P) }] : []),
+    ...(window.SEM_ELECTRON || !NA_VPS(P.cwd) ? [] : [{ sec: 'Painel', ic: 'terminal', nome: 'terminal na VPS', desc: 'shell de verdade lá dentro, na pasta deste painel', act: () => abrirTerminalVps(P) }]),
     /* leva 10.5: branch isolada. Aparece SEMPRE — inclusive no Codex e na VPS, onde entrar é
        recusado com o motivo escrito, mas SAIR precisa continuar possível (ele pode ter
        trocado de motor depois de entrar). */
@@ -5574,9 +5679,14 @@ function formConector(P) {
     const comando = $('#cnCmd', cx).value.trim();
     const erro = $('#cnErro', cx);
     if (!nome || (!url && !comando)) { erro.style.display = 'block'; erro.textContent = 'Preciso do nome e do endereço (ou do comando).'; return; }
-    $('#cnOk', cx).textContent = 'adicionando…';
+    // mesma trava do botao "Entrar/Reconectar": sem isso, clique duplo aqui mandava dois
+    // mcpAcao juntos e podia duplicar o conector ou colidir escrevendo no mesmo config
+    const bt = $('#cnOk', cx);
+    if (bt.disabled) return;
+    bt.disabled = true;
+    bt.textContent = 'adicionando…';
     const r = await window.api.mcpAcao({ engine: P.engine, acao: 'add', nome, url, comando });
-    if (r && r.error) { erro.style.display = 'block'; erro.textContent = r.error; $('#cnOk', cx).textContent = 'Tentar de novo'; return; }
+    if (r && r.error) { erro.style.display = 'block'; erro.textContent = r.error; bt.textContent = 'Tentar de novo'; bt.disabled = false; return; }
     fecharModal(P);
     // aplicar o conector desliga o motor AGORA: com trabalho rodando, pergunta antes
     // (mesmo padrao de trocar de motor e trocar de modo), em vez de matar sem avisar
@@ -6690,9 +6800,15 @@ function pintarUso(P) {
   const passou = (ps !== null && ps >= USO_AVISO_SESSAO) || (pw !== null && pw >= USO_AVISO_SEMANA);
   if (!passou) { USO_FECHADO[P.engine] = null; esconderUso(P); return; }   // voltou ao normal
 
-  // ja foi fechado neste patamar: so reaparece se piorar de verdade
+  // ja foi fechado neste patamar: so reaparece se piorar de verdade.
+  // baseline null = a metrica nao tinha dado nenhum quando fechou (nao dava pra comparar
+  // crescimento); nesse caso qualquer valor real que chegar depois ja conta como piora, senao
+  // a tarja ficava travada em 999% pra sempre e nunca mais avisava daquela metrica
   const f = USO_FECHADO[P.engine];
-  if (f && (ps === null || ps < f.sessao + USO_DENOVO) && (pw === null || pw < f.semana + USO_DENOVO)) { esconderUso(P); return; }
+  if (f
+    && (f.sessao === null ? ps === null : (ps === null || ps < f.sessao + USO_DENOVO))
+    && (f.semana === null ? pw === null : (pw === null || pw < f.semana + USO_DENOVO))
+  ) { esconderUso(P); return; }
 
   const naSessao = ps !== null && ps >= USO_AVISO_SESSAO;
   const zera = naSessao ? u.sessao : u.semana;
@@ -6719,7 +6835,9 @@ function fecharUso(P) {
   const u = USO[P.engine];
   if (!u) return esconderUso(P);
   const ps = usoPct(u.sessao), pw = usoPct(u.semana);
-  USO_FECHADO[P.engine] = { sessao: ps === null ? 999 : ps, semana: pw === null ? 999 : pw };
+  // guardar null quando a metrica nao tinha dado (nao forcar 999): 999 travava a baseline
+  // pra sempre e a tarja nunca mais voltava a avisar daquela metrica quando ela chegasse
+  USO_FECHADO[P.engine] = { sessao: ps, semana: pw };
   // um X so: fechar num chat cala o aviso em TODOS os chats do mesmo motor
   for (const q of panes.values()) if (q.engine === P.engine) esconderUso(q);
 }
@@ -6791,7 +6909,9 @@ async function contaAcao(P, acao, motorPedido) {
     }
     // todo chat do mesmo motor recomeca, senao continua falando pela conta velha — mas se algum
     // estiver ocupado, perguntar antes de cortar (mesmo padrao de trocarParaConta)
-    const ocupados = [...panes.values()].filter(q => q.engine === eng && (q.busy || agTrabalhando(q)));
+    // a conta da VPS e' outra, controlada pelo servidor de la: trocar de conta local nao
+    // pode perguntar nem cortar chat que esta rodando na VPS (mesma regra do trocarParaConta)
+    const ocupados = [...panes.values()].filter(q => q.engine === eng && !NA_VPS(q.cwd) && (q.busy || agTrabalhando(q)));
     if (ocupados.length) {
       const msg = ocupados.length === 1
         ? 'O ' + nomeDoMotor(eng) + ' está trabalhando em “' + ((ocupados[0].titulo || '').trim().slice(0, 40) || 'um chat') + '”.\n\nTrocar de conta agora joga fora o que ele está fazendo. Continuar mesmo assim?'
@@ -6799,7 +6919,7 @@ async function contaAcao(P, acao, motorPedido) {
       if (!confirm(msg)) { avisoTemp(P, 'Nada foi cortado. Mande uma mensagem quando puder trocar.'); return; }
     }
     for (const q of panes.values()) {
-      if (q.engine !== eng) continue;
+      if (q.engine !== eng || NA_VPS(q.cwd)) continue; // VPS nao muda de conta aqui, nao interromper
       await desligarMotor(q);
       // religa na MESMA conversa: a sessao e' arquivo local, nao pertence a conta
       q.resumeId = q.sessaoId || q.resumeId; q.sessaoId = null;
@@ -6930,6 +7050,9 @@ function chegouNaInbox(m) {
   // o mesmo nome regravado: a tarja antiga apontava para o MESMO caminho, e o X dela apagaria
   // a mensagem NOVA
   try { $$('#faixaAvisos [data-aviso^="inbox-' + CSS.escape(m.nome) + '-"]').forEach((t) => t.remove()); } catch {}
+  // R3-025: a legenda chegou antes da foto e ja virou tarja de texto sozinha — some com ela
+  // agora que a foto trouxe a MESMA legenda, senao a mesma frase fica duas vezes na tela
+  if (m.substituiuNome) { try { $$('#faixaAvisos [data-aviso^="inbox-' + CSS.escape(m.substituiuNome) + '-"]').forEach((t) => t.remove()); } catch {} }
   const idAviso = 'inbox-' + m.nome + '-' + Math.round((m.quando || Date.now()) / 1000);
   mostrarAviso({
     // id por arquivo E hora: o mesmo nome noutro dia não herda o "fechado" do anterior
@@ -7057,15 +7180,18 @@ function pintarAnexos(P) {
 /* ================= completar caminho de arquivo com "@" =================
    Digitou "@" em qualquer ponto da linha e o menu mostra os arquivos da pasta DESTE painel —
    inclusive quando a pasta mora na VPS. Escolheu, o caminho inteiro entra na mensagem. */
-let buscaArqTimer = 0;
+/* Timer e geracao SAO DO PAINEL (P._buscaArqTimer / P._buscaArqGen), nao globais: eram
+   variaveis unicas do modulo, entao mandar mensagem ou fechar QUALQUER outro painel cancelava
+   a busca de arquivo em andamento de um painel diferente — send()/closePane de um painel B
+   derrubava o timer do painel A sem os dois terem nada a ver. */
 /* Geracao da busca. Na VPS a resposta demora e pode chegar DEPOIS da tecla seguinte: sem
    isto a lista velha pintava por cima da nova. */
-let buscaArqGen = 0;
 /* O miolo do cancelamento, sem tocar na tela. Separado de proposito: o pararBuscaDeArquivos
    fecha menu, e fechar menu solta o atalho de volta — em circulo. */
-function pararBuscaEmVoo() {
-  clearTimeout(buscaArqTimer);
-  buscaArqGen++;
+function pararBuscaEmVoo(P) {
+  if (!P) return;
+  clearTimeout(P._buscaArqTimer);
+  P._buscaArqGen = (P._buscaArqGen || 0) + 1;
 }
 /* R9: o fecharMenus nao reseta o className do .modal-cx, entao a marca "menu-arquivos"
    sobreviveria escondida ali depois de fechado. Por isso ninguem pergunta so' pela classe:
@@ -7080,7 +7206,7 @@ function menuDeArquivosNaTela(P) {
    de arquivos abriria sozinho por cima do que ja esta acontecendo na tela. */
 function pararBuscaDeArquivos(P) {
   if (!P) return;
-  pararBuscaEmVoo();
+  pararBuscaEmVoo(P);
   // o "procurando…" pode ja estar na tela: some junto, senao ficava pra sempre
   if (menuDeArquivosNaTela(P)) fecharMenus();
 }
@@ -7124,10 +7250,10 @@ function janelinhaOcupada(P) {
 }
 async function menuArquivos(P, termo) {
   const remoto = NA_VPS(P.cwd);
-  clearTimeout(buscaArqTimer);
-  const meuGen = ++buscaArqGen;
-  buscaArqTimer = setTimeout(async () => {
-    if (meuGen !== buscaArqGen) return;
+  clearTimeout(P._buscaArqTimer);
+  const meuGen = (P._buscaArqGen = (P._buscaArqGen || 0) + 1);
+  P._buscaArqTimer = setTimeout(async () => {
+    if (meuGen !== P._buscaArqGen) return;
     if (!P.el || !P.el.isConnected) return;              // o chat fechou enquanto o relogio corria
     if (janelinhaOcupada(P)) return;
     if (!arrobaAindaNoCampo(P, termo)) return;
@@ -7142,7 +7268,7 @@ async function menuArquivos(P, termo) {
       if (Array.isArray(r)) itens = r;
       else if (r && typeof r === 'object') { itens = Array.isArray(r.itens) ? r.itens : []; erro = r.error || ''; }
     } catch (e) { erro = 'Não consegui buscar os arquivos: ' + ((e && e.message) || e); }
-    if (meuGen !== buscaArqGen) return;                  // outra tecla ja pediu uma busca mais nova
+    if (meuGen !== P._buscaArqGen) return;                  // outra tecla ja pediu uma busca mais nova
     if (!P.el || !P.el.isConnected) return;
     if (janelinhaOcupada(P)) return;                     // enquanto o SSH voltava, a janelinha virou outra coisa
     // ele fechou o "procurando…" (Esc, clique fora): a resposta que chega depois nao pode
@@ -7201,7 +7327,7 @@ async function menuArquivos(P, termo) {
            tratador do documento, que mandava PARAR o trabalho da IA. Um aperto, duas coisas,
            e a segunda invisivel — trabalho jogado fora sem ele entender por quê. */
         ev.preventDefault(); ev.stopPropagation();
-        pararBuscaEmVoo();               // a proxima resposta em voo nao reabre o menu
+        pararBuscaEmVoo(P);               // a proxima resposta em voo nao reabre o menu
         fecharMenus(); soltarNavArquivos(P);
       }
     };
@@ -7552,7 +7678,9 @@ function lateralSegueAPasta() {
   }
 }
 
-const chaveFav = (s) => s.engine + ':' + s.id;
+// R3-037: inclui o arquivo — Codex repete o mesmo id em .jsonl diferentes (conversas distintas);
+// sem o arquivo, apagar uma tirava o favorito/grupo da irmã que continua viva.
+const chaveFav = (s) => s.engine + ':' + s.id + ':' + (s.file || '');
 const ehFavorita = (s) => Array.isArray(cfg.favoritos) && cfg.favoritos.includes(chaveFav(s));
 function trocarFavorita(s) {
   if (!Array.isArray(cfg.favoritos)) cfg.favoritos = [];
@@ -8192,6 +8320,8 @@ async function openSession(s, el) {
   // a conversa abre na aba do cliente dela, mesmo que tenha nascido numa subpasta
   const A = abaDoCaminho(s.cwd, true);
   let P = newPane({ engine: s.engine, aba: A, cwd: s.cwd, titulo: s.title });
+  // marca "nasceu agora": distingue do ramo "aberta" acima, que devolve um painel JA em uso (R3-008)
+  if (P) P._painelNovoDeAbertura = true;
   document.body.classList.remove('gaveta');
   document.querySelectorAll('.hist-item').forEach(x => x.classList.remove('on'));
   if (el) el.classList.add('on');
@@ -9245,8 +9375,12 @@ async function atualizarGit(P) {
   if (NA_VPS(P.cwd)) { chip.classList.add('hidden'); return; }
   // no worktree o chip mostra a branch isolada (a pasta só nasce na 1ª mensagem)
   const pastaGit = pastaDoWorktree(P);
+  // R3-042: 2 chamadas pro mesmo painel podem responder fora de ordem — a mais nova ganha
+  P.gitGen = (P.gitGen || 0) + 1;
+  const minhaVez = P.gitGen;
   let g = null;
   try { g = await window.api.gitStatus({ cwd: pastaGit }); } catch {}
+  if (minhaVez !== P.gitGen) return;   // ja tem uma resposta mais nova: esta morreu
   if (!g || !g.branch) {
     if (P.worktree) {
       chip.classList.remove('hidden');
@@ -9317,7 +9451,9 @@ function pintarPasta(P, rotulo) {
   bt.setAttribute('aria-label', rotulo);
 }
 async function alternarWorktree(P) {
-  if (P.worktree) { await aplicarWorktree(P, ''); return; }   // sair sempre pode, em qualquer motor
+  // R3-040: abrir/sair de worktree corta o motor igual troca de motor — pergunta antes se está trabalhando
+  if (!confirmarCorte(P, P.worktree ? 'Sair do worktree' : 'Abrir em worktree')) return;
+  if (P.worktree) { await aplicarWorktree(P, ''); return; }   // sair sempre pode, em qualquer motor (so pergunta se ha trabalho em andamento)
   if (P.engine !== 'claude') { note(P, 'Worktree por aqui só no Claude: a flag -w é dele. Troque o motor deste chat para o Claude.', true); return; }
   if (NA_VPS(P.cwd)) { note(P, 'Worktree não vale em chat da VPS: a branch isolada seria criada no disco de lá, e quem confere o repositório é o Mac.', true); return; }
   /* Confere o repositório ANTES de perguntar o nome. O processo principal também confere (e
@@ -9786,9 +9922,16 @@ function acaoDeMenu(a) {
   if (a === 'ditar') return focusPane && alternarDitado(focusPane);
   if (a === 'quadro') {
     // R2-025: avisa o main.js se abriu de verdade — sem painel em foco, focusPane e null e nada abre
-    const abriu = !!(focusPane && window.Quadro && window.Quadro.abrir(focusPane));
-    if (window.api && window.api.quadroAbriu) window.api.quadroAbriu(abriu);
-    return abriu;
+    // R3-007: Quadro.abrir e assincrona (Promise sempre truthy); so avisa quando ela
+    // resolver de verdade, com o valor booleano real (nao mais !!Promise)
+    if (focusPane && window.Quadro) {
+      Promise.resolve(window.Quadro.abrir(focusPane)).then((abriu) => {
+        if (window.api && window.api.quadroAbriu) window.api.quadroAbriu(!!abriu);
+      });
+      return true;
+    }
+    if (window.api && window.api.quadroAbriu) window.api.quadroAbriu(false);
+    return false;
   }
   if (a === 'salvarVault') return focusPane && salvarConversaNoVault(focusPane);
   if (a === 'newPane') novoChatNaAba();
@@ -9841,30 +9984,38 @@ document.addEventListener('keydown', (e) => {
     svg.setAttribute('aria-hidden', 'true');
     svg.innerHTML = conteudoLogoMotor(engine);
   }
-  HOME = await window.api.home();
-  cfg = await window.api.getConfig();
-  cfg.defCwd = cfg.defCwd || HOME;
-  pintarCaminho($('#defCwd'), cfg.defCwd);
-  $('#chkRobos').checked = !!cfg.verRobos;
-  if ($('#chkAtalhosGlobais')) {
-    $('#chkAtalhosGlobais').checked = !!cfg.atalhosGlobais;
-    // se a tecla estiver tomada por outro programa, ele tem de saber ao abrir os Ajustes
-    if (window.api.atalhosEstado) { try { pintarAvisoAtalhos(await window.api.atalhosEstado()); } catch (_) {} }
-  }
-  /* leva 6 — onde fica a caixa de entrada. O caminho MUDA entre rodar por `npm start` (pasta
-     "cockpit") e o app instalado ("Cockpit"), então nenhum script pode cravá-lo: é daqui que
-     se copia. No telefone a pasta é do Mac e não há o que abrir, então o bloco some. */
-  if ($('#inboxBloco')) {
-    if (window.SEM_ELECTRON) $('#inboxBloco').classList.add('hidden');
-    else {
-      try {
-        const pasta = await window.api.inboxPasta();
-        pintarCaminho($('#inboxPasta'), pasta);
-        $('#btnInboxAbrir').addEventListener('click', () => { if (pasta) window.api.openPath(pasta); });
-      } catch (_) {}
+  // R3-041: no iPhone estas 3 chamadas passam pelo WebSocket e podem demorar/rejeitar; sem
+  // isto o boot inteiro travava mudo (a capa some sozinha em 12s e a tela fica vazia atrás).
+  // Sem "return" no catch: HOME/cfg já nascem com padrão no topo do arquivo e o boot segue.
+  try {
+    HOME = await window.api.home();
+    cfg = await window.api.getConfig();
+    cfg.defCwd = cfg.defCwd || HOME;
+    pintarCaminho($('#defCwd'), cfg.defCwd);
+    $('#chkRobos').checked = !!cfg.verRobos;
+    if ($('#chkAtalhosGlobais')) {
+      $('#chkAtalhosGlobais').checked = !!cfg.atalhosGlobais;
+      // se a tecla estiver tomada por outro programa, ele tem de saber ao abrir os Ajustes
+      if (window.api.atalhosEstado) { try { pintarAvisoAtalhos(await window.api.atalhosEstado()); } catch (_) {} }
     }
+    /* leva 6 — onde fica a caixa de entrada. O caminho MUDA entre rodar por `npm start` (pasta
+       "cockpit") e o app instalado ("Cockpit"), então nenhum script pode cravá-lo: é daqui que
+       se copia. No telefone a pasta é do Mac e não há o que abrir, então o bloco some. */
+    if ($('#inboxBloco')) {
+      if (window.SEM_ELECTRON) $('#inboxBloco').classList.add('hidden');
+      else {
+        try {
+          const pasta = await window.api.inboxPasta();
+          pintarCaminho($('#inboxPasta'), pasta);
+          $('#btnInboxAbrir').addEventListener('click', () => { if (pasta) window.api.openPath(pasta); });
+        } catch (_) {}
+      }
+    }
+    if (window.api.webEstado) { const st = await window.api.webEstado(); if ($('#chkWeb')) $('#chkWeb').checked = !!(st && st.ligado); pintarWeb(st); }
+  } catch (e) {
+    console.error('boot: nao consegui falar com o Mac:', e);
+    setTimeout(() => alert('Não consegui falar com o Mac. Recarregue a página.'), 300);
   }
-  if (window.api.webEstado) { const st = await window.api.webEstado(); if ($('#chkWeb')) $('#chkWeb').checked = !!(st && st.ligado); pintarWeb(st); }
   // no telefone: a lateral vira gaveta
   const bg = $('#btnGaveta');
   if (bg) {

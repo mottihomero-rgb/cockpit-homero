@@ -45,6 +45,9 @@ function loadMain() {
     proc.stdin.destroyed = false; proc.stdin.writable = true;
     const record = { bin, args: [...args], options, writes: [], proc };
     proc.stdin.write = value => { record.writes.push(JSON.parse(value)); return true; };
+    // R3-009/R3-010: cli-motors.js (Gemini) fecha o stdin com .end(prompt) em vez de
+    // .write(); sem isto qualquer teste que mande mensagem pro Gemini quebra na hora
+    proc.stdin.end = value => { if (value !== undefined) { try { record.writes.push(JSON.parse(value)); } catch { record.writes.push(value); } } proc.stdin.destroyed = true; return true; };
     proc.kill = signal => { record.signal = signal; };
     spawned.push(record);
     const agy = /(?:^|[\\/])agy$/.test(String(bin));

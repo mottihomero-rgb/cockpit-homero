@@ -164,6 +164,10 @@ test('R1-020: MODELOS_CODEX vazio ([]) nao trava a proxima tentativa de buscar d
     traduzCodex: (ms) => ms.map(m => ({ id: m.id, nome: m.id })),
     fillModels: () => { fillCalls++; },
     pintar: () => { pintarCalls++; },
+    // R3-033: o bloco agora confere se a janelinha ainda e' o mesmo menu de Modelo antes de
+    // repintar; aqui ela continua sendo, igual ao caminho feliz de sempre deste teste.
+    modal: { classList: { contains: (x) => x === 'como-menu' }, dataset: { codexSurface: 'menu', geracaoMenu: 'g1' } },
+    geracao: 'g1',
   });
   c.window.api.codexModels = async () => [];   // Codex fora do ar na 1a tentativa
   // MODELOS_CODEX precisa existir como variavel do escopo do contexto, igual ao module-level

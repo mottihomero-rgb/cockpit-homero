@@ -337,6 +337,10 @@ function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somente
         res.writeHead(302, { Location: '/', 'Cache-Control': 'no-store' });
         return res.end();
       }
+      // R3-053: /upload e o WebSocket ja conferem a origem; aqui faltava — uma pagina de outro
+      // site com um <form> escondido conseguia mandar POST de senha sem passar por isto. Pedido
+      // sem cabeçalho Origin continua passando (mesmaOrigem ja trata isso), so a origem ERRADA e barrada.
+      if (!mesmaOrigem(req, enderecoAtual)) return paginaLogin(res, 403, true, 'Origem não permitida.');
       const endereco = ip(req);
       const jaDentro = sessaoValida(pegarSessao(req.headers.cookie));
       return lerCorpo(req, (campos) => {

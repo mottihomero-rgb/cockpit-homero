@@ -228,8 +228,15 @@ function ptyMac({ linha, cols, rows, cwd, env, ptyBridge }) {
       // Python perceber o EOF e chamar encerrar_filho (SIGHUP no grupo,
       // depois SIGKILL) -- caminho que ja existe e ja funciona.
       try { p.stdin.end(); } catch {}
-      const t = setTimeout(() => { try { p.kill('SIGKILL'); } catch {} }, 2000);
-      if (t.unref) t.unref();
+      // R3-009: devolve Promise que so' resolve no 'close' de verdade (ou no teto de 2s),
+      // igual ao matarGrupoExtra do main.js — sem isto shutdown() nao espera o terminal morrer.
+      return new Promise((resolve) => {
+        let feito = false;
+        const acabar = () => { if (feito) return; feito = true; resolve(); };
+        try { p.once('close', acabar); } catch {}
+        const t = setTimeout(() => { try { p.kill('SIGKILL'); } catch {} acabar(); }, 2000);
+        if (t.unref) t.unref();
+      });
     },
   };
 }

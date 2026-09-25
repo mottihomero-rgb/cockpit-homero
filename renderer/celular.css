@@ -173,7 +173,18 @@ body.sem-mac::after{content:"reconectando ao Mac…";position:fixed;left:0;right
   .aba:not(.ativa) .aba-x{display:none}
   .aba-x{width:30px;height:30px;top:1px;right:1px}
   .hist-item{padding:10px 9px}
-  .hi-fav,.hi-edit{opacity:1}
+  /* R3-050: no toque nao existe :hover, entao "Apagar conversa" (.hi-mais) e "Mover pra grupo"
+     (.hi-grupo) ficavam com largura 0 e sem onde tocar (style.css so mostra eles no :hover do
+     mouse). Aqui os quatro ficam sempre visiveis, com espaco de verdade na fileira. */
+  .hi-fav,.hi-edit,.hi-grupo,.hi-mais{opacity:1}
+  .hist-item:not(.com-trecho) .hi-grupo,
+  .hist-item:not(.com-trecho) .hi-mais{width:20px;margin-left:0}
+  /* R3-052: os quatro botoes da linha tinham so 20x20px de alvo de toque, abaixo do minimo de
+     44px do resto do app (.cb,.p-send,... aqui embaixo). Anel invisivel de -9px (nao -12px como
+     o .p-close la em cima) porque aqui os botoes ficam a so 7px um do outro — um anel maior
+     fazia eles roubarem toque um do outro. */
+  .hi-fav,.hi-edit,.hi-grupo,.hi-mais{position:relative}
+  .hi-fav::after,.hi-edit::after,.hi-grupo::after,.hi-mais::after{content:"";position:absolute;inset:-9px}
   .bv-tit{font-size:18px}
   .bv-bts{flex-direction:column;align-items:center}
   .bv-bt{max-width:none;width:100%;flex-direction:row;justify-content:center;gap:12px;padding:16px}

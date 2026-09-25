@@ -10,7 +10,7 @@
  *   3. como se abre um terminal de verdade (pty): no Mac é o ptybridge.py,
  *      no Windows é o ConPTY, via node-pty (binário pronto, não compila nada).
  */
-const { spawn, execFileSync } = require('child_process');
+const { spawn, execFileSync, execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -222,8 +222,14 @@ function ptyMac({ linha, cols, rows, cwd, env, ptyBridge }) {
     escrever(d) { if (!p.stdin.destroyed && !p.stdin.writableEnded) p.stdin.write(d); },
     redimensionar(c, r) { try { p.stdio[3].write(`resize ${c} ${r}\n`); } catch {} },
     matar() {
-      try { p.kill('SIGTERM'); } catch {}
-      setTimeout(() => { try { p.kill('SIGKILL'); } catch {} }, 1500);
+      // SIGTERM direto matava o ptybridge.py sem rodar a limpeza dele (nao
+      // tem handler pra SIGTERM): o comando em 2o plano que ignora SIGHUP
+      // ficava orfao pra sempre. Fechar a entrada faz o proprio laco do
+      // Python perceber o EOF e chamar encerrar_filho (SIGHUP no grupo,
+      // depois SIGKILL) -- caminho que ja existe e ja funciona.
+      try { p.stdin.end(); } catch {}
+      const t = setTimeout(() => { try { p.kill('SIGKILL'); } catch {} }, 2000);
+      if (t.unref) t.unref();
     },
   };
 }
@@ -251,20 +257,22 @@ function ptyWindows({ linha, cols, rows, cwd, env }) {
 
 /* ---------- onde ficam as credenciais do Claude ----------
    No Mac ficam no Chaveiro (comando `security`). No Windows ficam num arquivo. */
-function tokenClaude() {
+// R2-017: execFileSync travava a JANELA INTEIRA por ate 16s (dois tiros de 8s) enquanto o
+// Chaveiro nao respondia (negado/trancado). Isso roda no processo principal do Electron, entao
+// mouse e teclado travavam junto. execFile (assincrono) devolve o mesmo resultado sem bloquear
+// o laco de eventos — igual ja foi feito pro Tailscale (ver enderecoTailscale em main.js).
+async function tokenClaude() {
   if (!EH_WIN) {
-    try {
-      const { execFileSync } = require('child_process');
-      for (const conta of [process.env.USER, 'unknown']) {
-        try {
-          const raw = execFileSync('security',
-            ['find-generic-password', '-s', 'Claude Code-credentials', '-a', conta, '-w'],
-            { encoding: 'utf8', timeout: 8000 });
-          const o = (JSON.parse(raw).claudeAiOauth) || {};
-          if (o.accessToken) return o.accessToken;
-        } catch {}
-      }
-    } catch {}
+    for (const conta of [process.env.USER, 'unknown']) {
+      try {
+        const raw = await new Promise((resolve, reject) => {
+          execFile('security', ['find-generic-password', '-s', 'Claude Code-credentials', '-a', conta, '-w'],
+            { encoding: 'utf8', timeout: 8000 }, (err, stdout) => err ? reject(err) : resolve(stdout));
+        });
+        const o = (JSON.parse(raw).claudeAiOauth) || {};
+        if (o.accessToken) return o.accessToken;
+      } catch {}
+    }
     return null;
   }
   for (const f of [path.join(HOME, '.claude', '.credentials.json'),

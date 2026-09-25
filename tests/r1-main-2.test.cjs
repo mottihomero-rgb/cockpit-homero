@@ -204,21 +204,27 @@ test('R1-045: conector por URL remota continua liberado pro celular (o achado de
 // contador. A prova aqui e' pelo proprio "credQuando" (variavel de controle do cache, um
 // "let" no main.js): se ele mudar de valor e' porque credClaude rodou tokenDoClaude() de
 // novo; se ficar igual, o cache serviu sem reler.
+// R2-017 [testes ajustados]: credClaude virou "async function" (tokenDoClaude agora e'
+// assincrono no plataforma.js de verdade — so o harness continua com o stub sincrono). Os dois
+// testes abaixo afirmavam que credClaude(false) devolvia o valor direto, na hora; isso deixou
+// de ser verdade (agora devolve sempre uma Promise, mesmo no caminho do cache). O comportamento
+// que eles verificam (cache de 90s, "nao achei" x token bom) continua o mesmo — so precisou de
+// "await" em cada chamada.
 
-test('R1-049: Chaveiro falhando (token vazio) repetidas vezes so bate 1x dentro da janela de 90s', () => {
+test('R1-049: Chaveiro falhando (token vazio) repetidas vezes so bate 1x dentro da janela de 90s', async () => {
   const h = loadMain();
   const dateNowOriginal = Date.now;
   let agora = 5000000;
   try {
     Date.now = () => agora;
     h.evaluate('credGuardada = null; credQuando = 0;');
-    const r1 = h.evaluate('credClaude(false)');
+    const r1 = await h.evaluate('credClaude(false)');
     assert.equal(!!r1, false, 'o Chaveiro do harness sempre devolve vazio');
     const quandoApos1a = h.evaluate('credQuando');
     assert.equal(quandoApos1a, agora, 'a 1a leitura tem de marcar a hora em que rodou');
 
     agora += 1000;   // ainda dentro da janela de 90s
-    h.evaluate('credClaude(false)');
+    await h.evaluate('credClaude(false)');
     // Antes do conserto: credGuardada nunca virava truthy (o Chaveiro sempre falha), entao
     // "if (!credGuardada)" era verdade em TODA chamada — cada uma rodava a trava sincrona de
     // ate 8s de novo, travando a janela inteira repetidas vezes.
@@ -226,25 +232,25 @@ test('R1-049: Chaveiro falhando (token vazio) repetidas vezes so bate 1x dentro 
       'dentro da janela de 90s nao pode ter rodado de novo — credQuando teria mudado');
 
     agora += 91000;   // agora sim passou dos 90s desde a 1a leitura
-    h.evaluate('credClaude(false)');
+    await h.evaluate('credClaude(false)');
     assert.equal(h.evaluate('credQuando'), agora,
       'passados os 90s tem de tentar de novo — senao um Chaveiro que voltou a funcionar nunca seria lido');
   } finally { Date.now = dateNowOriginal; }
 });
 
-test('R1-049: token BOM continua em cache pra sessao inteira (o TTL novo e so pro "nao achei")', () => {
+test('R1-049: token BOM continua em cache pra sessao inteira (o TTL novo e so pro "nao achei")', async () => {
   const h = loadMain();
   const dateNowOriginal = Date.now;
   let agora = 5000000;
   try {
     Date.now = () => agora;
     h.evaluate('credGuardada = "token-bom"; credQuando = 0;');
-    const r1 = h.evaluate('credClaude(false)');
+    const r1 = await h.evaluate('credClaude(false)');
     assert.equal(r1, 'token-bom');
     assert.equal(h.evaluate('credQuando'), 0, 'com o token ja bom, credClaude nem precisa marcar a hora — nao vai reler');
 
     agora += 500000;   // bem mais que 90s
-    const r2 = h.evaluate('credClaude(false)');
+    const r2 = await h.evaluate('credClaude(false)');
     assert.equal(r2, 'token-bom', 'token bom continua valendo mesmo muito depois — nao pode ter sido substituido pelo vazio do Chaveiro');
     assert.equal(h.evaluate('credQuando'), 0, 'nunca rodou de novo: credQuando continua 0 (nao foi setado)');
   } finally { Date.now = dateNowOriginal; }

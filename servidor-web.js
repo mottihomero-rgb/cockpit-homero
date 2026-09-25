@@ -22,6 +22,8 @@ const PERMITIDOS = new Set([
   'config:get', 'sys:home', 'fs:list', 'fs:read', 'fs:buscarArquivos',
   'pane:start', 'pane:send', 'pane:respond', 'pane:settings', 'pane:steer',
   'pane:compactar', 'pane:interrupt', 'pane:stop', 'pane:approve',
+  // so LEITURA (R2-012): o celular usa isso so pra reconciliar no reconnect, nunca muda nada no Mac
+  'pane:estado',
   'codex:models', 'codex:api-status', 'codex:apps',
   'sessions:claude', 'sessions:codex', 'sessions:cli', 'sessions:acp', 'sessions:history',
   'sessions:titulo', 'sessions:buscar', 'sessions:claudeRemoto', 'sessions:historyRemoto',
@@ -249,6 +251,12 @@ function receberUpload(req, res, { temSessao, pasta, endereco }) {
 
 function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somenteTailscale = false, endereco = '', pastaColados = '' }) {
   const { WebSocketServer } = require('ws');
+  // R2-041: o main.js sobe com endereco placeholder e troca depois (web.endereco = end),
+  // ja que o tailscale responde so depois do boot. Antes esse valor ficava preso no
+  // PARAMETRO 'endereco' (fechamento fixo): mesmaOrigem() e receberUpload() nunca viam a
+  // troca e o celular ficava travado pra sempre com "origem invalida". Agora e uma variavel
+  // que o getter/setter do retorno atualiza, calculada uma unica vez aqui na criacao.
+  let enderecoAtual = endereco || (somenteTailscale ? '' : ('http://' + ipDaRede() + ':' + porta));
   const sessoes = new Map();
   const tentativas = new Map();
   const clientes = new Set();
@@ -361,7 +369,7 @@ function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somente
     // a sessao precisa receber um erro curto em JSON, e nao a tela de login inteira em HTML
     // (o app leria 200 "deu certo" e anexaria a pagina de login no lugar do video).
     if (url.pathname === '/upload') {
-      return receberUpload(req, res, { temSessao: !!t && sessaoValida(t), pasta: pastaDeColados(pastaColados), endereco });
+      return receberUpload(req, res, { temSessao: !!t && sessaoValida(t), pasta: pastaDeColados(pastaColados), endereco: enderecoAtual });
     }
     if (!t || !sessaoValida(t)) return paginaLogin(res, 200, false);
 
@@ -386,7 +394,7 @@ function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somente
     // Navegadores sempre informam a origem. Sem esta checagem, uma página aberta
     // no celular poderia tentar falar com o Cockpit usando a sessão já existente.
     if (!redePermitida(req)) { ws.close(1008, 'fora do Tailscale'); return; }
-    if (!mesmaOrigem(req, endereco)) { ws.close(1008, 'origem invalida'); return; }
+    if (!mesmaOrigem(req, enderecoAtual)) { ws.close(1008, 'origem invalida'); return; }
     const t = pegarSessao(req.headers.cookie);
     if (!t || !sessaoValida(t)) { ws.close(1008, 'sem sessao'); return; }
     ws.ck = t;                       // guarda a sessao deste telefone para reconferir depois
@@ -486,7 +494,13 @@ function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somente
     try { servidor.closeAllConnections(); } catch {}
   };
 
-  return { servidor, fechar, pronto, endereco: endereco || (somenteTailscale ? '' : ('http://' + ipDaRede() + ':' + porta)) };
+  return {
+    servidor, fechar, pronto,
+    // get/set em vez de campo fixo: main.js faz 'web.endereco = end' quando o tailscale
+    // responde, e essa escrita precisa chegar em mesmaOrigem()/receberUpload() acima.
+    get endereco() { return enderecoAtual; },
+    set endereco(v) { enderecoAtual = v; },
+  };
 }
 
 function mandarArquivo(req, res, arq) {

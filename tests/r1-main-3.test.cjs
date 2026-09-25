@@ -65,34 +65,40 @@ test('R1-011: duas ditacoes ao mesmo tempo (2 paineis, ou Mac + celular) usam ar
 test('R1-012: com Chrome e Safari fechados, NUNCA chama o script que abriria os dois so pra achar aba nenhuma', async () => {
   const h = loadMain();
   h.evaluate(`
-    globalThis.__scripts = [];
-    rodar = async (_bin, args) => {
-      const script = args[1] || '';
-      globalThis.__scripts.push(script);
-      // "System Events" so PERGUNTA se o processo existe, nunca abre nada
-      if (/System Events/.test(script)) return { err: null, out: 'false\\n', errout: '' };
-      // se o codigo chegasse aqui de verdade (tell application "Google Chrome"/"Safari"),
-      // o macOS teria acabado de abrir o app so pra responder — e' exatamente o que nao pode
-      // acontecer com os dois fechados
+    // R2-042 trocou a checagem de processo de "System Events" por pgrep (System Events pede
+    // permissao de Automacao propria e falhava calada); o mock tem de simular pgrep agora.
+    globalThis.__chamadas = [];
+    rodar = async (bin, args) => {
+      globalThis.__chamadas.push({ bin: String(bin), args });
+      if (String(bin) === '/usr/bin/pgrep') {
+        // Chrome e Safari fechados: pgrep nao acha o processo, devolve erro
+        return { err: new Error('saiu com código 1'), out: '', errout: '' };
+      }
+      // se o codigo chegasse aqui de verdade (osascript "tell application"), o macOS teria
+      // acabado de abrir o app so pra responder — e' exatamente o que nao pode acontecer
+      // com os dois fechados
       return { err: null, out: '', errout: '' };
     };
   `);
   const r = await h.call('navegador:aba');
-  const scripts = h.evaluate('globalThis.__scripts');
-  assert.equal(scripts.length, 2, 'so as duas checagens de processo (Chrome, Safari) — nada mais');
-  assert.ok(scripts.every((s) => /System Events/.test(s)),
-    'nenhuma chamada pode ser o script que pede a URL da aba: esse e o que abre o app sozinho');
+  const chamadas = h.evaluate('globalThis.__chamadas');
+  assert.equal(chamadas.length, 2, 'so as duas checagens de processo (Chrome, Safari) — nada mais');
+  assert.ok(chamadas.every((c) => c.bin === '/usr/bin/pgrep'),
+    'nenhuma chamada pode ser o osascript que pede a URL da aba: esse e o que abre o app sozinho');
   assert.ok(r && r.error, 'com os dois fechados tem de devolver erro, sem ter aberto nada');
 });
 
 test('R1-012: com o Chrome aberto de verdade, continua achando a aba normal (nao quebrou o caminho bom)', async () => {
   const h = loadMain();
   h.evaluate(`
-    rodar = async (_bin, args) => {
-      const script = args[1] || '';
-      if (/System Events/.test(script)) {
-        return { err: null, out: (/Google Chrome/.test(script) ? 'true' : 'false') + '\\n', errout: '' };
+    rodar = async (bin, args) => {
+      if (String(bin) === '/usr/bin/pgrep') {
+        // pgrep -x <nome>: acha o Chrome, nao acha o Safari
+        return args[1] === 'Google Chrome'
+          ? { err: null, out: '', errout: '' }
+          : { err: new Error('saiu com código 1'), out: '', errout: '' };
       }
+      const script = args[1] || '';
       if (/Google Chrome/.test(script)) {
         return { err: null, out: 'https://exemplo.com\\nTitulo da aba', errout: '' };
       }

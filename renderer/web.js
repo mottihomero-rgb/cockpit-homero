@@ -296,6 +296,8 @@
     paneInterrupt: (o) => chamar('pane:interrupt', o),
     paneStop: (o) => chamar('pane:stop', o),
     approve: (o) => chamar('pane:approve', o),
+    // so leitura: o celular usa isso pra saber se perdeu evento enquanto estava dormindo (R2-012)
+    paneEstado: (o) => chamar('pane:estado', o),
     codexModels: () => chamar('codex:models'),
     codexApiStatus: () => chamar('codex:api-status'),
     codexApiKey: () => Promise.resolve({ error: 'Guarde a chave pelo Mac.' }),

@@ -14,7 +14,8 @@ function montar(cenario) {
     CLAUDE_BIN: '/casa/.cockpit/bin/claude',
     loadConfig: () => cenario.config || {},
     anota: (...a) => log.push(a.join(' ')),
-    usarClaudeDeCaminhoFixo: () => log.push('RECOPIEI'),
+    // R2-031: a chamada de dentro de atualizarMotoresSozinho passou a ser a versão async
+    usarClaudeDeCaminhoFixoAsync: async () => log.push('RECOPIEI'),
     versoesDosMotores: async () => cenario.versoes,
     rodar: async (bin, args) => {
       log.push('RODOU ' + bin + ' ' + args.join(' '));

@@ -13,6 +13,7 @@ import os
 import sys
 import select
 import signal
+import subprocess
 import time
 import struct
 import fcntl
@@ -26,50 +27,88 @@ def set_size(fd, cols, rows):
         pass
 
 
-def sinalizar_grupo(pid, sinal):
-    """Manda o sinal para o grupo do filho, nunca para o nosso.
-
-    O filho do forkpty vira dono de um grupo so dele, entao o sinal no grupo
-    alcanca tambem os netos (o que o comando abriu por dentro). Se por algum
-    motivo ele estiver no MESMO grupo que a ponte, mandar no grupo derrubaria
-    o Cockpit junto: nesse caso manda so para ele.
+def grupos_da_sessao(sid):
+    """Acha o grupo (pgid) de TODO processo vivo preso na mesma sessao do
+    terminal (sid = pid de quem o forkpty criou, que sempre vira lider de
+    sessao nova). Um `comando &` digitado num shell interativo ganha um
+    GRUPO NOVO por causa do controle de job do shell, mas continua na MESMA
+    sessao -- so olhar o grupo de 'pid' deixava esse job de fora.
     """
+    grupos = set()
     try:
-        grupo = os.getpgid(pid)
-        if grupo != os.getpgrp():
+        saida = subprocess.run(['ps', '-Ao', 'pid=,pgid='],
+                                capture_output=True, text=True, timeout=1).stdout
+    except Exception:
+        return grupos
+    for linha in saida.splitlines():
+        partes = linha.split()
+        if len(partes) != 2:
+            continue
+        try:
+            p, g = int(partes[0]), int(partes[1])
+            if os.getsid(p) == sid:
+                grupos.add(g)
+        except Exception:
+            continue
+    return grupos
+
+
+def sinalizar_sessao(pid, sinal):
+    """Manda o sinal pra sessao inteira do comando (todo grupo dela), nunca
+    para o nosso. Se por algum motivo nao achar ninguem pela sessao, cai pro
+    grupo do proprio 'pid' (jeito antigo) pra nao ficar sem mandar nada.
+    """
+    grupos = grupos_da_sessao(pid)
+    if not grupos:
+        try:
+            grupos = {os.getpgid(pid)}
+        except Exception:
+            grupos = set()
+    nosso = os.getpgrp()
+    for grupo in grupos:
+        if grupo == nosso:
+            continue
+        try:
             os.killpg(grupo, sinal)
-            return
-    except Exception:
-        pass
-    try:
-        os.kill(pid, sinal)
-    except Exception:
-        pass
+        except Exception:
+            pass
 
 
 def encerrar_filho(pid):
-    """Fecha o comando do terminal e devolve o codigo de saida dele.
+    """Fecha o comando do terminal -- e qualquer job em 2o plano que ele
+    tenha aberto na mesma sessao -- e devolve o codigo de saida do comando
+    principal.
 
-    Primeiro pede para sair (SIGHUP). Se em 1,5 s ele nao saiu, mata na marra
-    (SIGKILL) para nao sobrar programa rodando escondido.
+    Primeiro pede pra sessao inteira sair (SIGHUP). Espera ate 1,5 s o
+    comando principal sair. Sai ele ou nao a tempo, confere de novo quem
+    sobrou na sessao e manda SIGKILL neles: sem essa segunda checagem, um
+    job com `trap '' HUP` (ou soh mais lento) ficava orfao escondido mesmo
+    com o terminal ja fechado, porque o comando principal costuma morrer do
+    SIGHUP quase na hora -- antes do relogio de 1,5 s valer alguma coisa
+    pros outros da sessao.
     """
-    sinalizar_grupo(pid, signal.SIGHUP)
+    sinalizar_sessao(pid, signal.SIGHUP)
     limite = time.time() + 1.5
+    status = None
     while True:
         try:
-            morto, status = os.waitpid(pid, os.WNOHANG)
+            morto, st = os.waitpid(pid, os.WNOHANG)
         except ChildProcessError:
-            return 0
+            morto, st = pid, 0
         if morto == pid:
+            status = st
             break
         if time.time() > limite:
-            sinalizar_grupo(pid, signal.SIGKILL)
-            try:
-                _, status = os.waitpid(pid, 0)
-            except Exception:
-                return 0
             break
         time.sleep(0.05)
+    if status is None:
+        sinalizar_sessao(pid, signal.SIGKILL)
+        try:
+            _, status = os.waitpid(pid, 0)
+        except Exception:
+            status = 0
+    if grupos_da_sessao(pid):
+        sinalizar_sessao(pid, signal.SIGKILL)
     return os.waitstatus_to_exitcode(status) if hasattr(os, 'waitstatus_to_exitcode') else 0
 
 

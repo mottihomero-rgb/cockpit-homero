@@ -59,6 +59,31 @@ function usarClaudeDeCaminhoFixo() {
     anota('nao consegui usar o caminho fixo do Claude', e.message);   // segue com o original
   }
 }
+/* R2-031: mesma coisa, mas assincrona (fs.promises), pra nao travar o loop principal do
+   Electron (todos os paineis, nao so o Claude) durante a copia do binario. So usada na
+   auto-atualizacao (roda em background, 6/6h); o boot continua com a versao sincrona acima,
+   de proposito, porque roda antes da janela existir. */
+async function usarClaudeDeCaminhoFixoAsync() {
+  if (EH_WIN) return;
+  try {
+    const real = await fs.promises.realpath(path.join(HOME, '.local/bin/claude'));
+    const nova = await fs.promises.stat(real);
+    let atual = null;
+    try { atual = await fs.promises.stat(CLAUDE_FIXO); } catch {}
+    if (!atual || atual.size !== nova.size || Math.round(atual.mtimeMs) !== Math.round(nova.mtimeMs)) {
+      await fs.promises.mkdir(path.dirname(CLAUDE_FIXO), { recursive: true });
+      const meio = CLAUDE_FIXO + '.novo';
+      await fs.promises.copyFile(real, meio);
+      await fs.promises.chmod(meio, 0o755);
+      await fs.promises.utimes(meio, nova.atime, nova.mtime);   // a data igual e o que diz "ja copiei esta"
+      await fs.promises.rename(meio, CLAUDE_FIXO);              // troca atomica: quem esta rodando nao cai
+      anota('copiei o Claude para o caminho fixo', real);
+    }
+    CLAUDE_BIN = CLAUDE_FIXO;
+  } catch (e) {
+    anota('nao consegui usar o caminho fixo do Claude', e.message);   // segue com o original
+  }
+}
 const CONFIG_PATH = () => path.join(app.getPath('userData'), 'config.json');
 const LOG = () => path.join(app.getPath('userData'), 'cockpit.log');
 function anota(...partes) {
@@ -139,7 +164,30 @@ function loadConfig() {
    mais caro do que o problema que estamos evitando. So o caminho da perda (raro) le o disco. */
 let abasNoDisco = -1;
 const listaDeAbas = (d) => (Array.isArray(d && d.abas) ? d.abas : []);
+/* R2-040: cfg.porPasta guarda modelo/esforco por PASTA COMPLETA e ninguem nunca podava — o
+   proprio jeito dele trabalhar (CLAUDE.md: "demanda nova = subpasta do cliente") cria uma
+   pasta local nova quase todo dia, e cada escolha de modelo vira uma chave permanente em
+   config.json, o arquivo mais gravado do app. So' poda quando a pasta ja sumiu do disco HA'
+   DIAS seguidos: no primeiro boot sem ela (HD externo desligado, pasta do Drive ainda nao
+   montada) so' anota a ausencia, nao apaga a preferencia. Pasta da VPS (ehRemoto) nunca conta
+   como ausente: fs.existsSync não enxerga o disco remoto. */
+const PODA_PASTA_APOS_MS = 3 * 24 * 60 * 60 * 1000;   // 3 dias seguidos sumida
+function podarPorPasta(cfg) {
+  if (!cfg || !cfg.porPasta || typeof cfg.porPasta !== 'object') return;
+  const agora = Date.now();
+  const antes = (cfg.porPastaAusenteDesde && typeof cfg.porPastaAusenteDesde === 'object') ? cfg.porPastaAusenteDesde : {};
+  const depois = {};
+  for (const chave of Object.keys(cfg.porPasta)) {
+    const pasta = chave.split('|')[0];
+    if (!pasta || ehRemoto(pasta) || fs.existsSync(pasta)) continue;   // existe (ou e' da VPS): nada a podar
+    const desde = antes[chave] || agora;
+    if (agora - desde >= PODA_PASTA_APOS_MS) delete cfg.porPasta[chave];
+    else depois[chave] = desde;
+  }
+  cfg.porPastaAusenteDesde = depois;
+}
 function saveConfig(cfg, origem) {
+  podarPorPasta(cfg);
   const nAgora = listaDeAbas(cfg).length;
   if (abasNoDisco < 0) abasNoDisco = listaDeAbas(loadConfig()).length;
   let aGravar = cfg, devolvidas = 0;
@@ -435,34 +483,40 @@ function codexServerRequest(destino, m) {
   }
   const base = { rpcId: m.id, destino, paneId: pane, threadId: params.threadId, turnId: params.turnId };
   if (meth === 'item/commandExecution/requestApproval' || meth === 'execCommandApproval') {
-    pendingApprovals.set(key, { ...base, kind: 'cmd', legacy: meth === 'execCommandApproval' });
-    emit(pane, 'approval', { key,
+    // guarda o MESMO payload que vai no emit: e o que o celular pede de volta no reconnect (pane:estado)
+    const dadosEvento = { key,
       title: destino === 'local' ? 'Rodar comando no seu Mac' : 'Rodar comando na ' + destino.toUpperCase(),
       detail: (Array.isArray(params.command) ? params.command.join(' ') : params.command || '') + (params.cwd ? '\nem ' + params.cwd : ''),
       reason: params.reason || '',
-    });
+    };
+    pendingApprovals.set(key, { ...base, kind: 'cmd', legacy: meth === 'execCommandApproval', evento: { tipo: 'approval', dados: dadosEvento } });
+    emit(pane, 'approval', dadosEvento);
     return;
   }
   if (meth === 'item/fileChange/requestApproval' || meth === 'applyPatchApproval') {
-    pendingApprovals.set(key, { ...base, kind: 'file', legacy: meth === 'applyPatchApproval' });
-    emit(pane, 'approval', { key, title: 'Alterar arquivos', detail: params.grantRoot ? 'em ' + params.grantRoot : '', reason: params.reason || '' });
+    const dadosEvento = { key, title: 'Alterar arquivos', detail: params.grantRoot ? 'em ' + params.grantRoot : '', reason: params.reason || '' };
+    pendingApprovals.set(key, { ...base, kind: 'file', legacy: meth === 'applyPatchApproval', evento: { tipo: 'approval', dados: dadosEvento } });
+    emit(pane, 'approval', dadosEvento);
     return;
   }
   if (meth === 'item/permissions/requestApproval') {
-    pendingApprovals.set(key, { ...base, kind: 'perm', permissions: params.permissions || {} });
-    emit(pane, 'approval', { key, title: 'Permitir acesso adicional neste trabalho',
-      detail: JSON.stringify(params.permissions || {}, null, 2), reason: params.reason || '' });
+    const dadosEvento = { key, title: 'Permitir acesso adicional neste trabalho',
+      detail: JSON.stringify(params.permissions || {}, null, 2), reason: params.reason || '' };
+    pendingApprovals.set(key, { ...base, kind: 'perm', permissions: params.permissions || {}, evento: { tipo: 'approval', dados: dadosEvento } });
+    emit(pane, 'approval', dadosEvento);
     return;
   }
   if (meth === 'item/tool/requestUserInput') {
-    pendingApprovals.set(key, { ...base, kind: 'input', questions: params.questions || [], isBlocking: params.isBlocking !== false });
-    emit(pane, 'question', { key, questionKind: 'requestUserInput', questions: params.questions || [], isBlocking: params.isBlocking !== false });
+    const dadosEvento = { key, questionKind: 'requestUserInput', questions: params.questions || [], isBlocking: params.isBlocking !== false };
+    pendingApprovals.set(key, { ...base, kind: 'input', questions: params.questions || [], isBlocking: params.isBlocking !== false, evento: { tipo: 'question', dados: dadosEvento } });
+    emit(pane, 'question', dadosEvento);
     return;
   }
   if (meth === 'mcpServer/elicitation/request') {
-    pendingApprovals.set(key, { ...base, kind: 'elicitation', mode: params.mode, schema: params.requestedSchema });
-    emit(pane, 'question', { key, questionKind: 'elicitation', message: params.message || '', serverName: params.serverName,
-      schema: params.requestedSchema || null, mode: params.mode, url: params.url || '', isBlocking: true });
+    const dadosEvento = { key, questionKind: 'elicitation', message: params.message || '', serverName: params.serverName,
+      schema: params.requestedSchema || null, mode: params.mode, url: params.url || '', isBlocking: true };
+    pendingApprovals.set(key, { ...base, kind: 'elicitation', mode: params.mode, schema: params.requestedSchema, evento: { tipo: 'question', dados: dadosEvento } });
+    emit(pane, 'question', dadosEvento);
     return;
   }
   // Não responder {}: isso parecia aprovação e descartava perguntas. Ferramentas
@@ -691,8 +745,9 @@ function codexNotification(method, params, destino = 'local') {
       codex.paneTurn.delete(pane);
       // o erro pode vir como texto ou como objeto {message, codexErrorInfo}
       const e = params.error;
+      // R2-005: codexErrorInfo e objeto estruturado, nao texto — sem shortJson virava '[object Object]' na tela
       const texto = params.message
-        || (typeof e === 'string' ? e : (e && (e.message || e.codexErrorInfo)))
+        || (typeof e === 'string' ? e : (e && (e.message || shortJson(e.codexErrorInfo))))
         || 'erro no Codex';
       const remoto = destinoDoPane(pane) !== 'local';
       const precisaEntrar = /revoked|unauthorized|log out and sign in|not logged in/i.test(texto);
@@ -1088,16 +1143,19 @@ function claudeStart(paneId, opts) {
 
 function claudeStop(paneId) {
   const st = claudePanes.get(paneId);
+  let matando = Promise.resolve();
   if (st) {
     st.parandoDeProposito = true;
     claudePanes.delete(paneId);
     // mata o GRUPO, nao so' o processo: filho que o Claude tenha disparado (MCP server) senao
     // fica orfao rodando escondido (precisa do spawn com detached: !EH_WIN acima)
-    matarGrupoExtra(st.proc);
+    matando = matarGrupoExtra(st.proc);
   }
   const delta = filaDelta.get(paneId);
   if (delta) { clearTimeout(delta.timer); filaDelta.delete(paneId); }
   for (const [key, pending] of pendingApprovals) if (pending.paneId === paneId && pending.kind === 'claude') pendingApprovals.delete(key);
+  claudeCwd.delete(paneId);   // R2-036: senao fica crescendo pra sempre, um chat fechado atras do outro
+  return matando;   // R2-034: shutdown() espera este SIGKILL de garantia antes de fechar o app
 }
 
 /* Unico lugar que fala com o claude. Antes cada comando escrevia direto no stdin, e escrever
@@ -1161,11 +1219,13 @@ function claudeMessage(paneId, m) {
   if (m.type === 'control_response') return;
   if (m.type === 'control_request' && m.request && m.request.subtype === 'can_use_tool') {
     const key = 'cl_' + paneId + '_' + m.request_id;
-    pendingApprovals.set(key, { kind: 'claude', paneId, reqId: m.request_id, input: m.request.input });
-    emit(paneId, 'approval', {
+    const dadosEvento = {
       key, title: 'Claude quer usar: ' + (m.request.tool_name || 'ferramenta'),
       detail: claudeToolArg(m.request.tool_name, m.request.input), reason: '',
-    });
+    };
+    // evento guardado igual ao emit: e o que 'pane:estado' devolve pro celular reconectar sem perder a tarja
+    pendingApprovals.set(key, { kind: 'claude', paneId, reqId: m.request_id, input: m.request.input, evento: { tipo: 'approval', dados: dadosEvento } });
+    emit(paneId, 'approval', dadosEvento);
     return;
   }
   if (m.type === 'stream_event' && m.event) {
@@ -1468,7 +1528,6 @@ function motivoDoSsh(txt, r) {
    falhar, o noServidorSsh tenta UMA vez sem ele; se ai der certo, o multiplexing sai de cena
    pelo resto da sessao e tudo segue funcionando do jeito de sempre. */
 let muxLigado = true;      // fica sempre ligado; socket preso se descarta sozinho, nao se desiste dele
-let muxProvado = false;    // true so' enquanto a ULTIMA ida com socket deu certo (nao e' permanente)
 const sockUsados = new Set();   // sockets que ESTE app abriu — so nesses o "-O exit" pode mandar
 
 function pastaSsh() {
@@ -1559,13 +1618,8 @@ async function noServidorSsh(r, comando, ms) {
   if (!r || !r.host) return { code: -1, error: 'servidor desconhecido' };
   const sock = muxLigado ? caminhoDoSocket(r) : '';
   let x = await sshUmaVez(r, comando, ms, sock);
-  if (sock && !x.falhou && !x.estourou && x.code === 0) muxProvado = true;
-  /* Antes so' tentava recuperar sem socket ATE a primeira prova de sucesso (!muxProvado): depois
-     disso, socket preso ou morto (Mac dormiu, trocou de rede/VPN, ControlPersist de 120s expirou)
-     fazia TODA chamada seguinte falhar pelo resto da sessao — a VPS parecia fora do ar com ela
-     100% no ar. Agora tenta sem socket em QUALQUER falha; se der certo, descarta o socket velho
-     (em vez de desligar o multiplexing pra sempre) pra' proxima chamada nascer um socket novo. */
-  else if (sock && (x.falhou || x.estourou || x.code === 255)) {
+  // R2-044: aqui marcava numa variavel de controle que so era ESCRITA, nunca lida — tirada
+  if (sock && (x.falhou || x.estourou || x.code === 255)) {
     /* R1-008: a 1a tentativa (com socket) ja gastou ate' 'ms' inteiro. Repetir do zero com o
        MESMO teto dobrava a espera de cada clique quando a VPS esta fora do ar (o log real ja
        mostra ETIMEDOUT). Se ela ESTOUROU o tempo, o host esta inacessivel: tentar de novo nao
@@ -1575,7 +1629,6 @@ async function noServidorSsh(r, comando, ms) {
     if (x.estourou) return { code: -1, out: x.out, errout: x.errout, error: 'a VPS demorou demais para responder' };
     const y = await sshUmaVez(r, comando, Math.min(ms || 20000, 8000), '');
     if (!y.falhou && !y.estourou && y.code === 0) {
-      muxProvado = false;
       fecharMestresSsh();
       try { fs.unlinkSync(sock); } catch {}
       return { code: 0, out: y.out, errout: y.errout };
@@ -2087,15 +2140,20 @@ function textoLegivel(file) {
   }
   return partes.join('\n');
 }
+// R2-011: tira acento pra comparar — sem isso 'codigo' não achava 'código' e vice-versa
+function semAcento(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
 function trechoDoIndice(texto, alvo) {
-  const j = texto.toLowerCase().indexOf(alvo);
+  const j = semAcento(texto.toLowerCase()).indexOf(alvo);
   if (j < 0) return null;
   const de = Math.max(0, j - 45);
   return (de > 0 ? '…' : '') + texto.slice(de, de + 150).replace(/\s+/g, ' ').trim() + '…';
 }
 
 handle('sessions:buscar', async (_e, { engine, termo, itens }) => {
-  const alvo = String(termo || '').toLowerCase().trim();
+  const alvo = semAcento(String(termo || '').toLowerCase().trim());
   if (!alvo) return [];
   const lista = itens || [];
   // teto largo: so entra em acao na primeira busca, quando o indice ainda esta sendo montado
@@ -2116,7 +2174,7 @@ handle('sessions:buscar', async (_e, { engine, termo, itens }) => {
   const carim = lerCarimbos();
   const achou = new Map();            // id da conversa -> trecho para mostrar
   await varrerTexto((linha) => {
-    if (atalho && !linha.toLowerCase().includes(alvo)) return;
+    if (atalho && !semAcento(linha.toLowerCase()).includes(alvo)) return;
     let d;
     try { d = JSON.parse(linha); } catch { return; }
     const id = d && d.f ? querido.get(d.f) : undefined;
@@ -2154,6 +2212,13 @@ function montarIndiceDeFundo() {
       let tirou = 0;
       for (const f of Object.keys(carim)) if (!vivos.has(f) && !fs.existsSync(f)) { delete carim[f]; tirou++; }
       if (tirou) gravarCarimbosDepois();
+      // R2-039: indice-conversas.json (titulo/pasta/entrypoint) e irmao do carim, mas so era
+      // podado pelo botao "Apagar conversa". Arquivo que some sem passar por ali (Finder,
+      // terminal, pasta do projeto apagada depois do Drive) ficava com ficha presa pra sempre.
+      const ind = lerIndice();
+      let tirouInd = 0;
+      for (const f of Object.keys(ind)) if (!vivos.has(f) && !fs.existsSync(f)) { delete ind[f]; tirouInd++; }
+      if (tirouInd) gravarIndice();
       await compactarTexto();   // e, ja que estamos no fundo, tira o lixo do arquivo de texto
     } catch {}
   }, 20000);
@@ -2315,7 +2380,12 @@ function codexHistory(file, maxFalas, maxTools) {
   const msgs = [];
   const calls = new Map();
   let data = '';
-  try { data = fs.readFileSync(file, 'utf8'); } catch { return msgs; }
+  try {
+    const st = fs.statSync(file);
+    // R2-035: mesmo teto do claudeHistory. Sem isso, arquivo .jsonl grande do Codex
+    // trava o processo principal (e todos os paineis) numa leitura sincrona.
+    data = st.size > 6 * 1024 * 1024 ? tailRead(file, 6 * 1024 * 1024) : fs.readFileSync(file, 'utf8');
+  } catch { return msgs; }
   for (const line of data.split('\n')) {
     if (!line.startsWith('{')) continue;
     let d; try { d = JSON.parse(line); } catch { continue; }
@@ -2564,13 +2634,15 @@ handle('sessions:history', async (_e, { engine, file, id, cwd }) => {
     if (!alvo) alvo = acharConversaClaude(id, cwd);
     return alvo ? claudeHistory(alvo, 600, 250) : [];
   }
+  // R2-009: se ja sabemos o ARQUIVO clicado (alvo), ele manda — o app-server responde pelo
+  // id da thread, que pode ser o mesmo em mais de uma conversa (arquivos diferentes). Buscar
+  // pelo id primeiro trazia o estado errado quando duas linhas da lista compartilham id.
+  if (alvo) return codexHistory(alvo, 600, 250);
   if (id) {
     try {
       const messages = await codexOfficialHistory(id, destinoDoCwd(cwd));
       if (messages.length) return cortarHistorico(messages, 600, 250);
     } catch (e) { anota('histórico oficial indisponível, usando arquivo local:', e.message); }
-  }
-  if (!alvo && id) {
     try { const session = codexSessions(true, {}).find(x => x.id === id); if (session) alvo = session.file; } catch {}
   }
   return alvo ? codexHistory(alvo, 600, 250) : [];
@@ -3180,13 +3252,16 @@ const tokenDoClaude = plataforma.tokenClaude;
 // fica guardado na memoria: assim o Chaveiro so e consultado uma vez por sessao do app,
 // em vez de a cada leitura da faixa de uso
 let credGuardada = null, credQuando = 0;
-function credClaude(denovo) {
+// R2-017: tokenDoClaude agora e assincrono (plataforma.js), entao credClaude precisa esperar
+// por ele — sem o await, a Promise (sempre "verdadeira") vira o token, e a leitura de uso
+// quebra em silencio.
+async function credClaude(denovo) {
   if (denovo) { credGuardada = null; credQuando = 0; }
   // R1-049: token BOM continua em cache pra sessao inteira, como antes (um so achado no
   // Chaveiro). So o "nao achei" ganha prazo de 90s — sem isso, Chaveiro bloqueado/trancado
-  // repetia a chamada SINCRONA de ate 8s (travando a janela inteira) a cada leitura de uso.
+  // repetia a chamada de leitura a cada leitura de uso.
   if (!credGuardada && Date.now() - credQuando > 90000) {
-    credGuardada = tokenDoClaude();
+    credGuardada = await tokenDoClaude();
     credQuando = Date.now();
   }
   return credGuardada;
@@ -3211,14 +3286,14 @@ async function usoDoClaude() {
 }
 
 async function buscarUsoDoClaude(segundaTentativa) {
-  const t = credClaude(false);
+  const t = await credClaude(false);
   if (!t) return null;
   try {
     const r = await fetch('https://api.anthropic.com/api/oauth/usage', {
       headers: { Authorization: 'Bearer ' + t, 'anthropic-beta': 'oauth-2025-04-20' },
     });
     // vencida: descarta a guardada e tenta mais uma vez com a atual
-    if ((r.status === 401 || r.status === 403) && !segundaTentativa) { credClaude(true); return buscarUsoDoClaude(true); }
+    if ((r.status === 401 || r.status === 403) && !segundaTentativa) { await credClaude(true); return buscarUsoDoClaude(true); }
     // 429 e "muita consulta em pouco tempo", nao e conta com problema. Espera o que ela
     // mandar; sem prazo, dobra a espera a cada 429 seguido (2, 4, 8... ate 15 min)
     if (r.status === 429) {
@@ -3971,7 +4046,10 @@ handle('clipboard:anexos', () => {
       fs.writeFileSync(destino, img.toPNG());
       return { arquivos: [destino] };
     }
-  } catch {}
+  } catch (e) {
+    // R2-037: disco cheio ou pasta sem permissão não pode virar "nada pra colar" em silêncio
+    return { arquivos: [], error: e.message };
+  }
   return { arquivos: [] };
 });
 
@@ -4033,19 +4111,37 @@ handle('quadro:rascunhoGravar', (_e, { cena, enviadoEm } = {}) => {
 });
 
 /* pedido do Claude pra abrir o quadro: a skill planejar-sistema grava o desenho no rascunho e
-   cria o arquivo "pedido-abrir". Aqui o app abre o quadro no chat da frente e apaga o pedido.
-   Sem janela nenhuma aberta, o pedido fica esperando a janela voltar. */
+   cria o arquivo "pedido-abrir". Aqui o app manda o menu 'quadro' pro renderer e SO apaga o
+   pedido quando o renderer confirma que abriu de verdade (handshake em quadro:abriuResultado,
+   logo abaixo). Sem confirmacao — por exemplo sem nenhum painel em foco, focusPane null — o
+   pedido fica vivo e tenta de novo no proximo ciclo. R2-025: antes apagava e logava sucesso
+   mesmo quando nada abria na tela. */
+const PEDIDO_QUADRO_TETO_MS = 5 * 60 * 1000;   // 5 min tentando: depois disso desiste e avisa no log
 function vigiarPedidoDoQuadro() {
   setInterval(() => {
   try {
     const pedido = path.join(PASTA_QUADROS(), 'pedido-abrir');
     if (!fs.existsSync(pedido) || !win || win.isDestroyed()) return;
-    fs.unlinkSync(pedido);
+    const idade = Date.now() - fs.statSync(pedido).mtimeMs;
+    if (idade > PEDIDO_QUADRO_TETO_MS) {
+      // ninguem confirmou por 5 min (provavel nenhum painel em foco): desiste, nao fica tentando pra sempre
+      fs.unlinkSync(pedido);
+      anota('quadro NAO abriu a pedido do Claude (sem painel em foco por 5 min) — pedido descartado', pedido);
+      return;
+    }
     win.webContents.send('menu', 'quadro');
-    anota('quadro aberto a pedido do Claude', pedido);
   } catch {}
   }, 1500);
 }
+
+handle('quadro:abriuResultado', (_e, ok) => {
+  if (!ok) return { ok: false };
+  try {
+    const pedido = path.join(PASTA_QUADROS(), 'pedido-abrir');
+    if (fs.existsSync(pedido)) { fs.unlinkSync(pedido); anota('quadro aberto a pedido do Claude', pedido); }
+  } catch {}
+  return { ok: true };
+});
 
 handle('quadro:rascunhoLer', () => {
   try {
@@ -4429,11 +4525,12 @@ function agentesTrabalhando() {
 }
 let saindoDoApp = false;
 
-function shutdown() {
+async function shutdown() {
   paneStarts.clear();
   cli.fechar(); acp.fechar();
   fecharMestresSsh();   // o mestre do ControlPersist nao fica pendurado depois do app
-  for (const id of [...claudePanes.keys()]) claudeStop(id);
+  const espera = [];   // R2-034: promessas do SIGKILL de garantia de cada processo filho
+  for (const id of [...claudePanes.keys()]) espera.push(claudeStop(id));
   for (const id of [...vozAtiva.keys()]) vozMatar(id);
   for (const id of [...terms.keys()]) termMatar(id);
   for (const c of codexConns.values()) {
@@ -4442,8 +4539,11 @@ function shutdown() {
     for (const [, pending] of c.pend) pending.reject(new Error('A janela do Cockpit foi fechada.'));
     c.pend.clear();
     limparPaineisCodex(c.destino);
-    if (proc) matarGrupoExtra(proc);   // mata o grupo, nao so' o codex (filho de sandbox pode sobrar)
+    if (proc) espera.push(matarGrupoExtra(proc));   // mata o grupo, nao so' o codex (filho de sandbox pode sobrar)
   }
+  // so' agora, com tudo desligado: espera o SIGTERM/SIGKILL de cada processo terminar (ou o
+  // teto de 1,5s de cada um) antes do 'before-quit' deixar o Electron fechar o app de vez.
+  await Promise.all(espera);
 }
 
 /* ======================= IPC ======================= */
@@ -4699,6 +4799,7 @@ app.on('before-quit', () => { for (const id of [...vozAtiva.keys()]) vozMatar(id
 const { globalShortcut } = require('electron');
 const TECLA_DITAR = 'Control+Alt+Space';
 const atalhosFalhos = [];
+let criandoJanelaPeloAtalho = false;   // R2-026: trava contra aperto repetido antes da janela existir
 function ligarAtalhosGlobais(ligado) {
   try { globalShortcut.unregisterAll(); } catch {}
   atalhosFalhos.length = 0;
@@ -4706,7 +4807,19 @@ function ligarAtalhosGlobais(ligado) {
   // se outro programa ja tem a tecla, o register devolve false: fica so o caminho pelo menu
   try {
     const ok = globalShortcut.register(TECLA_DITAR, () => {
-      if (!win || win.isDestroyed()) return;
+      // R2-026: janela fechada (botao vermelho) nao morre no Mac, so some — mas o atalho
+      // fazia nada nesse caso. Recria pelo mesmo caminho do clique no Dock (activate).
+      if (!win || win.isDestroyed()) {
+        if (criandoJanelaPeloAtalho) return;
+        criandoJanelaPeloAtalho = true;
+        createWindow();
+        win.webContents.once('did-finish-load', () => {
+          criandoJanelaPeloAtalho = false;
+          win.show(); win.focus();
+          win.webContents.send('menu', 'ditar');
+        });
+        return;
+      }
       if (win.isMinimized()) win.restore();
       win.show(); win.focus();
       win.webContents.send('menu', 'ditar');
@@ -4778,9 +4891,12 @@ handle('navegador:aba', async () => {
   let algumAberto = false;
   for (const [nome, script] of roteiros) {
     // R1-012: "tell application" ABRE o app sozinho se ele nao estiver rodando; checar se o
-    // processo ja existe antes evita abrir Chrome/Safari escondido so pra nao achar aba nenhuma
-    const check = await rodar('/usr/bin/osascript', ['-e', 'tell application "System Events" to (name of processes) contains "' + nome + '"'], 3000);
-    if (String(check.out || '').trim() !== 'true') continue;
+    // processo ja existe antes evita abrir Chrome/Safari escondido so pra nao achar aba nenhuma.
+    // R2-042: pgrep em vez de "System Events" — System Events pede permissao de Automacao
+    // PROPRIA e separada; sem ela a checagem falhava calada e dizia "abra o navegador" com
+    // o navegador aberto. pgrep e utilitario do macOS, nao pede permissao nenhuma.
+    const check = await rodar('/usr/bin/pgrep', ['-x', nome], 3000);
+    if (check.err) continue;
     algumAberto = true;
     const r = await rodar('/usr/bin/osascript', ['-e', script], 8000);
     const saida = String(r.out || '').trim();
@@ -4830,11 +4946,16 @@ handle('config:claude', () => {
    o resto (imagem, pdf, pasta, doc) continua abrindo direto, sem fricção nova. */
 const EXTENSOES_EXECUTAVEIS = new Set(['.command', '.app', '.pkg', '.scpt', '.workflow', '.applescript']);
 async function abrirComCuidado(p) {
+  let roda = false;
   try {
     const ext = path.extname(String(p || '')).toLowerCase();
-    let roda = EXTENSOES_EXECUTAVEIS.has(ext);
+    roda = EXTENSOES_EXECUTAVEIS.has(ext);
     if (!roda) { try { roda = !!(fs.statSync(p).mode & 0o111); } catch {} }
-    if (roda) {
+  } catch {}
+  if (roda) {
+    // R2-043: dialogo em try PROPRIO — antes, se ele falhasse (janela fechando no meio),
+    // caia no catch de fora e abria o arquivo perigoso direto, sem aviso nenhum.
+    try {
       const r = await dialog.showMessageBox(win, {
         type: 'warning',
         buttons: ['Cancelar', 'Abrir mesmo assim'],
@@ -4843,8 +4964,8 @@ async function abrirComCuidado(p) {
         detail: p,
       });
       if (r.response !== 1) return '';
-    }
-  } catch {}
+    } catch { return ''; }
+  }
   return shell.openPath(p);
 }
 handle('shell:open', (_e, p) => abrirComCuidado(p));
@@ -4863,10 +4984,35 @@ function codexSettingsFor(paneId, changes = {}) {
   if (settings.cwd && ehRemoto(settings.cwd)) settings.cwd = partesRemoto(settings.cwd).caminho;
   return settings;
 }
-function claudeAttachmentText(text, attachments) {
+/* R2-013: no painel remoto (VPS) quem responde e' um Claude por SSH DENTRO da VPS — ele nao
+   enxerga o disco do Mac. Antes, o anexo virava so' o caminho LOCAL escrito no texto, e o
+   agente remoto nunca via a foto, sem nenhum erro explicando o motivo. Mesmo tratamento que
+   codexProtocol.userInput ja da' pro Codex: imagem que a API do Claude aceita (formato em
+   main.js:1156) vai embutida em base64; qualquer outro anexo remoto (heic da camera do
+   iPhone, pdf etc.) vira erro claro no texto, nao o caminho cru que o processo remoto nao
+   consegue abrir. */
+const CLAUDE_IMG_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
+function claudeAttachmentContent(text, attachments, remoto) {
   const content = typeof text === 'string' ? text : '';
-  const paths = (attachments || []).filter(file => file && typeof file.path === 'string' && !content.includes(file.path)).map(file => '- ' + file.path);
-  return paths.length ? content + (content ? '\n\n' : '') + 'Arquivos anexados pelo usuário:\n' + paths.join('\n') : content;
+  const novos = (attachments || []).filter(file => file && typeof file.path === 'string' && !content.includes(file.path));
+  if (!remoto) {
+    const paths = novos.map(file => '- ' + file.path);
+    const texto = paths.length ? content + (content ? '\n\n' : '') + 'Arquivos anexados pelo usuário:\n' + paths.join('\n') : content;
+    return [{ type: 'text', text: texto }];
+  }
+  const blocks = [];
+  const avisos = [];
+  for (const file of novos) {
+    const ext = path.extname(file.path).slice(1).toLowerCase();
+    const mime = CLAUDE_IMG_MIME[ext];
+    if (!mime) { avisos.push('- ' + path.basename(file.path) + ': este tipo de arquivo não pode ser enviado a um chat na VPS (o arquivo ficou só no Mac).'); continue; }
+    try { blocks.push({ type: 'image', source: { type: 'base64', media_type: mime, data: fs.readFileSync(file.path).toString('base64') } }); }
+    catch { avisos.push('- ' + path.basename(file.path) + ': não encontrei este arquivo no Mac.'); }
+  }
+  let texto = content;
+  if (avisos.length) texto += (texto ? '\n\n' : '') + 'Anexo não pôde ser enviado à VPS:\n' + avisos.join('\n');
+  if (texto) blocks.unshift({ type: 'text', text: texto });
+  return blocks.length ? blocks : [{ type: 'text', text: '' }];
 }
 function codexThreadParams(settings, billing) {
   const policy = CODEX_MODE[settings.approval] || CODEX_MODE.bypass;
@@ -4912,12 +5058,24 @@ function attachCodexThread(paneId, threadId, response, settings) {
 const acpMod = require('./acp.js');
 function motorAcp(engine) { return engine === 'acp' || engine === 'grok'; }
 function matarGrupoExtra(proc) {
-  if (!proc) return;
+  if (!proc) return Promise.resolve();
   if (!EH_WIN && Number.isInteger(proc.pid) && proc.pid > 1) {
     try { process.kill(-proc.pid, 'SIGTERM'); } catch { try { proc.kill('SIGTERM'); } catch {} }
-    const timer = setTimeout(() => { try { process.kill(-proc.pid, 'SIGKILL'); } catch {} }, 1500);
-    if (timer.unref) timer.unref();
-  } else matarProcesso(proc);
+    /* R2-034: o timer nasce unref'd de proposito (nao pode travar o fechar de UM painel), mas
+       isso deixava o SIGKILL de garantia correndo o risco de nunca disparar no fechamento
+       TOTAL do app — o Electron podia sumir com o processo antes dos 1500ms. Agora devolve
+       uma Promise que resolve no 'exit' (caminho feliz, rapido) OU no proprio SIGKILL (o que
+       vier primeiro); shutdown() espera essa promessa antes do app.exit(). */
+    return new Promise((resolve) => {
+      let feito = false;
+      const acabar = () => { if (feito) return; feito = true; resolve(); };
+      try { proc.once('exit', acabar); } catch {}
+      const timer = setTimeout(() => { try { process.kill(-proc.pid, 'SIGKILL'); } catch {} acabar(); }, 1500);
+      if (timer.unref) timer.unref();
+    });
+  }
+  matarProcesso(proc);
+  return Promise.resolve();
 }
 const cli = require('./cli-motors').criarCli({ HOME, emit: (paneId, kind, data) => {
   if (kind === 'sessao' && data && data.id) marcarDonoDoFio(paneId, data.id, 'gemini');
@@ -5194,9 +5352,10 @@ handle('pane:send', async (_e, data) => {
      lista de caminhos no fim do texto, feito pelo próprio acp.js. */
   if (motorAcp(engine)) return acp.enviar(paneId, text, (attachments || []).map(a => a && a.path).filter(Boolean));
   if (engine === 'claude') {
-    // A interface Claude continua usando o texto com a lista de caminhos.
-    const content = claudeAttachmentText(text, attachments);
-    const foi = escreverClaude(paneId, { type: 'user', message: { role: 'user', content: [{ type: 'text', text: content }] } });
+    // No Mac a interface continua usando o texto com a lista de caminhos; na VPS a foto vai
+    // embutida em base64 (R2-013), porque o processo remoto nao enxerga o disco do Mac.
+    const content = claudeAttachmentContent(text, attachments, ehRemoto(claudeCwd.get(paneId)));
+    const foi = escreverClaude(paneId, { type: 'user', message: { role: 'user', content } });
     // marca que este painel esta no meio de um turno: e isso que o aviso de fechar a janela le
     if (foi) { const st = claudePanes.get(paneId); if (st) st.rodando = true; }
     return foi;
@@ -5268,8 +5427,10 @@ handle('pane:steer', async (_e, data) => {
   if (engine === 'gemini') return { error: 'Espere o Gemini terminar ou clique em parar.' };
   if (motorAcp(engine)) return { error: 'Neste motor não dá para falar no meio do trabalho. Espere terminar ou clique em parar.' };
   if (engine === 'claude') {
-    const content = claudeAttachmentText(text, attachments);
-    if (!escreverClaude(paneId, { type: 'user', message: { role: 'user', content: [{ type: 'text', text: content }] } })) return { error: 'sessão fora do ar' };
+    // Mesmo tratamento remoto do pane:send (R2-013): sem isso, steerar com foto na VPS
+    // mandava o caminho local do Mac, que o Claude remoto nao consegue abrir.
+    const content = claudeAttachmentContent(text, attachments, ehRemoto(claudeCwd.get(paneId)));
+    if (!escreverClaude(paneId, { type: 'user', message: { role: 'user', content } })) return { error: 'sessão fora do ar' };
     return { ok: true };
   }
   const tid = codex.paneToThread.get(paneId);
@@ -5376,6 +5537,21 @@ handle('pane:approve', (_e, { key, allow, paneId }) => {
     return true;
   } catch { return false; }
 });
+
+/* R2-012: o celular reconecta depois de dormir e nao repunha nem o turno que terminou
+   escondido nem a aprovacao pendente. So LEITURA do estado real do Mac (nada aqui muda nada),
+   pra mobile.js decidir se pode reler o historico ou reexibir a tarja sem esperar recarregar
+   a pagina inteira. */
+function estadoPane(paneId) {
+  const st = claudePanes.get(paneId);
+  const busy = !!(st && st.rodando) || codex.paneTurn.has(paneId);
+  let aprovacao = null;
+  for (const a of pendingApprovals.values()) {
+    if (a.paneId === paneId && a.evento) { aprovacao = a.evento; break; }
+  }
+  return { busy, aprovacao };
+}
+handle('pane:estado', (_e, { paneId }) => estadoPane(paneId));
 
 handle('pane:respond', async (_e, data) => {
   const a = pendingApprovals.get(data.key);
@@ -5664,7 +5840,7 @@ async function atualizarMotoresSozinho(motivo) {
       if (r && r.err) { anota('falhou ao atualizar ' + eng, r.err.message, String(r.errout || '').slice(-400)); continue; }
       /* Confere na fonte em vez de acreditar no comando: "update" as vezes sai com codigo 0
          sem ter trocado nada (sem rede, sem permissao de escrita na pasta da versao). */
-      if (eng === 'claude') usarClaudeDeCaminhoFixo();
+      if (eng === 'claude') await usarClaudeDeCaminhoFixoAsync();   // R2-031: async aqui, nao trava os paineis
       const binLer = eng === 'claude' ? CLAUDE_BIN : eng;
       const lida = await rodar(binLer, ['--version'], 15000).then((x) => String(x.out + ' ' + x.errout).match(/(\d+\.\d+\.\d+)/)).catch(() => null);
       const agora = lida ? lida[1] : '';
@@ -6168,9 +6344,15 @@ handle('web:ligar', async (_e, ligar) => {
       // a tela mostrava endereco e senha e o telefone nunca conectava
       if (web && web.pronto) await web.pronto;
       manterAcordado(true);
-      cfg.webLigado = true; cfg.webSeguroConfirmado = true;
+      /* R2-038: 'cfg' foi lido ANTES dos dois awaits acima (endereco do Tailscale, ate 5s; e o
+         servidor subir). Nesse meio-tempo o renderer pode gravar config novo (painel aberto,
+         aba criada) — gravar por cima de 'cfg' aqui apagaria essa gravacao concorrente e o
+         numero de abas nao mudou, entao a rede de seguranca do saveConfig nao pega isso.
+         Reler o disco na hora e mexer so' nos dois campos deste handler evita a corrida. */
+      const fresco = loadConfig();
+      fresco.webLigado = true; fresco.webSeguroConfirmado = true;
       anotarChaveDoMain('webLigado', true); anotarChaveDoMain('webSeguroConfirmado', true);
-      saveConfig(cfg);
+      saveConfig(fresco);
     } catch (e) {
       try { if (web) web.fechar(); } catch {}
       web = null; manterAcordado(false);
@@ -6357,4 +6539,18 @@ app.whenReady().then(() => { anota('app iniciou'); usarClaudeDeCaminhoFixo(); me
     }
   } catch (e) { anota('NAO ABRIU para o telefone:', e); } setTimeout(() => codexStart().catch(() => {}), 1500); app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWindow(); }); });
 app.on('window-all-closed', () => { shutdown(); if (process.platform !== 'darwin') app.quit(); });
-app.on('before-quit', () => { saindoDoApp = true; shutdown(); if (web) { try { (web.fechar || web.servidor.close.bind(web.servidor))(); } catch {} } });
+/* R2-034: antes, shutdown() rodava sem esperar nada e o Electron seguia fechando o processo
+   logo depois — o SIGKILL de garantia de matarGrupoExtra (1,5s, timer unref'd de proposito)
+   podia nunca chegar a disparar, e um processo filho preso (MCP server que ignora SIGTERM)
+   sobrava rodando escondido mesmo com o Cockpit fechado. Agora segura o fechamento
+   (preventDefault) ate' shutdown() terminar, e so' entao sai — com app.exit(), nao
+   app.quit(), que reemitiria 'before-quit' e entraria em loop. */
+app.on('before-quit', (event) => {
+  if (saindoDoApp) return;   // ja' estamos no meio da saida (app.exit chamando de novo)
+  saindoDoApp = true;
+  event.preventDefault();
+  shutdown().finally(() => {
+    if (web) { try { (web.fechar || web.servidor.close.bind(web.servidor))(); } catch {} }
+    app.exit();
+  });
+});

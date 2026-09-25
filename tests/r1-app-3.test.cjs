@@ -86,6 +86,9 @@ test('trocar de conta com painel ocupado em outra aba pergunta antes, e cancela 
   const ctx = {
     console, panes: new Map(), motoresTrocandoConta: new Set(),
     nomeDoMotor: () => 'Codex', agTrabalhando: () => false,
+    // R2-020 passou a checar painel da VPS dentro de trocarParaConta; sem este stub o teste
+    // antigo quebrava so' por faltar o global, nao porque o comportamento afirmado ficou errado
+    NA_VPS: (cwd) => /^vps:/i.test(String(cwd || '')),
     window: { api: {} },
   };
   vm.createContext(ctx);
@@ -117,6 +120,9 @@ test('trocar de conta sem painel ocupado nao interrompe pra perguntar nada', asy
   const ctx = {
     console, panes: new Map(), motoresTrocandoConta: new Set(),
     nomeDoMotor: () => 'Codex', agTrabalhando: () => false,
+    // R2-020 passou a checar painel da VPS dentro de trocarParaConta; sem este stub o teste
+    // antigo quebrava so' por faltar o global, nao porque o comportamento afirmado ficou errado
+    NA_VPS: (cwd) => /^vps:/i.test(String(cwd || '')),
     window: { api: {} },
   };
   vm.createContext(ctx);

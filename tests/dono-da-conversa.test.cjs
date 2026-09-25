@@ -80,13 +80,16 @@ test('mandar de NOVO assume a conversa e desliga o agente do outro lado', async 
   await abrirNoMac(h, 'p1', 'S-8');
   const primeira = await h.call('pane:start', { paneId: 'w7k3p1', engine: 'claude', cwd: h.HOME, resumeId: 'S-8' });
   assert.equal(primeira.jaAberta, true, 'a primeira vez avisa');
+  // R2-046: claudePanes.delete(paneId) roda ANTES de matarGrupoExtra(st.proc) dentro de
+  // claudeStop (main.js) — entao so' conferir "claudePanes.has('p1') === false" prova que o
+  // REGISTRO sumiu, nao que o PROCESSO foi morto de verdade. Espiao no mesmo padrao de
+  // tests/r1-main-1.test.cjs (R1-048), ligado so' antes desta segunda tentativa pra nao pegar
+  // chamada de outro ponto do fluxo (nenhum claudeStop roda antes disso neste teste).
+  h.evaluate("globalThis.__chamadasGrupo = []; matarGrupoExtra = (p) => { globalThis.__chamadasGrupo.push(p); };");
   const segunda = await h.call('pane:start', { paneId: 'w7k3p1', engine: 'claude', cwd: h.HOME, resumeId: 'S-8' });
   assert.notEqual(segunda && segunda.jaAberta, true, 'insistindo, a conversa vem para ca');
-  // R1 (25/09): claudeStop passou a matar pelo GRUPO do processo (matarGrupoExtra), nao mais
-  // com kill('SIGTERM') direto — o proprio kill do processo fake do harness nao registra
-  // sinal nesse caminho (cai no matarProcesso, que so chama p.kill() sem argumento, igual o
-  // Node faz de verdade). A prova de "foi desligado de verdade" e' o registro do painel
-  // antigo ter sumido de claudePanes, nao mais o sinal exato que foi passado pro kill.
+  assert.equal(h.evaluate("globalThis.__chamadasGrupo.length"), 1, 'claudeStop tem de matar o GRUPO do processo antigo (matarGrupoExtra), nao so apagar o registro');
+  // prova complementar: o registro tambem sumiu (mas sozinha nao bastava, ver acima)
   assert.equal(h.evaluate("claudePanes.has('p1')"), false, 'o agente que estava na conversa tem de ser desligado de verdade');
   // e o chat de la fica sabendo, em vez de emudecer sem explicacao
   const recado = h.paneEvents('note').find(e => /passou para l/i.test(e.text || ''));

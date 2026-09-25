@@ -153,14 +153,25 @@
     const P = focusPane;
     // Um painel com motor próprio recebe os eventos em tempo real. Nunca substituir
     // sua resposta por uma leitura parcial de disco, nem reiniciar esse motor.
-    if (!P || P.started || P.busy || !sessao(P) || restaurando) return;
+    if (!P || P.busy || !sessao(P) || restaurando) return;
     const id = sessao(P), engine = P.engine;
     atualizando = true;
     try {
+      if (P.started) {
+        // R2-012: o painel acha que ainda esta rodando, mas pode ter dormido e perdido o
+        // fim do turno (ou uma aprovacao) enquanto o WebSocket estava caido. Pergunta pro
+        // Mac o estado real antes de desistir; sem isso a tela fica presa em "trabalhando…"
+        // pra sempre. So LEITURA: nao mexe em nada, so decide se pode seguir abaixo.
+        if (!window.api.paneEstado) return;
+        const estado = await window.api.paneEstado({ paneId: P.id }).catch(() => null);
+        if (!estado || estado.busy || P.busy || !panes.has(P.id) || focusPane !== P || sessao(P) !== id) return;
+        if (estado.aprovacao) receberEventoPane({ paneId: P.id, kind: estado.aprovacao.tipo, ...estado.aprovacao.dados });
+        // segue pra releitura do historico abaixo mesmo com P.started true: o Mac confirmou que acabou
+      }
       const msgs = (engine === 'claude' && NA_VPS(P.cwd))
         ? await window.api.sessionHistoryRemoto({ id })
         : await window.api.sessionHistory({ engine, file: P.sessaoFile, id, cwd: P.cwd });
-      if (P.started || P.busy || !panes.has(P.id) || sessao(P) !== id || P.engine !== engine || !Array.isArray(msgs) || !msgs.length) return;
+      if (P.busy || !panes.has(P.id) || sessao(P) !== id || P.engine !== engine || !Array.isArray(msgs) || !msgs.length) return;
       const selo = JSON.stringify(msgs);
       if (selos.get(P) === selo) return;
       const topo = P.chat.scrollTop;

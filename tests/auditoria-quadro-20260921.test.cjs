@@ -26,8 +26,10 @@ function montar() {
     setTimeout(fn) { const id = ++seq; timers.set(id, fn); return id; }, clearTimeout: id => timers.delete(id),
   });
   const src = fs.readFileSync(path.join(__dirname, '../renderer/quadro.js'), 'utf8');
-  vm.runInContext(src.replace('window.Quadro = { abrir, fechar, aberto };',
-    'window.Quadro = { abrir, fechar, aberto, Q, recuperarRascunho, copiarTexto, gerarPNG, marcarSujo, mandarProChat };'), ctx);
+  // R2-023 acrescentou donoEh na linha de baixo: o "de" (busca) tem de acompanhar, senão o
+  // replace vira no-op e window.Quadro fica sem Q/recuperarRascunho (o teste quebra por tabela)
+  vm.runInContext(src.replace('window.Quadro = { abrir, fechar, aberto, donoEh };',
+    'window.Quadro = { abrir, fechar, aberto, donoEh, Q, recuperarRascunho, copiarTexto, gerarPNG, marcarSujo, mandarProChat };'), ctx);
   const q = window.Quadro;
   q.Q.el = { sub: el(), canvas: el(), palco: el(), toast, mandar: el(), editor: el(), props: el(), ferramentas: el(), dica: el() };
   return { q, window, ctx, listeners, toast, canvases };

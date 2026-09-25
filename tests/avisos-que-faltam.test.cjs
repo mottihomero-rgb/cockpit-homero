@@ -162,8 +162,11 @@ test('motor que falta neste Mac diz o motivo ANTES de criar o chat', () => {
   c.radar({ claude: true, codex: true, gemini: true, grok: false });
   assert.equal(c.motivo('grok', '/Users/homeromotti'), 'Grok não está instalado neste Mac.');
   assert.equal(c.motivo('gemini', '/Users/homeromotti'), '', 'instalado continua liberado');
-  assert.equal(c.motivo('grok', 'vps:/opt/adsure'), '',
-    'na VPS quem roda e o motor DE LA: o que falta no Mac nao vem ao caso');
+  // R2-016 (25/09): o Grok roda pelo ACP, que o backend RECUSA na VPS (main.js: "o agente ACP
+  // roda no Mac, nao na VPS"). Essa asserção testava o bug: dizia que era pra ficar mudo igual
+  // ao motor que so falta local, mas o Grok na VPS precisa do MESMO aviso do Gemini.
+  assert.notEqual(c.motivo('grok', 'vps:/opt/adsure'), '',
+    'grok na VPS precisa do mesmo aviso do gemini: o ACP nao roda la, e sem aviso a troca matava a conversa atual antes do backend recusar');
 });
 
 test('Claude e Codex nunca sao apagados por leitura de PATH', () => {

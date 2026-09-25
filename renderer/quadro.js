@@ -1665,6 +1665,9 @@
   /* volta direto, sem perguntar: um dialogo "quer recuperar?" e o tipo de parada que ele odeia */
   async function recuperarRascunho() {
     if (!temApi('quadroRascunhoLer')) return;
+    // gravacao do Limpar (ou de qualquer edicao) ainda nao confirmou no disco: ler agora
+    // traria de volta o desenho velho, desfazendo o Limpar sozinho (R2-022)
+    if (Q.rascunho.sujo) return;
     const abertura = Q.abertura, revisao = Q.revisao;
     let r = null;
     try { r = await window.api.quadroRascunhoLer(); } catch (_) { return; }
@@ -2207,7 +2210,13 @@
   async function abrir(P) {
     const el = caixa();
     const jaAberto = Q.aberto;
-    Q.P = P || Q.P || null;
+    // reabrir apontando pra outro chat com desenho ainda nao mandado trocaria o dono
+    // escondido, e o "Mandar pro chat" iria pro lugar errado; so troca se nao ha nada a perder
+    if (jaAberto && P && P !== Q.P && !cenaVazia()) {
+      toast('Esse desenho ainda não foi mandado. Mande ou limpe antes de abrir noutro chat.');
+    } else {
+      Q.P = P || Q.P || null;
+    }
     lerTema();
     // a cor viva do botao principal e a do motor daquele chat: laranja no Claude, azul no Codex
     el.style.setProperty('--qd', (Q.P && Q.P.engine === 'codex') ? 'var(--codex)' : 'var(--claude)');
@@ -2258,5 +2267,8 @@
 
   function aberto() { return Q.aberto; }
 
-  window.Quadro = { abrir, fechar, aberto };
+  // o quadro so pertence a UM painel por vez: fechar um painel diferente do dono nao pode derrubar o quadro alheio
+  function donoEh(P) { return !Q.P || Q.P === P; }
+
+  window.Quadro = { abrir, fechar, aberto, donoEh };
 })();

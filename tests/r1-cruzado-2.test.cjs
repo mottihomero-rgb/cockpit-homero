@@ -71,8 +71,8 @@ test('pointerdown na régua liga pointermove/pointerup (o arrasto continua com o
 test('CSS da régua de esforço trava o gesto de rolagem da tela (touch-action:none)', () => {
   const bloco = /\.ef-shell\{[^}]*\}/.exec(cssSource);
   assert.ok(bloco, 'achou a regra .ef-shell no style.css');
-  assert.ok(
-    cssSource.includes('touch-action:none') || /touch-action\s*:\s*none/.test(cssSource),
-    'style.css precisa de touch-action:none pra régua não virar scroll no celular'
-  );
+  // R2-047: a asserção olhava cssSource (arquivo inteiro), e .pane-split-h já tem
+  // touch-action:none em outro ponto do CSS — então a busca global batia mesmo sem a
+  // regra em .ef-shell. Tem de olhar só dentro do bloco .ef-shell (bloco[0], o match).
+  assert.match(bloco[0], /touch-action\s*:\s*none/, 'a regra .ef-shell precisa de touch-action:none pra régua não virar scroll no celular');
 });

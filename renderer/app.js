@@ -473,7 +473,18 @@ function conversaDaPastaNova(P, pasta) {
 }
 
 async function trocarPastaDaAba(A) {
+  // R2-015: aba da VPS nao tem Finder — o dialog nativo do Mac (pickFolder) ignora o prefixo
+  // "vps:/..." e deixa escolher qualquer pasta local, sem aviso nenhum de que trocou de
+  // servidor. Igual ja acontecia na troca por PAINEL (mudarPastaDoChat -> pedirCaminhoVps),
+  // mas faltava aqui na troca por ABA.
+  if (NA_VPS(A.cwd)) return pedirCaminhoVpsDaAba(A);
   const p = await window.api.pickFolder(A.cwd);
+  if (!p || p === A.cwd) return;
+  await aplicarPastaNaAba(A, p);
+}
+
+// move TODOS os chats da aba pra pasta nova (local ou VPS) — usado pelo Finder e pelo campo da VPS
+async function aplicarPastaNaAba(A, p) {
   if (!p || p === A.cwd) return;
   A.cwd = p;
   pintarAba(A);
@@ -490,6 +501,42 @@ async function trocarPastaDaAba(A) {
   if (abaAtiva === A) { loadTree(p); const pn = $('#projName'); if (pn) pn.textContent = nomePasta(p); }
   lateralSegueAPasta();
   savePanes();
+}
+
+// chat na VPS nao tem Finder: pede o caminho de la, ancorado no chat ativo da aba (ou o 1o),
+// e ao confirmar move a ABA INTEIRA — nao so um chat, senao diverge de trocarPastaDaAba
+function pedirCaminhoVpsDaAba(A) {
+  const ancora = panes.get(A.ativo) || panes.get(A.ordem[0]);
+  if (!ancora) return;   // aba sem nenhum chat vivo: nao ha onde ancorar o modal
+  const modal = $('.p-modal', ancora.el), cx = $('.modal-cx', modal);
+  modal.classList.remove('hidden');
+  cx.className = 'modal-cx cx-vps';
+  cx.onclick = (e) => e.stopPropagation();
+  cx.innerHTML = '<div class="mo-top"><span class="mo-tit">Pasta na VPS</span><button class="mo-x">' + ico('x') + '</button></div>'
+    + '<div class="mo-sub">Digite o caminho de lá. Todos os chats desta aba vão pra essa pasta.</div>'
+    + '<input class="na-caminho" id="vpsCaminho" spellcheck="false">'
+    + '<div class="na-atalhos" id="vpsAtalhos"></div>'
+    + '<div class="mo-rodape"><button class="mo-btn destaque" id="vpsOk">Ir</button></div>';
+  const inp = $('#vpsCaminho', cx);
+  inp.value = semPrefixo(A.cwd);
+  for (const cam of PASTAS_VPS) {
+    const b = document.createElement('button');
+    b.className = 'na-atalho'; b.textContent = cam;
+    b.onclick = () => { inp.value = cam; inp.focus(); };
+    $('#vpsAtalhos', cx).appendChild(b);
+  }
+  const irAba = () => {
+    // tira um "vps:" que o usuário já tenha digitado, senão dobra o prefixo
+    const c = semPrefixo((inp.value || '').trim());
+    fecharModal(ancora);
+    if (!c) return;
+    aplicarPastaNaAba(A, 'vps:' + (c.startsWith('/') ? c : '/' + c));
+  };
+  $('#vpsOk', cx).onclick = irAba;
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); irAba(); } });
+  $('.mo-x', cx).onclick = () => fecharModal(ancora);
+  modal.onclick = (e) => { if (e.target === modal) fecharModal(ancora); };
+  setTimeout(() => { inp.focus(); inp.select(); }, 50);
 }
 
 // tira o chat de onde esta e coloca em outra posicao (ou em outra aba)
@@ -910,6 +957,8 @@ function newPane(opts = {}) {
     e.preventDefault();
     const r = await window.api.colados();
     if (r && r.arquivos && r.arquivos.length) { setFocus(P); await anexar(P, r.arquivos); }
+    // R2-037: antes falha e "nada pra colar" pareciam a mesma coisa (tela muda)
+    else if (r && r.error) avisoTemp(P, 'Não consegui colar a imagem: ' + r.error, true);
   };
   el.addEventListener('paste', colar);   // um so: o evento do campo sobe ate aqui
 
@@ -1155,11 +1204,16 @@ async function restaurarAbas() {
   if (!salvas.length) return false;
   restaurando = true;
   abasQueNaoVoltaram = salvas.slice();     // cada aba que remontar sai desta lista
+  let remontadas = 0;
   try {
-    await restaurarAbasCorpo(salvas);
+    remontadas = await restaurarAbasCorpo(salvas);
   } finally {
     restaurando = false;
   }
+  // R2-002: existia aba salva pra tentar restaurar, mas NENHUMA remontou — isso e falha total,
+  // nao "0 abas porque nao tinha nada salvo". Sem isto o app abria sem aba nenhuma e sem
+  // a tela de nova conversa, so o "+" pequeno da faixa funcionando, sem explicar nada.
+  if (!remontadas) return false;
   /* Quando TODAS as abas gravadas voltaram, a lista pode legitimamente encolher: duas abas do
      mesmo cliente viram uma so (agruparPorCliente). Essa gravacao tem licenca pra diminuir.
      Se sobrou alguma que nao voltou, nao tem: ai a conta so pode cair por causa da falha, e o
@@ -1171,6 +1225,7 @@ async function restaurarAbas() {
 
 async function restaurarAbasCorpo(salvas) {
   const paraCarregar = [];
+  let remontadas = 0;   // R2-002: conta quantas abas voltaram de verdade, pra restaurarAbas() saber se falhou tudo
   for (const a of salvas) {
     // cada aba isolada: uma aba com problema nao pode derrubar as seguintes
     try {
@@ -1206,6 +1261,7 @@ async function restaurarAbasCorpo(salvas) {
     if (Pativo) A.ativo = Pativo.id;
     // esta aba voltou: sai da lista das que precisam ser preservadas as cegas
     abasQueNaoVoltaram = abasQueNaoVoltaram.filter(x => x !== a);
+    remontadas++;   // R2-002: conta a aba que remontou de verdade
     } catch (e) {
       console.error('nao consegui remontar a aba', a && a.cwd, e);
     }
@@ -1218,9 +1274,13 @@ async function restaurarAbasCorpo(salvas) {
   const i = iCli >= 0 ? iCli : Math.min(Math.max(0, cfg.abaAberta | 0), abertas.length - 1);
   ativarAbaProjeto(abertas[i] || abertas[0]);
 
-  // as conversas voltam com o que ja tinha sido dito, uma de cada vez para nao travar a tela
-  for (const { P, arquivo, id, cwd, revisao } of paraCarregar) {
-    if (!painelAindaAtual(P, revisao)) continue;
+  /* R2-001: cada conversa busca o historico em paralelo (Promise.all de funcoes independentes),
+     nao mais uma de cada vez. Antes, um "for...of" com await sequencial fazia QUALQUER aba do
+     Mac que estivesse depois de uma aba da VPS na lista esperar a VPS estourar o tempo (ate
+     ~12s de ConnectTimeout SSH, ou o codexReq do Codex remoto) antes de sequer comecar a
+     carregar, mesmo sem nenhuma relacao com a VPS. */
+  await Promise.all(paraCarregar.map(async ({ P, arquivo, id, cwd, revisao }) => {
+    if (!painelAindaAtual(P, revisao)) return;
     note(P, 'Trazendo a conversa de volta…');
     try {
       // manda tambem id e pasta: quando o caminho se perdeu (config antigo), o main
@@ -1229,7 +1289,7 @@ async function restaurarAbasCorpo(salvas) {
       const msgs = (P.engine === 'claude' && NA_VPS(cwd) && window.api.sessionHistoryRemoto)
         ? await window.api.sessionHistoryRemoto({ id })
         : await window.api.sessionHistory({ engine: P.engine, file: arquivo, id, cwd });
-      if (!painelAindaAtual(P, revisao)) continue;
+      if (!painelAindaAtual(P, revisao)) return;
       const aviso = $('.note', P.chat); if (aviso) aviso.remove();
       for (const m of (msgs || [])) renderizarHistorico(P, m);
       $$('.tool-st.run', P.el).forEach(x => { x.className = 'tool-st ok'; x.innerHTML = ico('check'); });
@@ -1238,8 +1298,8 @@ async function restaurarAbasCorpo(salvas) {
       scroll(P, true);
     } catch { if (painelAindaAtual(P, revisao)) note(P, 'Não consegui trazer o que já foi conversado. Pode continuar mesmo assim.', true); }
     finally { if (painelAindaAtual(P, revisao)) P.carregandoHistorico = false; }
-  }
-  return true;
+  }));
+  return remontadas;   // R2-002: 0 quando NENHUMA aba salva conseguiu remontar
 }
 
 /* Por que só gemini e grok na segunda checagem: são os dois que podem faltar nesta máquina.
@@ -1247,7 +1307,9 @@ async function restaurarAbasCorpo(salvas) {
    trocar um aviso tardio por um app que não abre chat nenhum. É a mesma dupla que o
    avisarInstalacaoMotor já usa aqui embaixo. */
 function motorIndisponivelNaPasta(engine, cwd) {
-  if (engine === 'gemini' && NA_VPS(cwd)) return 'O Gemini está disponível neste Mac. Escolha uma pasta do Mac para usar o Gemini.';
+  // R2-016: o Grok roda pelo ACP, que o backend recusa na VPS igual ao Gemini — sem isto a
+  // troca matava a conversa atual e so depois o backend recusava, na mensagem seguinte
+  if ((engine === 'gemini' || engine === 'grok') && NA_VPS(cwd)) return nomeDoMotor(engine) + ' está disponível neste Mac. Escolha uma pasta do Mac para usar o ' + nomeDoMotor(engine) + '.';
   // na VPS quem roda é o motor DE LÁ: o que falta neste Mac não vem ao caso
   if (!NA_VPS(cwd) && ['gemini', 'grok'].includes(engine) && MOTORES_OK?.[engine] === false) {
     return nomeDoMotor(engine) + ' não está instalado neste Mac.';
@@ -1303,8 +1365,19 @@ async function trocarMotor(P, novo) {
   const estavaPlanejando = velho === 'codex' ? P.collaborationMode === 'plan' : P.mode === 'plan';
   P.trocando = true;
   invalidarConversa(P);
-  // o estado e o desenho mudam JA, antes da ida ao processo principal: enquanto se esperava
-  // o paneStop responder, o icone continuava marcando o motor antigo
+  // so o recado no chat e imediato (e so texto, nao roteia evento nenhum)
+  marcaTroca(P, antigo, nomeDoMotor(novo));
+  /* R2-004: P.engine (e tudo que depende dele: busy, blocks, tools, model...) SO troca DEPOIS
+     que o paneStop confirmar que o motor velho parou. O Codex espera ate 1.5s pela resposta do
+     turn/interrupt antes de soltar o paneId — nessa janela o app-server dele ainda manda
+     tool-start/tool-end/text-delta/turn-end pro MESMO paneId, e o switch de receberEventoPane
+     so olha o paneId, nao o motor. Trocando P.engine cedo (como era antes), esses eventos
+     atrasados do motor velho eram processados como se fossem do motor NOVO, que nem comecou —
+     passo de ferramenta fantasma, "terminou" com o motor errado, ate notificacao errada.
+     Enquanto o await esta pendente P.engine continua sendo o velho DE PROPOSITO: assim
+     qualquer evento atrasado ainda cai certo no switch, como pertencente ao motor de antes. */
+  try { await window.api.paneStop({ paneId: P.id, engine: velho }); } catch {}
+  if (panes.get(P.id) !== P) { P.trocando = false; return; }   // painel fechou no meio da espera
   // Cada motor usa um tipo diferente de numero de conversa. O id do Claude nao existe no
   // Codex, e o id do Codex nao existe no Claude. Se ele atravessa a troca, o motor novo tenta
   // retomar uma conversa impossivel ("no rollout found" no Codex). A continuidade entre os
@@ -1326,23 +1399,22 @@ async function trocarMotor(P, novo) {
   // leva 10.5: a branch isolada é uma coisa do Claude (a flag -w é dele). Trocar de motor
   // devolve o chat à pasta principal, senão o rótulo "⎇ nome" ficaria mentindo no Codex
   P.worktree = '';
-  // o processo velho vai morrer: o chat deixa de estar ocupado e a fila morre com ele.
-  // O texto que estava na fila volta para o campo, e a bolha dele sai da tela junto — senao
+  // o processo velho ja confirmou que morreu: o chat deixa de estar ocupado e a fila morre com
+  // ele. O texto que estava na fila volta para o campo, e a bolha dele sai da tela junto — senao
   // ele manda de novo e a mesma mensagem fica duas vezes na conversa.
   P.busy = false; escondePerm(P);
+  // R2-004: faltava aqui — as outras 6 funcoes que resetam a conversa (conversaDaPastaNova,
+  // send(), turn-end, openSession, novaConversa, "Limpar a tela") sempre zeram isto; sem isto um
+  // text-delta atrasado do motor antigo podia casar com um bloco de resposta ainda vivo na tela.
+  P.blocks.clear(); P.tools.clear();
   if (P.queued) { const q = P.queued; P.queued = null; devolverFilaAoCampo(P, q); }
   // try/finally: se qualquer coisa tropecar aqui no meio, a trava TEM de sair, senao o botao
   // de trocar de motor fica morto para sempre naquele chat
   try {
     pararTrabalho(P); limparPassos(P); limparContinuar(P);
     fillModels(P); paintEngine(P); pintarModo(P); setDot(P, 'off');
-    // O contexto e o recado da troca TEM de ficar prontos antes do await. Como o desenho ja
-    // mudou, ele confia e escreve na hora; se estas duas linhas ficassem depois, a primeira
-    // mensagem saia sem a conversa anterior e a seguinte levava tudo colado, fora de hora.
     if (P.hist.length) P.passarContexto = montarContexto(P);
-    marcaTroca(P, antigo, nomeDoMotor(novo));
     avisarInstalacaoMotor(P);
-    try { await window.api.paneStop({ paneId: P.id, engine: velho }); } catch {}
   } finally {
     P.trocando = false;
   }
@@ -1486,8 +1558,8 @@ async function desligarMotor(P) {
 
 async function closePane(id, semPerguntar) {
   const P = panes.get(id); if (!P) return;
-  // o quadro branco e dono de um chat: fechar o chat por tras deixaria o desenho orfao
-  if (window.Quadro && window.Quadro.aberto && window.Quadro.aberto()) { try { window.Quadro.fechar(); } catch (_) {} }
+  // o quadro branco e dono de UM painel so: fechar outro painel nao pode derrubar o desenho dele
+  if (window.Quadro && window.Quadro.aberto && window.Quadro.aberto() && window.Quadro.donoEh && window.Quadro.donoEh(P)) { try { window.Quadro.fechar(); } catch (_) {} }
   if ((P.busy || agTrabalhando(P)) && !semPerguntar) {
     const nome = (P.titulo || '').trim().slice(0, 40) || 'este chat';
     if (!confirm('O ' + nomeDoMotor(P.engine) + ' está trabalhando em “' + nome + '”.\n\nFechar agora joga fora o que ele está fazendo. Fechar mesmo assim?')) return;
@@ -2435,6 +2507,9 @@ function vozEvento(P, ev) {
   }
   if (ev.type === 'final') {
     if (vozVazio(ev.text)) { VIVO.parcial = ''; return; }
+    // sincroniza VIVO.base com o que foi digitado à mão ANTES do comando, senão "manda" envia
+    // texto velho por cima de uma correção que ele acabou de teclar (vozPintar já faz esse sync)
+    vozPintar(P);
     // a frase que fechou, quando é SÓ um comando ("manda", "cancela"), não vira texto: vira ação
     if (vozComando(P, ev.text)) return;
     VIVO.firme = (VIVO.firme ? VIVO.firme.replace(/\s*$/, ' ') : '') + String(ev.text || '').trim();
@@ -3627,6 +3702,9 @@ async function send(P) {
     if (!P.passarContexto) P.passarContexto = contextoDoEnvio;
     P.ultraAvisado = ultraAntes;
     concluirEscolhasEnvio(P, escolhasDoEnvio, false);
+    // P.started TEM de voltar a false, senao o proximo envio pula o religar e repete a mesma
+    // falha para sempre (mesmo motivo do ramo `!aceito` acima e do catch de agendarFila).
+    P.started = false; P.resumeId = P.sessaoId || P.resumeId;
     P.busy = false; pararTrabalho(P); limparPassos(P);
     recuperarEnvio(P, bolha, text, anexos);
     setDot(P, 'idle'); note(P, 'Falhou: ' + (e && e.message || e), true); }
@@ -4374,7 +4452,12 @@ function barraEsforco(P) {
     frameMola = requestAnimationFrame(passo);
   }
 
-  async function aplicar(i) { pintar(i); await trocarEsforco(P, lista[i].id); }
+  async function aplicar(i) {
+    const antes = ix;
+    pintar(i);
+    // cancelou (trabalho rodando e ele desistiu): o slider não pode mentir sobre o esforço atual
+    if (await trocarEsforco(P, lista[i].id) === false) pintar(antes);
+  }
 
   const valorDoX = (clientX) => {
     const r = shell.getBoundingClientRect();
@@ -4385,6 +4468,9 @@ function barraEsforco(P) {
   // Pointer Events cobrem mouse e toque com a mesma API (R1-021: no iPhone o
   // arrasto de dedo não gerava mousemove e a tela só rolava).
   const comecar = (e) => {
+    // um dedo por vez: no iPhone um segundo toque durante o arrasto resetava `amostras` e
+    // os dois dedos brigavam pelo mesmo valor/ix do slider (R2-045)
+    if (arrastando) return;
     e.preventDefault(); e.stopPropagation();
     cancelAnimationFrame(frameMola);
     arrastando = true; box.classList.add('pegando');
@@ -4520,12 +4606,20 @@ function barraEsforco(P) {
 }
 
 async function trocarEsforco(P, id) {
+  // trocar de esforço desliga o motor: com trabalho rodando, pergunta antes (igual ao modo/motor)
+  const estavaRodando = !!P.busy || agTrabalhando(P);
+  if (!confirmarCorte(P, 'Trocar de esforço')) return false;
   // vale só para este painel: conversa nova continua nascendo no esforço de PADRAO_NOVO
   P.effort = id; P.ultraAvisado = false;
   lembrarEscolhaDaPasta(P);
-  if (P.engine === 'claude' && P.started) await desligarMotor(P);
+  if (P.engine === 'claude' && P.started) {
+    await desligarMotor(P);
+    avisoTemp(P, 'Esforço: ' + (EF_PT[id] || id) + '.'
+      + (estavaRodando ? ' O que estava em andamento parou aqui.' : ''));
+  }
   if (P.engine === 'codex' && !modeloPorCreditos(P.model)) await mudarEscolhasCodex(P, { effort: id });
   savePanes();
+  return true;
 }
 
 function avisoEnvio(P, txt) {
@@ -4763,6 +4857,9 @@ async function menuModelos(P) {
       // leva 12.5: no ACP o menu diz o que está e o que NÃO está instalado nesta máquina
       const faltando = P.engine === 'acp' && !agenteAcpTem(mo);
       m.appendChild(elItem({ nome: mo.nome, desc: mo.desc + (faltando ? ' · não está instalado neste Mac' : ''), on: mo.id === P.model }, async () => {
+        // trocar de modelo desliga o motor: pergunta ANTES de mexer em P.model, senão a UI já
+        // muda visualmente antes dele confirmar/cancelar
+        if (mo.id !== P.model && !confirmarCorte(P, 'Trocar de modelo')) return;
         const vaiPorCreditos = modeloPorCreditos(mo.id);
         const mudouOrigem = modeloPorCreditos(P.model) !== vaiPorCreditos;
         P.model = mo.id;
@@ -4920,6 +5017,8 @@ function guardarFechado(P) {
     engine: P.engine, cwd: P.cwd, titulo: P.titulo,
     resumeId: P.sessaoId || P.resumeId || '', arquivo: P.sessaoFile || '',
     aid: P.aid,
+    // R2-033: guarda o worktree pra reabrir devolver o chat na branch isolada, não na pasta principal
+    worktree: (P.worktree && !NA_VPS(P.cwd)) ? P.worktree : '',
   });
   if (fechadosRecentes.length > 20) fechadosRecentes.shift();
 }
@@ -4927,7 +5026,9 @@ async function reabrirUltimoFechado() {
   const f = fechadosRecentes.pop();
   if (!f) { if (focusPane) avisoTemp(focusPane, 'Nenhum chat fechado nesta sessão.'); return; }
   if (f.resumeId) {
-    await openSession({ id: f.resumeId, engine: f.engine, cwd: f.cwd, title: f.titulo || '', file: f.arquivo }, null);
+    const P = await openSession({ id: f.resumeId, engine: f.engine, cwd: f.cwd, title: f.titulo || '', file: f.arquivo }, null);
+    // R2-033: openSession sempre zera P.worktree — repõe aqui, igual o boot faz em restaurarAbasCorpo
+    if (P && f.worktree && !NA_VPS(f.cwd)) { P.worktree = f.worktree; mostrarPastaNoPainel(P); }
     return;
   }
   const A = abas.get(f.aid) || abaAtiva;
@@ -5261,11 +5362,16 @@ async function extrairTexto(P, a, bt) {
   let r = null;
   try { r = await window.api.ocrLer({ arquivo: a.path }); } catch (e) { r = { error: String(e && e.message || e) }; }
   a._ocr = false;
+  // ele pode ter removido o anexo enquanto o OCR ainda rodava: aí o texto não é mais dele
+  const aindaAnexado = (P.anexos || []).includes(a);
   if (bt && bt.isConnected) { bt.textContent = antes; bt.disabled = false; }
   // a barra foi repintada no meio da leitura: o botao novo nasceu preso em "lendo…"
-  else if ((P.anexos || []).includes(a)) pintarAnexos(P);
+  else if (aindaAnexado) pintarAnexos(P);
   // R4: sucesso por avisoTemp; o note() so serve para o erro, e com `true`
-  if (r && r.texto) { inserirNoInput(P, r.texto); avisoTemp(P, 'Texto da imagem colocado no campo. Confira antes de mandar.'); }
+  if (r && r.texto) {
+    if (aindaAnexado) { inserirNoInput(P, r.texto); avisoTemp(P, 'Texto da imagem colocado no campo. Confira antes de mandar.'); }
+    else avisoTemp(P, 'A imagem foi removida antes de terminar de ler; o texto não foi inserido.');
+  }
   else note(P, 'Não achei texto nessa imagem' + (r && r.error ? ': ' + r.error : '.'), true);
 }
 
@@ -6407,7 +6513,8 @@ async function trocarParaConta(P, eng, apelido) {
   const nomeEng = eng === 'codex' ? 'Codex' : 'Claude';
   // troca de conta derruba TODO painel deste motor, mesmo o de outra aba que o usuario nao
   // esta olhando; se algum estiver ocupado, perguntar antes de cortar (igual fechar aba/trocar motor)
-  const ocupados = [...panes.values()].filter(Q => Q.engine === eng && (Q.busy || agTrabalhando(Q)));
+  // painel na VPS fica de fora: a conta de la e' outra, controlada pelo servidor, e nao muda aqui
+  const ocupados = [...panes.values()].filter(Q => Q.engine === eng && !NA_VPS(Q.cwd) && (Q.busy || agTrabalhando(Q)));
   if (ocupados.length) {
     const msg = ocupados.length === 1
       ? 'O ' + nomeEng + ' está trabalhando em “' + ((ocupados[0].titulo || '').trim().slice(0, 40) || 'um chat') + '”.\n\nTrocar de conta agora joga fora o que ele está fazendo. Continuar mesmo assim?'
@@ -6420,7 +6527,7 @@ async function trocarParaConta(P, eng, apelido) {
      trocar com ele rodando podia ser desfeito calado, minutos depois. */
   let religados = 0;
   for (const Q of [...panes.values()]) {
-    if (Q.engine !== eng) continue;
+    if (Q.engine !== eng || NA_VPS(Q.cwd)) continue; // VPS nao muda de conta aqui, nao interromper
     await desligarMotor(Q);
     // religa na MESMA conversa: a sessao e' arquivo local, nao pertence a conta
     Q.resumeId = Q.sessaoId || Q.resumeId; Q.sessaoId = null;
@@ -6682,10 +6789,20 @@ async function contaAcao(P, acao, motorPedido) {
       }
       return;
     }
-    // todo chat do mesmo motor recomeca, senao continua falando pela conta velha
+    // todo chat do mesmo motor recomeca, senao continua falando pela conta velha — mas se algum
+    // estiver ocupado, perguntar antes de cortar (mesmo padrao de trocarParaConta)
+    const ocupados = [...panes.values()].filter(q => q.engine === eng && (q.busy || agTrabalhando(q)));
+    if (ocupados.length) {
+      const msg = ocupados.length === 1
+        ? 'O ' + nomeDoMotor(eng) + ' está trabalhando em “' + ((ocupados[0].titulo || '').trim().slice(0, 40) || 'um chat') + '”.\n\nTrocar de conta agora joga fora o que ele está fazendo. Continuar mesmo assim?'
+        : 'O ' + nomeDoMotor(eng) + ' está trabalhando em ' + ocupados.length + ' chats.\n\nTrocar de conta agora joga fora o que eles estão fazendo. Continuar mesmo assim?';
+      if (!confirm(msg)) { avisoTemp(P, 'Nada foi cortado. Mande uma mensagem quando puder trocar.'); return; }
+    }
     for (const q of panes.values()) {
       if (q.engine !== eng) continue;
-      await desligarMotor(q); q.resumeId = null;
+      await desligarMotor(q);
+      // religa na MESMA conversa: a sessao e' arquivo local, nao pertence a conta
+      q.resumeId = q.sessaoId || q.resumeId; q.sessaoId = null;
     }
     if (!r.confereDepois) { avisoTemp(P, 'Pronto. Mande uma mensagem para começar de novo.'); return; }
     avisoTemp(P, 'Conferindo qual conta ficou…');
@@ -6693,6 +6810,9 @@ async function contaAcao(P, acao, motorPedido) {
     const txt = ((st && st.texto) || '').trim();
     const r2 = lerStatusConta(txt);
     if (r2.dentro) {
+      // Codex compartilha UM app-server que so le a conta ao subir: sem reiniciar, a tela diz
+      // "conta trocada" mas ele segue respondendo pela conta antiga (mesmo motivo de trocarParaConta)
+      if (eng === 'codex') { try { await window.api.codexReiniciar(); } catch {} }
       avisoTemp(P, 'Conta trocada' + (r2.quem ? ': ' + r2.quem : '.'));
       USO_FECHADO[eng] = null; lerUso(eng, true);
       // trocou de conta: aqui SIM vale reler o cartao inteiro, pro e-mail e o plano mudarem
@@ -7015,7 +7135,8 @@ async function menuArquivos(P, termo) {
     if (remoto) recadoDeArquivos(P, 'Procurando os arquivos na VPS…');
     let itens = [], erro = '';
     try {
-      const r = await window.api.buscarArquivos({ cwd: P.cwd, termo });
+      // com worktree ativo, o @ tem de buscar na pasta ONDE O MOTOR TRABALHA, nao na principal
+      const r = await window.api.buscarArquivos({ cwd: pastaDoWorktree(P), termo });
       /* As DUAS formas, de proposito: a pasta do Mac devolve a lista crua e a da VPS devolve
          { itens, error } — porque falha de rede nao pode virar "essa pasta nao tem arquivo". */
       if (Array.isArray(r)) itens = r;
@@ -7351,7 +7472,9 @@ function todasAsConversas() {
   const tudo = [];
   for (const m of MOTORES) {
     for (const s of (histCache[m] || [])) {
-      const k = (s.engine || m) + ':' + s.id;
+      // por arquivo, nao so por id: o Codex repete o mesmo id em varias .jsonl, e cada uma e'
+      // uma conversa real — dedup so por id derrubava as outras da busca
+      const k = (s.engine || m) + ':' + s.id + ':' + (s.file || '');
       if (vistas.has(k)) continue;
       vistas.add(k);
       tudo.push(s);
@@ -7578,6 +7701,9 @@ async function apagarConversa(s, d) {
      É o mesmo bloco do conversaDaPastaNova (aqui não existe "destravarPainel"). */
   for (const Q of panes.values()) {
     if (Q.resumeId !== s.id && Q.sessaoId !== s.id) continue;
+    // R2-008: Codex repete o mesmo id em varios arquivos (ver motorQueAbriu) — sem checar o
+    // arquivo, apagar uma conversa antiga derrubava a irma que continua viva noutro .jsonl.
+    if (Q.sessaoFile && s.file && Q.sessaoFile !== s.file) continue;
     try { await window.api.paneStop({ paneId: Q.id, engine: Q.engine }); } catch {}
     Q.busy = false; Q.queued = null; Q.filaMsgs = []; escondePerm(Q);
     pararTrabalho(Q); limparPassos(Q); limparContinuar(Q);
@@ -7592,9 +7718,11 @@ async function apagarConversa(s, d) {
      lá e reabrir o app tentaria retomar uma conversa morta. */
   savePanes();
   for (const ab of (cfg.abas || [])) {
-    for (const c of (ab.chats || [])) if (c && c.sessao === s.id) { c.sessao = ''; c.arquivo = ''; }
+    // R2-008: só limpa se o arquivo bater também (fallback sem arquivo salvo = registro antigo)
+    for (const c of (ab.chats || [])) if (c && c.sessao === s.id && (!c.arquivo || c.arquivo === s.file)) { c.sessao = ''; c.arquivo = ''; }
   }
-  if (Array.isArray(histCache[s.engine])) histCache[s.engine] = histCache[s.engine].filter(x => x.id !== s.id);
+  // R2-008: filtra por id E arquivo — senão a conversa irmã (arquivo diferente, mesmo id) sumia da lista
+  if (Array.isArray(histCache[s.engine])) histCache[s.engine] = histCache[s.engine].filter(x => !(x.id === s.id && (x.file || '') === (s.file || '')));
   if (Array.isArray(cfg.favoritos)) cfg.favoritos = cfg.favoritos.filter(k => k !== chaveFav(s));
   if (cfg.grupoSessao) delete cfg.grupoSessao[chaveFav(s)];
   window.api.setConfig(cfg);
@@ -7920,6 +8048,11 @@ function linhaDaBusca(s, termo, trecho) {
    aparecia duplicada e misturada. Agora o desenho velho percebe que ficou para tras e desiste. */
 const pintaVez = { claude: 0, codex: 0, acp: 0, gemini: 0, grok: 0 };
 
+// tira acento pra comparar (diferente de normalizarFala: essa não tira pontuação nem número)
+function semAcento(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
 async function paintHist(engine, listaCrua) {
   const minhaVez = ++pintaVez[engine];
   const box = caixaHist(engine);   // [EDITA leva 12.4] sem isto o ACP APAGAVA a lista do Codex
@@ -7991,7 +8124,9 @@ async function paintHist(engine, listaCrua) {
     return;
   }
 
-  const porNome = list.filter(s => String(s.title || '').toLowerCase().includes(termo));
+  // R2-011: sem tirar acento, "codigo" não achava "código" (e vice-versa)
+  const termoSemAcento = semAcento(termo);
+  const porNome = list.filter(s => semAcento(String(s.title || '').toLowerCase()).includes(termoSemAcento));
   const resto = list.filter(s => !porNome.includes(s));
   if (porNome.length) {
     box.appendChild(Object.assign(document.createElement('div'), { className: 'hist-cab', textContent: 'no nome' }));
@@ -8040,15 +8175,18 @@ async function paintHist(engine, listaCrua) {
 async function openSession(s, el) {
   const remoto = !!s.remoto || NA_VPS(s.cwd);
   // ja esta aberta em algum painel? so pisca e leva voce ate ela
+  // R2-007: checa também o arquivo (igual motorQueAbriu) — Codex repete o mesmo id em várias
+  // .jsonl; sem isso, abrir uma versão ANTIGA só focava a versão atual já aberta, sem trocar.
   const aberta = [...panes.values()].find(q => q.engine === s.engine && NA_VPS(q.cwd) === remoto
-    && (q.resumeId === s.id || q.sessaoId === s.id));
+    && (q.resumeId === s.id || q.sessaoId === s.id)
+    && !(q.sessaoFile && s.file && q.sessaoFile !== s.file));
   if (aberta) {
     document.querySelectorAll('.hist-item').forEach(x => x.classList.remove('on'));
     if (el) el.classList.add('on');
     setFocus(aberta);
     piscar(aberta);
     $('.p-input', aberta.el).focus();
-    return;
+    return aberta;
   }
   // cada conversa da lista abre no seu proprio painel, sem atropelar o que ja esta rolando
   // a conversa abre na aba do cliente dela, mesmo que tenha nascido numa subpasta
@@ -8098,6 +8236,7 @@ async function openSession(s, el) {
   } finally {
     if (painelAindaAtual(P, revisao)) P.carregandoHistorico = false;
   }
+  return P;   // R2-033: devolve o painel pra quem chamou saber onde a conversa abriu (ex.: reabrir fechado)
 }
 
 async function novaConversa(engine) {
@@ -9645,7 +9784,12 @@ function acaoDeMenu(a) {
   if (a === 'buscarConversa') return abrirBuscaDeConversa();
   if (a === 'perguntarAosDois') return focusPane && perguntarAosOutros(focusPane);
   if (a === 'ditar') return focusPane && alternarDitado(focusPane);
-  if (a === 'quadro') return focusPane && window.Quadro && window.Quadro.abrir(focusPane);
+  if (a === 'quadro') {
+    // R2-025: avisa o main.js se abriu de verdade — sem painel em foco, focusPane e null e nada abre
+    const abriu = !!(focusPane && window.Quadro && window.Quadro.abrir(focusPane));
+    if (window.api && window.api.quadroAbriu) window.api.quadroAbriu(abriu);
+    return abriu;
+  }
   if (a === 'salvarVault') return focusPane && salvarConversaNoVault(focusPane);
   if (a === 'newPane') novoChatNaAba();
   else if (a === 'newTab') telaNovaAba();

@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('api', {
   paneCompactar: (o) => ipcRenderer.invoke('pane:compactar', o),
   paneStop: (o) => ipcRenderer.invoke('pane:stop', o),
   approve: (o) => ipcRenderer.invoke('pane:approve', o),
+  // so leitura: o celular usa isso pra saber se perdeu evento enquanto estava dormindo (R2-012)
+  paneEstado: (o) => ipcRenderer.invoke('pane:estado', o),
   codexModels: () => ipcRenderer.invoke('codex:models'),
   codexApiStatus: () => ipcRenderer.invoke('codex:api-status'),
   codexApiKey: (chave) => ipcRenderer.invoke('codex:api-key:set', chave),
@@ -57,6 +59,8 @@ contextBridge.exposeInMainWorld('api', {
   quadroSalvar: (o) => ipcRenderer.invoke('quadro:salvar', o),
   quadroRascunhoGravar: (o) => ipcRenderer.invoke('quadro:rascunhoGravar', o),
   quadroRascunhoLer: () => ipcRenderer.invoke('quadro:rascunhoLer'),
+  // R2-025: confirma pro main.js se o pedido do Claude pra abrir o quadro realmente abriu na tela
+  quadroAbriu: (ok) => ipcRenderer.invoke('quadro:abriuResultado', ok),
   verArquivo: (f) => ipcRenderer.invoke('arquivo:ver', f),
   // arquivo que mora NA VPS: mesmo formato do verArquivo, mas o conteudo vem por SSH
   verArquivoVps: (f) => ipcRenderer.invoke('arquivo:verVps', f),

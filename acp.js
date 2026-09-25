@@ -747,6 +747,8 @@ function criarAcp(dep) {
   }
 
   function fimDoTurno(st, motivo) {
+    // R2-006: turno fechou por qualquer caminho, o watchdog do cancelamento nao serve mais
+    if (st.timerCancelamento) { clearTimeout(st.timerCancelamento); st.timerCancelamento = null; }
     const out = [];
     fecharFala(st, out);
     for (const ev of out) despachar(st, ev);
@@ -817,7 +819,10 @@ function criarAcp(dep) {
     emit(paneId, 'busy', {});
     // sem prazo: um turno de agente pode levar meia hora, e quem encerra e' o
     // proprio agente (ou o botao de parar, via session/cancel)
-    mandar(st, 'session/prompt', { sessionId: st.sessionId, prompt }, 0)
+    const promessaDoPrompt = mandar(st, 'session/prompt', { sessionId: st.sessionId, prompt }, 0);
+    // R2-006: guarda o id deste rpc pra interromper() poder dar um prazo SO' ao cancelamento
+    st.promptRpcId = st.rpcId;
+    promessaDoPrompt
       .then((r) => { if (paineis.get(paneId) === st) fimDoTurno(st, r && r.stopReason); })
       .catch((e) => {
         if (paineis.get(paneId) !== st) return;
@@ -826,6 +831,10 @@ function criarAcp(dep) {
       });
     return true;
   }
+
+  // R2-006: quanto tempo esperar o agente ACP honrar o session/cancel antes de
+  // forcar o fecho do turno (agente que ignora o cancel nao pode travar o Parar pra sempre)
+  const PRAZO_CANCELAMENTO_MS = 7500;
 
   function interromper(paneId) {
     const st = paineis.get(paneId);
@@ -836,6 +845,17 @@ function criarAcp(dep) {
     st.cancelando = true;
     cancelarPedidos(st);   // primeiro destrava quem esta' esperando a permissao...
     notificar(st, 'session/cancel', { sessionId: st.sessionId });   // ...depois avisa que o turno acabou
+    // R2-006: se o agente nao responder ao cancel, o proprio session/prompt (msTimeout=0)
+    // nunca teria timer de seguranca - sem isso o botao Parar fica preso pra sempre
+    if (st.timerCancelamento) clearTimeout(st.timerCancelamento);
+    st.timerCancelamento = setTimeout(() => {
+      st.timerCancelamento = null;
+      if (paineis.get(paneId) !== st) return;
+      const pendente = st.promptRpcId != null ? st.pend.get(st.promptRpcId) : null;
+      if (!pendente) return;   // ja respondeu (ou ja fechou por outro caminho)
+      st.pend.delete(st.promptRpcId);
+      pendente.rej(new Error('o agente não respondeu ao cancelamento'));
+    }, PRAZO_CANCELAMENTO_MS);
     try { aoFimDoTurno && aoFimDoTurno(paneId); } catch {}
     return true;
   }
@@ -847,6 +867,7 @@ function criarAcp(dep) {
     st.parandoDeProposito = true;
     pararFala(st);
     if (st.timerFila) { clearTimeout(st.timerFila); st.timerFila = null; }
+    if (st.timerCancelamento) { clearTimeout(st.timerCancelamento); st.timerCancelamento = null; }   // R2-006
     st.fila = [];
     cancelarPedidos(st);
     for (const [, q] of [...st.pend]) q.rej(new Error('painel parado'));

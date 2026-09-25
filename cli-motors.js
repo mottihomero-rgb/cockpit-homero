@@ -351,7 +351,26 @@ function start(paneId, opts) {
     // IDs do Gemini antigo não são aceitos pelo Antigravity. Mantém o arquivo
     // antigo legível e transmite as falas como contexto na primeira retomada.
     const fonte = fs.existsSync(file) ? file : cliSessions('gemini').find(s => s.id === opts.resumeId)?.file;
-    const msgs = fonte ? historico(fonte).filter(m => ['user', 'bot'].includes(m.role)).slice(-60) : [];
+    // R2-030: historico(fonte) le o arquivo inteiro de forma sincrona (linhasDoArquivo/
+    // cliLerConversa sem teto). Acima do teto do R1-040, isso trava o processo PRINCIPAL
+    // do Electron so' pra montar contexto de enriquecimento — le so' a cauda, como start()
+    // ja faz pro marcador de retomada. Contexto legado parcial/vazio e' aceitavel aqui;
+    // travar o app nao e'.
+    let msgs = [];
+    let tamanhoFonte = 0;
+    try { tamanhoFonte = fonte ? fs.statSync(fonte).size : 0; } catch {}
+    if (fonte && tamanhoFonte > TETO_LEITURA_COMPLETA) {
+      let cauda = caudaRead(fonte, tamanhoFonte, CAUDA_RETOMADA);
+      if (cauda) cauda = cauda.slice(cauda.indexOf('\n') + 1); // descarta a 1a linha, truncada no meio
+      msgs = String(cauda || '').split('\n').flatMap((l) => {
+        try {
+          const d = JSON.parse(l);
+          return mensagemValida(d) && ['user', 'bot'].includes(d.role) ? [{ role: d.role, text: String(d.text || '') }] : [];
+        } catch { return []; }
+      }).slice(-60);
+    } else if (fonte) {
+      msgs = historico(fonte).filter(m => ['user', 'bot'].includes(m.role)).slice(-60);
+    }
     mensagensLegado = msgs;
     contextoLegado = msgs.map(m => (m.role === 'user' ? 'Usuário: ' : 'Assistente: ') + String(m.text || '')).join('\n\n').slice(-80000);
     resumeId = '';

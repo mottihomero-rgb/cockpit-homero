@@ -173,6 +173,13 @@
         const estado = await window.api.paneEstado({ paneId: P.id }).catch(() => null);
         if (!estado || estado.busy || (P.busy && !busyAntes) || !panes.has(P.id) || focusPane !== P || sessao(P) !== id) return;
         if (estado.aprovacao) receberEventoPane({ paneId: P.id, kind: estado.aprovacao.tipo, ...estado.aprovacao.dados });
+        // R4-004: quem zera P.busy normalmente é o turn-end, que foi o evento perdido na queda
+        // do WebSocket — sem reconciliar aqui, a guarda "if (P.busy...) return" mais abaixo
+        // descartava a releitura e a tela ficava presa em "trabalhando…" pra sempre, mesmo com
+        // o Mac já confirmado que o turno acabou. setDot junto porque ele só muda por chamada
+        // explícita (nunca sozinho a partir de P.busy) — sem isso o ponto e o botão Parar
+        // ficavam presos em "ocupado" mesmo com o histórico voltando a renderizar certo.
+        P.busy = false; setDot(P, 'idle');
         // segue pra releitura do historico abaixo mesmo com P.started true: o Mac confirmou que acabou
       }
       const msgs = (engine === 'claude' && NA_VPS(P.cwd))

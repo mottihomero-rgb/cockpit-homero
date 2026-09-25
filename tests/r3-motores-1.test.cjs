@@ -83,8 +83,9 @@ test('R3-046: stdout sem quebra de linha acima do teto mata o processo em vez de
   const p = h.procs[0];
 
   const inicio = Date.now();
-  // uma unica mensagem (ex.: imagem grande em base64) sem '\n', acima do teto de 24MB
-  p.stdout.write(Buffer.alloc(25 * 1024 * 1024, 'a'));
+  // uma unica mensagem (ex.: imagem grande em base64) sem '\n', acima do teto
+  // (R4-002 subiu de 24MB pra 80MB pra nao matar diff/edicao legitima de arquivo grande)
+  p.stdout.write(Buffer.alloc(81 * 1024 * 1024, 'a'));
   await settle(); await settle();
   const duracao = Date.now() - inicio;
 

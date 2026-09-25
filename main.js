@@ -1263,10 +1263,16 @@ function claudeMessage(paneId, m) {
            frase fixa de 'limite de sessao' porque o mesmo caminho cobre outros erros sinteticos
            tambem. Dedupe: so avisa de novo se o texto mudar, senao cada retentativa ('Continue')
            enche a tela com o mesmo aviso repetido. */
-        if (m.message.model === '<synthetic>' && c.text && avisoSinteticoAnterior.get(paneId) !== c.text) {
-          avisoSinteticoAnterior.set(paneId, c.text);
-          emit(paneId, 'note', { text: c.text, error: true });
+        if (m.message.model === '<synthetic>') {
+          if (c.text && avisoSinteticoAnterior.get(paneId) !== c.text) {
+            avisoSinteticoAnterior.set(paneId, c.text);
+            emit(paneId, 'note', { text: c.text, error: true });
+          }
         }
+        // R4-003: texto de modelo DE VERDADE no meio da conversa prova que o episodio de erro
+        // sintetico passou. Limpa o dedupe aqui, senao o MESMO aviso (ex.: limite semanal fixo)
+        // que bater de novo mais tarde na mesma conversa fica engolido pra sempre.
+        else if (c.text) avisoSinteticoAnterior.delete(paneId);
       }
       /* O agente te chamou (PushNotification). Sem terminal, o CLI descarta a notificacao e
          responde "not sent": a chamada passa por aqui ANTES disso e o Cockpit entrega ele
@@ -3337,26 +3343,30 @@ function janelaClaude(x, velho) {
 // R3-019: mesmo padrao de cache/single-flight dos outros 3 motores (ver comentario da UMA
 // leitura, acima) — antes cada painel do Codex pedia account/rateLimits/read direto, sem
 // aproveitar leitura recente nem juntar pedidos simultaneos num so.
-const usoCodex = { dados: null, quando: 0, voando: null };
+const usoCodex = { dados: null, quando: 0, voando: null, geracao: 0 };
 // trocou de conta: o ultimo numero bom era da conta ANTERIOR e nao pode aparecer como desta.
 // R3-018: sobe a geracao e zera 'voando' — sem isso uma leitura ja em voo da conta antiga
 // podia terminar DEPOIS da troca e gravar o numero errado por cima do cache da conta nova.
+// R4-001: R3-018 tinha ficado incompleto no Codex (so' os outros 3 motores subiam geracao).
 function esquecerUso(engine) {
   if (engine === 'claude') { credGuardada = null; credQuando = 0; usoClaude.geracao++; Object.assign(usoClaude, { dados: null, quando: 0, pausaAte: 0, pausa: 0, voando: null }); }
-  if (engine === 'codex') Object.assign(usoCodex, { dados: null, quando: 0, voando: null });
+  if (engine === 'codex') { usoCodex.geracao++; Object.assign(usoCodex, { dados: null, quando: 0, voando: null }); }
   if (engine === 'grok') { usoGrok.geracao++; Object.assign(usoGrok, { dados: null, quando: 0, pausaAte: 0, pausa: 0, voando: null }); }
   if (engine === 'gemini') { usoGemini.geracao++; Object.assign(usoGemini, { dados: null, quando: 0, pausaAte: 0, pausa: 0, voando: null }); }
 }
 async function limitesDoCodex() {
   const agora = Date.now();
   if (usoCodex.dados && agora - usoCodex.quando < USO_VALE_MS) return { rl: usoCodex.dados, velho: 0 };
+  // R4-001: guarda a geracao de ANTES do fetch, mesmo padrao do buscarUsoDoClaude — se a conta
+  // trocar enquanto isso viaja, essa leitura e da conta velha e nao pode sujar o cache da nova.
+  const minhaGeracao = usoCodex.geracao;
   if (!usoCodex.voando) usoCodex.voando = (async () => {
     try {
       await codexStart();
       const lim = await codexReq('local', 'account/rateLimits/read', {});
       const rl = (lim && lim.rateLimits) || null;
       if (!rl) throw new Error('sem rateLimits');
-      Object.assign(usoCodex, { dados: rl, quando: Date.now() });
+      if (usoCodex.geracao === minhaGeracao) Object.assign(usoCodex, { dados: rl, quando: Date.now() });
       return { rl, velho: 0 };
     } catch {
       return usoCodex.dados ? { rl: usoCodex.dados, velho: usoCodex.quando } : { rl: null, velho: 0 };

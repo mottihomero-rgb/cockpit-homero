@@ -45,6 +45,9 @@ function contextoMobile(extras = {}) {
     scroll: () => {},
     recebidos,
     receberEventoPane: (ev) => recebidos.push(ev),
+    // R4-004: atualizar() passou a chamar setDot (funcao global do app.js) pra destravar o
+    // ponto/botao "Parar" — sem o stub aqui a chamada estoura e o catch silencioso engole tudo.
+    setDot: () => {},
     window: { api: {
       paneEstado: extras.paneEstado === undefined ? async () => { chamadas.paneEstado++; return { busy: false, aprovacao: null }; }
         : async (...a) => { chamadas.paneEstado++; return extras.paneEstado(P, ...a); },
@@ -69,7 +72,12 @@ test('R3-005 mobile.js: P.busy preso em true (turn-end perdido na queda) ainda a
   await atualizar();
   assert.equal(chamadas.paneEstado, 1, 'nunca perguntou o estado real ao Mac — travou so no P.busy');
   assert.equal(chamadas.sessionHistory, 1, 'confirmado que o turno acabou, tinha que reler o historico e destravar a tela');
-  assert.equal(P.busy, true, 'atualizar() e so leitura: nao mexe em P.busy, quem zera isso e o evento turn-end/app.js');
+  // R4-004: essa asserção (P.busy continua true) era o proprio furo do R3-005 — quem
+  // deveria zerar isso e o turn-end, mas ele e justamente o evento que se perdeu na queda e
+  // nunca chega, entao a guarda de saida (linha 181 do mobile.js) descartava tudo de novo e a
+  // tela nunca saia de "trabalhando…". O conserto certo e reconciliar aqui, ja que o Mac
+  // confirmou por paneEstado que o turno acabou.
+  assert.equal(P.busy, false, 'confirmado pelo Mac que o turno acabou, atualizar() tem que liberar P.busy (senao a guarda de saida descarta a releitura)');
 });
 
 test('R3-005 mobile.js: resposta chegando AO VIVO durante o await continua protegida (nao atropela streaming)', async () => {
@@ -208,12 +216,15 @@ test('R3-050 celular.css: .hi-grupo/.hi-mais ficam visiveis e com largura de ver
   assert.match(dentroDaMedia, /\.hist-item:not\(\.com-trecho\) \.hi-grupo,\s*\n?\s*\.hist-item:not\(\.com-trecho\) \.hi-mais\{width:20px;margin-left:0\}/);
 });
 
-test('R3-052 celular.css: .hi-fav/.hi-edit/.hi-grupo/.hi-mais ganham anel invisivel de toque (-9px)', () => {
+test('R3-052 celular.css: .hi-fav/.hi-edit/.hi-grupo/.hi-mais ganham anel invisivel de toque (-3px)', () => {
   assert.match(dentroDaMedia, /\.hi-fav,\.hi-edit,\.hi-grupo,\.hi-mais\{position:relative\}/,
     'sem position:relative aqui, o ::after de baixo nao ancora no botao certo');
+  // R4-006: o valor original (-9px) e o proprio furo do R3-052 — com gap real de 7px entre os
+  // botoes (style.css .hist-item), dois aneis de -9px vizinhos se sobrepunham (9+9>7) e o
+  // ultimo do DOM roubava o toque do botao anterior perto da borda. -3px cabe no vao (3+3<=7).
   assert.match(dentroDaMedia,
-    /\.hi-fav::after,\.hi-edit::after,\.hi-grupo::after,\.hi-mais::after\{content:"";position:absolute;inset:-9px\}/,
-    'alvo real continua 20x20 — falta o anel invisivel que os outros botoes do app ja tem (ex.: .p-close)');
+    /\.hi-fav::after,\.hi-edit::after,\.hi-grupo::after,\.hi-mais::after\{content:"";position:absolute;inset:-3px\}/,
+    'alvo real continua 20x20 — falta o anel invisivel que os outros botoes do app ja tem (ex.: .p-close), mas sem sobrepor o vizinho');
 });
 
 /* ===================== R3-053: POST /entrar sem checar a Origem ===================== */

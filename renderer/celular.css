@@ -183,8 +183,10 @@ body.sem-mac::after{content:"reconectando ao Mac…";position:fixed;left:0;right
      44px do resto do app (.cb,.p-send,... aqui embaixo). Anel invisivel de -9px (nao -12px como
      o .p-close la em cima) porque aqui os botoes ficam a so 7px um do outro — um anel maior
      fazia eles roubarem toque um do outro. */
+  /* R4-006: -9px ainda sobrepunha (9+9 > 7 de vao real), entao o botao seguinte no DOM roubava
+     o toque perto da borda. -3px cabe no vao de 7px (3+3=6, sobra 1px) sem sobrepor. */
   .hi-fav,.hi-edit,.hi-grupo,.hi-mais{position:relative}
-  .hi-fav::after,.hi-edit::after,.hi-grupo::after,.hi-mais::after{content:"";position:absolute;inset:-9px}
+  .hi-fav::after,.hi-edit::after,.hi-grupo::after,.hi-mais::after{content:"";position:absolute;inset:-3px}
   .bv-tit{font-size:18px}
   .bv-bts{flex-direction:column;align-items:center}
   .bv-bt{max-width:none;width:100%;flex-direction:row;justify-content:center;gap:12px;padding:16px}

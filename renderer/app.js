@@ -1472,7 +1472,13 @@ function montarContexto(P, retomada, motivo) {
     // e dizer que caiu fazia o motor pedir desculpas por um problema que nao existiu
     // primeira-tentativa: a conversa NUNCA chegou a começar (nenhuma resposta real ainda),
     // então não existe "queda" pra avisar nem "conversa até aqui" pra fingir — é só reenviar.
-    if (motivo === 'primeira-tentativa') return 'A primeira tentativa não chegou a começar. Mandando de novo.\n\n';
+    if (motivo === 'primeira-tentativa') {
+      // linhas vazio (nenhuma mensagem anterior com conteudo): so o aviso curto.
+      // linhas com conteudo: o que foi pedido antes tem que ir junto, senao some pra sempre.
+      if (!linhas.length) return 'A primeira tentativa não chegou a começar. Mandando de novo.\n\n';
+      return 'A primeira tentativa não chegou a começar. Mandando de novo.\n\n'
+        + '--- o que foi pedido antes ---\n' + linhas.join('\n\n') + '\n--- fim ---\n\n';
+    }
     const abertura = motivo === 'troca-de-cobranca'
       ? 'ATENÇÃO: esta conversa está continuando numa sessão nova (a forma de cobrança/modelo mudou). '
       : 'ATENÇÃO: esta conversa caiu (limite de uso ou internet) e voltou como sessão nova. ';
@@ -1595,15 +1601,16 @@ async function desligarMotor(P) {
 
 async function closePane(id, semPerguntar) {
   const P = panes.get(id); if (!P) return;
-  // o quadro branco e dono de UM painel so: fechar outro painel nao pode derrubar o desenho dele
-  if (window.Quadro && window.Quadro.aberto && window.Quadro.aberto() && window.Quadro.donoEh && window.Quadro.donoEh(P)) { try { window.Quadro.fechar(); } catch (_) {} }
-  // mesma regra do Quadro: o painel "Time de agentes" e' dono de UM painel so; fechar esse
-  // painel nao pode deixar a janela de agentes aberta mostrando um chat que ja nem existe mais
-  if (agPaneAberto === P) { try { fecharPainelAgentes(); } catch (_) {} }
   if ((P.busy || agTrabalhando(P)) && !semPerguntar) {
     const nome = (P.titulo || '').trim().slice(0, 40) || 'este chat';
     if (!confirm('O ' + nomeDoMotor(P.engine) + ' está trabalhando em “' + nome + '”.\n\nFechar agora joga fora o que ele está fazendo. Fechar mesmo assim?')) return;
   }
+  // o quadro branco e dono de UM painel so: fechar outro painel nao pode derrubar o desenho dele
+  // (so depois do confirm: "Cancelar" nao pode deixar rastro de coisa fechada)
+  if (window.Quadro && window.Quadro.aberto && window.Quadro.aberto() && window.Quadro.donoEh && window.Quadro.donoEh(P)) { try { window.Quadro.fechar(); } catch (_) {} }
+  // mesma regra do Quadro: o painel "Time de agentes" e' dono de UM painel so; fechar esse
+  // painel nao pode deixar a janela de agentes aberta mostrando um chat que ja nem existe mais
+  if (agPaneAberto === P) { try { fecharPainelAgentes(); } catch (_) {} }
   // fechar o chat tem de apagar a luz do microfone: o processo do ditado é dele
   vozSoltar(P, { guardarTexto: true });
   // e a busca do "@" deste chat morre junto: sem isto ela voltava depois e tentava abrir o
@@ -5135,7 +5142,10 @@ async function reabrirUltimoFechado() {
     if (P) delete P._painelNovoDeAbertura;
     return;
   }
-  const A = abas.get(f.aid) || abaAtiva;
+  // a aba antiga pode ja nao existir mais (foi fechada): reabrir nao pode cair em
+  // qualquer aba ativa de OUTRO projeto, tem que nascer numa aba do projeto certo (f.cwd)
+  const A = abas.get(f.aid) || novaAbaProjeto(f.cwd);
+  ativarAbaProjeto(A);
   const Q = newPane({ engine: f.engine, aba: A, cwd: f.cwd, titulo: f.titulo });
   if (Q) setFocus(Q);
 }

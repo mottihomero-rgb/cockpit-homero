@@ -115,6 +115,9 @@ function contextoMobile(extras = {}) {
     scroll: () => {},
     recebidos,
     receberEventoPane: (ev) => recebidos.push(ev),
+    // R4-004: atualizar() passou a chamar setDot (funcao global do app.js) pra destravar o
+    // ponto/botao "Parar" — sem o stub aqui a chamada estoura e o catch silencioso engole tudo.
+    setDot: () => {},
     window: { api: {
       paneEstado: extras.paneEstado === undefined ? async () => { chamadas.paneEstado++; return { busy: false, aprovacao: null }; }
         : async (...a) => { chamadas.paneEstado++; return extras.paneEstado(...a); },

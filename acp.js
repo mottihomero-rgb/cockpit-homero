@@ -40,7 +40,13 @@ const MAX_IMG_PASSO = 4;
 const LIM_LEITURA = 20 * 1024 * 1024;       // fs/read_text_file: acima disto trava a janela
 // R3-046: uma linha de stdout sem '\n' cresce pra sempre e o indexOf a cada pedaco
 // fica cada vez mais caro (sincrono no processo principal) - acima disto, corta.
-const LIM_BUF_SEM_QUEBRA = 24 * 1024 * 1024;
+// R4-002: o corte real de tamanho (LIM_DIFF/LIM_SAIDA) so' acontece DEPOIS do
+// JSON.parse da linha inteira - um teto baixo aqui mata diff/edicao LEGITIMA de
+// arquivo grande (>24MB de oldText+newText cru) antes desse corte rodar. 80MB
+// da' folga pra diff real e ainda mata buffer genuinamente sem fim; o que fica
+// na tela e na memoria do painel continua pequeno, porque o corte pos-parse
+// nao mudou.
+const LIM_BUF_SEM_QUEBRA = 80 * 1024 * 1024;
 const MIME_IMG = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
 
 /* Quebra a linha de comando em programa + argumentos, respeitando aspas.

@@ -78,7 +78,10 @@ test('R4-008: aba fechada nao existe mais -> reabre numa aba do PROJETO certo, n
   const abaCerta = { id: 'nova-do-projeto', cwd: '/projeto-certo' };
   let paneCriado = null;
 
-  const c = run(['guardarFechado', 'reabrirUltimoFechado'], {
+  // clienteDe/abaDoCaminho de verdade (reabrir usa a mesma regra do openSession)
+  const c = run(['guardarFechado', 'reabrirUltimoFechado', 'clienteDe', 'abaDoCaminho'], {
+    PROJETOS: () => '/proj',
+    dentroDe: (cwd, raiz) => cwd === raiz || String(cwd).startsWith(raiz + '/'),
     fechadosRecentes: [],
     abas,
     abaAtiva: abaDeOutroProjeto,   // o que estiver na tela agora e' de OUTRO projeto
@@ -104,4 +107,43 @@ test('R4-008: aba fechada nao existe mais -> reabre numa aba do PROJETO certo, n
   assert.ok(chamadas.includes('novaAbaProjeto:/projeto-certo'), 'tem que criar aba no cwd do chat fechado, nao usar a aba ativa');
   assert.ok(chamadas.indexOf('ativarAbaProjeto:nova-do-projeto') < chamadas.indexOf('newPane'), 'tem que ativar a aba ANTES de criar o painel nela');
   assert.equal(paneCriado.cwd, '/projeto-certo');
+});
+
+// ---- ajuste do orquestrador (25/09): reabrir reaproveita a aba do CLIENTE que ja esta aberta ----
+test('reabrir o ultimo fechado entra na aba do cliente que ja existe, em vez de abrir uma segunda aba da mesma pasta', async () => {
+  const chamadas = [];
+  const abaDoCliente = { id: 'aba-pedro', cwd: '/proj/Pedro' };
+  const abas = new Map([['aba-pedro', abaDoCliente]]);
+  let paneCriado = null;
+  const c = run(['guardarFechado', 'reabrirUltimoFechado', 'clienteDe', 'abaDoCaminho'], {
+    PROJETOS: () => '/proj',
+    dentroDe: (cwd, raiz) => cwd === raiz || String(cwd).startsWith(raiz + '/'),
+    fechadosRecentes: [], abas, abaAtiva: { id: 'outra', cwd: '/proj/Adsure' },
+    NA_VPS: () => false, avisoTemp: () => {}, focusPane: null,
+    novaAbaProjeto: (cwd) => { chamadas.push('novaAbaProjeto:' + cwd); return { id: 'duplicada', cwd }; },
+    ativarAbaProjeto: (A) => chamadas.push('ativarAbaProjeto:' + A.id),
+    newPane: (opts) => { paneCriado = opts; chamadas.push('newPane'); return { id: 'pNovo' }; },
+    setFocus: () => {}, openSession: async () => null,
+  });
+  // o chat fechado morava numa subpasta do cliente e a aba original dele ja foi fechada
+  c.guardarFechado({ engine: 'claude', cwd: '/proj/Pedro/2026-09-25_demanda', titulo: 'Demanda',
+    aid: 'aba-fechada', sessaoId: null, resumeId: null, hist: [{ quem: 'Você', texto: 'oi' }] });
+  await c.reabrirUltimoFechado();
+  assert.ok(!chamadas.some(x => x.startsWith('novaAbaProjeto')), 'nao pode criar segunda aba do mesmo cliente');
+  assert.ok(chamadas.indexOf('ativarAbaProjeto:aba-pedro') >= 0 && chamadas.indexOf('ativarAbaProjeto:aba-pedro') < chamadas.indexOf('newPane'));
+  assert.equal(paneCriado.aba, abaDoCliente);
+  assert.equal(paneCriado.cwd, '/proj/Pedro/2026-09-25_demanda');
+});
+
+// ---- ajuste do orquestrador (25/09): tela "Nova aba" sem frase explicativa ----
+test('Nova aba: sem motivo de bloqueio, a linha de dica fica vazia e a explicacao vira dica do botao', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../renderer/index.html'), 'utf8');
+  const htmlWeb = fs.readFileSync(path.join(__dirname, '../renderer/index-web.html'), 'utf8');
+  assert.match(html, /<p class="na-dica" id="naDica"><\/p>/, 'Mac: nasce vazia');
+  assert.match(htmlWeb, /<p class="na-dica" id="naDica"><\/p>/, 'iPhone: nasce vazia');
+  const corpo = func('naPintar');
+  assert.match(corpo, /\$\('#naDica'\)\.textContent = motivo \|\| '';/, 'na tela so o motivo');
+  assert.match(corpo, /\$\('#naOk'\)\.title = /, 'a explicacao vai para o title do Começar');
+  const css = fs.readFileSync(path.join(__dirname, '../renderer/style.css'), 'utf8');
+  assert.match(css, /\.na-dica:empty\{display:none\}/);
 });

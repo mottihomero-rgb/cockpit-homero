@@ -5143,8 +5143,10 @@ async function reabrirUltimoFechado() {
     return;
   }
   // a aba antiga pode ja nao existir mais (foi fechada): reabrir nao pode cair em
-  // qualquer aba ativa de OUTRO projeto, tem que nascer numa aba do projeto certo (f.cwd)
-  const A = abas.get(f.aid) || novaAbaProjeto(f.cwd);
+  // qualquer aba ativa de OUTRO projeto, tem que nascer numa aba do projeto certo (f.cwd).
+  // Mesma regra do openSession: se o cliente ja tem aba aberta, entra nela em vez de
+  // criar uma segunda aba da mesma pasta.
+  const A = abas.get(f.aid) || abaDoCaminho(f.cwd, true);
   ativarAbaProjeto(A);
   const Q = newPane({ engine: f.engine, aba: A, cwd: f.cwd, titulo: f.titulo });
   if (Q) setFocus(Q);
@@ -8647,11 +8649,15 @@ function naPintar() {
   $('#naRemoto').classList.toggle('hidden', !naVps);
   $('#naEscolhida').classList.toggle('hidden', naVps || !naEstado.pasta);
   $('#naPastaNome').textContent = naEstado.pasta ? shortPath(naEstado.pasta) : '';
-  $('#naDica').textContent = motivo || (naVps
+  // na tela so' fica o motivo quando algo impede (motor que nao roda ali). A explicacao de
+  // onde ele trabalha vira dica de passar o mouse no "Começar": frase explicativa na tela ele
+  // manda tirar (regra dele de 18/09: so rotulo e numero).
+  $('#naDica').textContent = motivo || '';
+  $('#naOk').title = naVps
     ? 'Ele roda dentro da VPS, na conta e no disco de lá.'
     : (naEstado.pasta
         ? 'Ele começa dentro dessa pasta, mas continua enxergando o Mac inteiro.'
-        : 'Sem pasta escolhida, ele abre no Mac inteiro.'));
+        : 'Sem pasta escolhida, ele abre no Mac inteiro.');
   $('#naDois').classList.toggle('hidden', true);   // ele pediu para tirar o "dois lado a lado" (11/09)
   $('.na-cx').style.setProperty('--accent', 'var(--' + naEstado.motor + ')');
 }

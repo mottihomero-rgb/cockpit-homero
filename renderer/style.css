@@ -1278,6 +1278,7 @@ body.arrastando-aba,body.arrastando-aba *{cursor:grabbing !important}
 .na-ok:hover{filter:brightness(1.08)}
 .na-ok:disabled{opacity:.5;cursor:not-allowed}
 .na-dica{font-size:11px;color:var(--fg-fraco);margin-top:9px;line-height:1.45}
+.na-dica:empty{display:none}
 .na-dois{width:100%;margin-top:14px;padding-top:13px;border-top:1px solid var(--line);
   display:flex;align-items:center;justify-content:center;gap:7px;font-size:12px;color:var(--fg-dim)}
 .na-dois:hover{color:var(--fg-strong)}

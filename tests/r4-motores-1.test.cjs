@@ -89,3 +89,43 @@ test('R4-002: uma linha realmente sem fim (acima do novo teto) continua matando 
   assert.equal(quedas.length, 1, 'buffer genuinamente sem fim ainda tem que matar o processo');
   assert.match(quedas[0].data.motivo, /grande demais/);
 });
+
+// ---- ajuste do orquestrador (25/09): a busca do '\n' comeca no pedaco novo ----
+test('ACP: mensagem picada em muitos pedacos, com a quebra de linha so no fim, chega inteira e a seguinte tambem', async (t) => {
+  const h = montarHarness(t);
+  await h.acp.start('p', { comando: 'falso', cwd: h.dir });
+  const p = h.procs[0];
+  const fala = (texto) => JSON.stringify({ jsonrpc: '2.0', method: 'session/update',
+    params: { sessionId: 's0', update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: texto } } } });
+  const tudo = fala('primeira ' + 'x'.repeat(20000) + ' fim') + '\n' + fala(' segunda') + '\n';
+  for (let i = 0; i < tudo.length; i += 997) p.stdout.write(tudo.slice(i, i + 997));
+  await new Promise((r) => setTimeout(r, 300));   // o texto do ACP sai com freio de 100ms
+  const falas = h.eventos.filter((e) => e.paneId === 'p' && e.kind === 'text-final').map((e) => e.data.text);
+  const ultima = falas[falas.length - 1] || '';
+  assert.match(ultima, /^primeira x+ fim segunda$/, 'as duas mensagens, inteiras e na ordem');
+  assert.equal(h.eventos.filter((e) => e.kind === 'engine-down').length, 0);
+});
+
+test('ACP: linha longa chegando em pedacos pequenos nao fica quadratica (varre so o pedaco novo)', async (t) => {
+  const h = montarHarness(t);
+  await h.acp.start('p', { comando: 'falso', cwd: h.dir });
+  const p = h.procs[0];
+  const linha = JSON.stringify({ jsonrpc: '2.0', method: 'session/update', params: { sessionId: 's0',
+    update: { sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'y'.repeat(4 * 1024 * 1024) } } } }) + '\n';
+  // conta quantos caracteres as buscas por '\n' varrem enquanto a linha chega: medida exata,
+  // sem depender do relogio da maquina
+  const original = String.prototype.indexOf;
+  let varrido = 0;
+  String.prototype.indexOf = function (alvo, desde) {
+    if (alvo === '\n') varrido += Math.max(0, this.length - (desde || 0));
+    return original.call(this, alvo, desde);
+  };
+  try {
+    for (let i = 0; i < linha.length; i += 4 * 1024) p.stdout.write(linha.slice(i, i + 4 * 1024));
+    await settle(); await settle();
+  } finally { String.prototype.indexOf = original; }
+  // varrendo do zero a cada pedaco: ~1.000 pedacos x ate 4MB = ~2 bilhoes de caracteres;
+  // varrendo so' o novo: ~4MB no total
+  assert.ok(varrido < 3 * linha.length, 'varreu ' + varrido + ' caracteres para uma linha de ' + linha.length);
+  assert.equal(h.eventos.filter((e) => e.kind === 'engine-down').length, 0);
+});

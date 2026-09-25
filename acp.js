@@ -635,6 +635,10 @@ function criarAcp(dep) {
     const decoder = new StringDecoder('utf8');
     proc.stdout.on('data', (chunk) => {
       if (paineis.get(paneId) !== st) return;
+      // o que ja estava no buffer foi varrido e nao tinha '\n' (o laco abaixo so' para quando
+      // nao sobra quebra): a busca comeca no pedaco NOVO. Refazer o indexOf do zero a cada
+      // pedaco deixava uma linha longa quadratica (80MB = bilhoes de comparacoes no processo principal).
+      const jaVarrido = st.buf.length;
       st.buf += decoder.write(chunk);
       // R3-046: uma linha de protocolo sem '\n' (ex.: imagem grande em base64 numa
       // unica mensagem) crescia pra sempre - cada pedaco novo refazia o indexOf sobre
@@ -648,8 +652,9 @@ function criarAcp(dep) {
         matarProcesso(proc);
         return;
       }
-      let i;
-      while ((i = st.buf.indexOf('\n')) >= 0) {
+      let i = st.buf.indexOf('\n', jaVarrido);
+      if (i < 0) return;
+      for (; i >= 0; i = st.buf.indexOf('\n')) {
         const linha = st.buf.slice(0, i).trim(); st.buf = st.buf.slice(i + 1);
         if (!linha) continue;
         // formato inesperado de um agente novo nao pode derrubar o app inteiro

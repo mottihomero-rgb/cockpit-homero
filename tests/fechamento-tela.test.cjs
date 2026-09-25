@@ -52,8 +52,11 @@ test('linhaDaBusca marca a linha e poe a etiqueta DEPOIS do titulo', () => {
 });
 
 test('nada de cor escrita na mao nas regras novas (vale nos 3 temas)', () => {
-  const bloco = css.slice(css.indexOf('.hi-onde{'), css.indexOf('.hi-onde{') + 400)
-    + css.slice(css.indexOf('.hist-item.com-onde{'), css.indexOf('.hist-item.com-onde{') + 700);
+  // indexOf sem checar >=0 deixava o teste passar sozinho se o seletor sumisse do CSS
+  const iHiOnde = css.indexOf('.hi-onde{');
+  const iComOnde = css.indexOf('.hist-item.com-onde{');
+  assert.ok(iHiOnde >= 0 && iComOnde >= 0, 'seletor sumiu do CSS');
+  const bloco = css.slice(iHiOnde, iHiOnde + 400) + css.slice(iComOnde, iComOnde + 700);
   assert.equal(/#[0-9a-fA-F]{3,8}\b|rgb\(/.test(bloco), false, 'cor tem de sair de variavel de tema');
 });
 

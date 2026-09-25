@@ -16,6 +16,21 @@ const headRead = (file, max) => {
   } catch { return ''; }
   finally { if (fd !== undefined) fs.closeSync(fd); }
 };
+// R1-040: acima disto, start() nao le mais o arquivo inteiro de uma vez (trava
+// o processo PRINCIPAL do Electron, app inteiro, nao so o painel do Gemini).
+const TETO_LEITURA_COMPLETA = 4 * 1024 * 1024;
+const CAUDA_RETOMADA = 1024 * 1024; // os marcadores de retomada/runtime ficam perto de onde a conversa esta sendo escrita agora
+const caudaRead = (file, tamanho, max) => {
+  let fd;
+  try {
+    fd = fs.openSync(file, 'r');
+    const n = Math.min(max, tamanho);
+    const buffer = Buffer.alloc(n);
+    fs.readSync(fd, buffer, 0, n, tamanho - n);
+    return buffer.toString('utf8');
+  } catch { return ''; }
+  finally { if (fd !== undefined) fs.closeSync(fd); }
+};
 const mensagemValida = m => m && typeof m === 'object' && !Array.isArray(m);
 const linhasDoArquivo = file => fs.readFileSync(file, 'utf8').split('\n').flatMap(l => {
   try { const valor = JSON.parse(l); return mensagemValida(valor) ? [valor] : []; } catch { return []; }
@@ -309,9 +324,28 @@ function start(paneId, opts) {
   const file = arquivo(id);
   let resumeId = opts.resumeId || '', runtimeAnterior = 'gemini', contextoLegado = '', mensagensLegado = [];
   if (fs.existsSync(file)) {
-    const linhas = fs.readFileSync(file, 'utf8').split('\n');
     resumeId = '';
-    for (const l of linhas) { try { const x = JSON.parse(l); if (x.runtime) runtimeAnterior = x.runtime; if (x.retomada) resumeId = x.retomada; } catch {} }
+    // R1-040: le tudo so' se o arquivo for pequeno (comportamento de hoje). Acima
+    // do teto, le so' a CAUDA (os marcadores ficam perto de onde a conversa esta
+    // sendo escrita agora); se a cauda nao achar nada, cai pro arquivo inteiro
+    // em vez de arriscar tratar uma conversa ja migrada como se nao fosse.
+    const aplicarLinhas = (bruto) => {
+      let achou = false;
+      for (const l of String(bruto || '').split('\n')) {
+        let x; try { x = JSON.parse(l); } catch { continue; }
+        if (x.runtime) { runtimeAnterior = x.runtime; achou = true; }
+        if (x.retomada) { resumeId = x.retomada; achou = true; }
+      }
+      return achou;
+    };
+    const tamanho = fs.statSync(file).size;
+    if (tamanho > TETO_LEITURA_COMPLETA) {
+      let cauda = caudaRead(file, tamanho, CAUDA_RETOMADA);
+      if (cauda) cauda = cauda.slice(cauda.indexOf('\n') + 1); // descarta a 1a linha, truncada no meio
+      if (!aplicarLinhas(cauda)) { try { aplicarLinhas(fs.readFileSync(file, 'utf8')); } catch {} }
+    } else {
+      aplicarLinhas(fs.readFileSync(file, 'utf8'));
+    }
   }
   if (resumeId && runtime !== runtimeAnterior) {
     // IDs do Gemini antigo não são aceitos pelo Antigravity. Mantém o arquivo

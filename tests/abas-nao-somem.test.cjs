@@ -96,12 +96,16 @@ test('o celular continua sem poder gravar config', () => {
 });
 
 /* A outra metade do conserto mora na tela. Sem isto a trava do Mac nao serve de nada:
-   bastaria a tela marcar TODA gravacao como "ele fechou" e a perda voltava. */
+   bastaria a tela marcar TODA gravacao como "ele fechou" e a perda voltava.
+   R1-050 (25/09): a restauracao passou a distinguir dois motivos de encolher — 'fechou'
+   (clique dele) e 'agrupou' (fusao automatica de abas do mesmo cliente no boot, sem clique
+   nenhum). Os dois SO diminuem a lista quando TODAS as abas gravadas voltaram; o argumento
+   deste teste foi atualizado pra letra nova, nao pra abrir excecao nova. */
 test('so o fechar de aba e a restauracao completa marcam a gravacao', () => {
   const fonte = fs.readFileSync(path.join(__dirname, '../renderer/app.js'), 'utf8');
   const argumentos = new Set([...fonte.matchAll(/savePanes\(([^)]*)\)/g)].map(m => m[1].trim()));
 
-  assert.deepEqual([...argumentos].sort(), ['', '!abasQueNaoVoltaram.length', 'fechou', 'true'],
+  assert.deepEqual([...argumentos].sort(), ['', "abasQueNaoVoltaram.length ? false : 'agrupou'", 'fechou', 'true'],
     'apareceu um savePanes com argumento novo: confira se aquela gravacao PODE mesmo perder aba');
 
   const bloco = (nome) => {
@@ -113,6 +117,6 @@ test('so o fechar de aba e a restauracao completa marcam a gravacao', () => {
     'fechar a aba no X (e o ⌘W no ultimo chat dela) tem de marcar a gravacao');
   assert.match(bloco('function moverPane(P, A, indice) {'), /savePanes\(true\)/,
     'arrastar o ultimo chat pra outra aba esvazia a de origem: tambem e ele pedindo');
-  assert.match(bloco('async function restaurarAbas() {'), /savePanes\(!abasQueNaoVoltaram\.length\)/,
-    'a restauracao so pode encolher a lista quando TODAS as abas gravadas voltaram');
+  assert.match(bloco('async function restaurarAbas() {'), /savePanes\(abasQueNaoVoltaram\.length \? false : 'agrupou'\)/,
+    'a restauracao so pode encolher a lista quando TODAS as abas gravadas voltaram (por fechar ou por agrupar)');
 });

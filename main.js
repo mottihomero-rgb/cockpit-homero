@@ -10,6 +10,16 @@ const codexProtocol = require('./codex-protocol');
 const plataforma = require('./plataforma');
 const { EH_WIN, acharBin, spawnBin, abrirPty, temBin, matarProcesso } = plataforma;
 
+/* R1-006: 2a copia do processo (app instalado + uma dev rodando por cima, por exemplo)
+   escreveria no MESMO arquivo temporario fixo do indice de busca (compactarTexto, mais
+   abaixo) e corromperia o indice-texto.ndjson. So uma instancia segura essa trava; a 2a se
+   fecha sozinha antes de abrir janela. O "typeof" e' de proposito: o harness de teste (VM,
+   sem Electron de verdade) nao simula essa API — sem a checagem QUALQUER teste que carrega
+   este arquivo quebraria na hora. */
+if (typeof app.requestSingleInstanceLock === 'function' && !app.requestSingleInstanceLock()) {
+  app.quit();
+}
+
 const HOME = os.homedir();
 const contasCli = require('./contas-cli').criarContasCli({ HOME, pastaDados: () => app.getPath('userData'), acharBin, temBin,
   buildEnv: () => plataforma.buildEnv(), ehWindows: EH_WIN });
@@ -138,6 +148,9 @@ function saveConfig(cfg, origem) {
     try { fs.copyFileSync(CONFIG_PATH(), CONFIG_PATH() + '.anterior'); } catch {}
     if (origem && origem.fechou) {
       anota('abas caindo de ' + abasNoDisco + ' para ' + nAgora + ' (ele fechou): guardei config.json.anterior');
+    } else if (origem && origem.agrupou) {
+      // nao foi clique dele: no boot, duas abas do mesmo cliente se fundiram numa so (agruparPorCliente)
+      anota('abas caindo de ' + abasNoDisco + ' para ' + nAgora + ' (agrupou no boot): guardei config.json.anterior');
     } else {
       // numeros de conversa que o retrato novo trouxe, de todas as abas juntas
       const idsDaAba = (a) => (Array.isArray(a && a.chats) ? a.chats : [])
@@ -300,12 +313,14 @@ function codexStart(destino = 'local') {
   const tentativa = new Promise((resolve, reject) => {
     let p;
     try {
+      // detached: o Codex roda com sandbox de acesso total e pode disparar comando de sistema
+      // como filho DELE; sem isto o kill so' atinge o "codex app-server" e o filho fica orfao
       if (destino === 'local') {
-        p = spawnBin('codex', ['-c', codexProviderAstra(), 'app-server'], { cwd: HOME, env: buildEnv(), stdio: ['pipe', 'pipe', 'pipe'] });
+        p = spawnBin('codex', ['-c', codexProviderAstra(), 'app-server'], { cwd: HOME, env: buildEnv(), stdio: ['pipe', 'pipe', 'pipe'], detached: !EH_WIN });
       } else {
         const r = partesRemoto(destino + ':/');
         if (!r) return reject(new Error('servidor desconhecido: ' + destino));
-        p = spawn('ssh', argsSsh(r, 'codex app-server'), { env: buildEnv(), stdio: ['pipe', 'pipe', 'pipe'] });
+        p = spawn('ssh', argsSsh(r, 'codex app-server'), { env: buildEnv(), stdio: ['pipe', 'pipe', 'pipe'], detached: !EH_WIN });
       }
     } catch (e) { return reject(e); }
     c.proc = p; processoDaTentativa = p; c.buf = '';
@@ -625,25 +640,34 @@ function codexNotification(method, params, destino = 'local') {
           output: it.aggregatedOutput || it.output || '',
           error: (it.exitCode != null && it.exitCode !== 0) || it.status === 'failed',
         });
+        // comando acabou: solta o registro. Sem isto o mapa cresce pra sempre (app fica dias
+        // no ar) e, se o processId for reaproveitado, a saida de um comando novo iria pro
+        // painel velho por engano.
+        if (it.processId) codexProcessPanes.delete(destino + ':' + it.processId);
       } else if (it.type === 'fileChange') {
         emit(pane, 'tool-end', { id: it.id, output: fileChangeSummary(it), error: it.status === 'failed' });
       /* O resultado do MCP trouxe imagem (print). Ate aqui o shortJson transformava o base64
          em texto: um paredao de megabytes dentro do passo, e a imagem ninguem via. Agora sai
          como imagem, e o texto vira a contagem. Os dois ramos originais seguem intocados
          logo abaixo, para todo resultado que NAO tem imagem. */
-      } else if ((it.type === 'mcpToolCall' || it.type === 'dynamicToolCall')
-        && imagensDoResultado(it.type === 'mcpToolCall' ? (it.result ?? it.output) : it.contentItems).length) {
+      } else if (it.type === 'mcpToolCall' || it.type === 'dynamicToolCall') {
         const imagens = imagensDoResultado(it.type === 'mcpToolCall' ? (it.result ?? it.output) : it.contentItems);
-        emit(pane, 'tool-end', {
-          id: it.id,
-          output: imagens.length === 1 ? '(1 imagem)' : '(' + imagens.length + ' imagens)',
-          error: it.status === 'failed' || it.success === false,
-          imagens,
-        });
-      } else if (it.type === 'mcpToolCall') {
-        emit(pane, 'tool-end', { id: it.id, output: shortJson(it.result ?? it.output), error: it.status === 'failed' });
-      } else if (it.type === 'dynamicToolCall') {
-        emit(pane, 'tool-end', { id: it.id, output: shortJson(it.contentItems), error: it.success === false || it.status === 'failed' });
+        if (imagens.length || imagens.descartadas) {
+          // antes, imagem grande demais (>3MB base64) sumia calada; agora entra no texto
+          const partes = [];
+          if (imagens.length) partes.push(imagens.length === 1 ? '1 imagem' : imagens.length + ' imagens');
+          if (imagens.descartadas) partes.push((imagens.descartadas === 1 ? '1 imagem' : imagens.descartadas + ' imagens') + ' grande(s) demais para mostrar');
+          emit(pane, 'tool-end', {
+            id: it.id,
+            output: '(' + partes.join(', ') + ')',
+            error: it.status === 'failed' || it.success === false,
+            ...(imagens.length ? { imagens } : {}),
+          });
+        } else if (it.type === 'mcpToolCall') {
+          emit(pane, 'tool-end', { id: it.id, output: shortJson(it.result ?? it.output), error: it.status === 'failed' });
+        } else {
+          emit(pane, 'tool-end', { id: it.id, output: shortJson(it.contentItems), error: it.success === false || it.status === 'failed' });
+        }
       } else if (it.type === 'webSearch') {
         emit(pane, 'tool-end', { id: it.id, output: it.query || '', error: false });
       } else if (it.type === 'error') {
@@ -924,6 +948,19 @@ const nomeDeWorktree = (n) => {
 };
 
 function claudeStart(paneId, opts) {
+  /* worktree invalido tem de ser recusado ANTES de matar o motor que ja estava rodando: o
+     claudeStop() abaixo apaga o registro do painel, e se a validacao falhasse depois disso o
+     motor antigo morria e nenhum novo subia, sem nenhum 'engine-down' pra destravar a tela
+     (o guard do 'close' ve que o registro ja trocou e sai calado). */
+  const nomeWtPedido = (!ehRemoto(opts.cwd) && opts.worktree) ? String(opts.worktree) : '';
+  if (nomeWtPedido && !dentroDeGit(opts.cwd || HOME)) {
+    emit(paneId, 'note', { text: 'A pasta deste chat não é um repositório git, e o worktree "' + nomeWtPedido + '" só funciona dentro de um. Use "Sair do worktree" no menu / do chat, ou troque a pasta.', error: true });
+    return false;
+  }
+  if (nomeWtPedido && !nomeDeWorktree(nomeWtPedido)) {
+    emit(paneId, 'note', { text: 'O nome de worktree "' + nomeWtPedido + '" não é aceito pelo git (não pode terminar em ponto nem em ".lock", nem ter ".." no meio). Use "Sair do worktree" no menu / do chat e entre de novo com outro nome.', error: true });
+    return false;
+  }
   claudeStop(paneId);
   claudeCwd.set(paneId, opts.cwd || HOME);
   const args = [
@@ -959,20 +996,9 @@ function claudeStart(paneId, opts) {
      (ou reaproveita) e onde ele trabalha. Fork de CODIGO, completando o de conversa.
      TODAS as linhas conferem ehRemoto: no painel da VPS o -w nem e cogitado. Sem opts.worktree
      nada aqui roda e o argv sai exatamente igual ao de sempre. */
-  const nomeWt = (!ehRemoto(opts.cwd) && opts.worktree) ? String(opts.worktree) : '';
-  if (nomeWt && !dentroDeGit(opts.cwd || HOME)) {
-    emit(paneId, 'note', { text: 'A pasta deste chat não é um repositório git, e o worktree "' + nomeWt + '" só funciona dentro de um. Use "Sair do worktree" no menu / do chat, ou troque a pasta.', error: true });
-    return false;
-  }
-  /* Nome que o git recusa (ponto no fim, ".lock", ".." no meio) nao vira -w nenhum. Sem este
-     aviso o Claude subiria CALADO na pasta principal enquanto o chip e o rotulo ⎇ continuariam
-     dizendo que ele esta na branch isolada — exatamente o acidente que o worktree existe para
-     evitar. Melhor recusar o turno e falar em vermelho. */
-  if (nomeWt && !nomeDeWorktree(nomeWt)) {
-    emit(paneId, 'note', { text: 'O nome de worktree "' + nomeWt + '" não é aceito pelo git (não pode terminar em ponto nem em ".lock", nem ter ".." no meio). Use "Sair do worktree" no menu / do chat e entre de novo com outro nome.', error: true });
-    return false;
-  }
-  if (nomeWt && nomeDeWorktree(nomeWt)) args.push('-w', nomeDeWorktree(nomeWt));
+  // validado no topo da funcao, antes do claudeStop; aqui so' usa o resultado
+  const nomeWt = nomeWtPedido;
+  if (nomeWt) args.push('-w', nomeDeWorktree(nomeWt));
   /* com -w o CLI entra em .claude/worktrees/<nome> ANTES de resolver a sessao: o .jsonl nasce
      na pasta do worktree, e o caminho que emitimos tem de ser esse (senao a conversa nao volta).
      A trava do args.includes e obrigatoria: nome recusado pelo git nao vira pasta nenhuma. */
@@ -988,9 +1014,11 @@ function claudeStart(paneId, opts) {
       return antes !== '--settings' && antes !== '--setting-sources';
     });
     const comando = 'cd ' + aspaSh(r.caminho) + ' && claude ' + semLocal.map(aspaSh).join(' ');
-    proc = spawn('ssh', argsSsh(r, comando), { env: buildEnv(), stdio: ['pipe', 'pipe', 'pipe'] });
+    // detached: o Claude pode ter filho seu (MCP server); sem isto o filho fica orfao vivo
+    // quando o painel fecha, porque o kill so' atinge o processo principal (ver matarGrupoExtra)
+    proc = spawn('ssh', argsSsh(r, comando), { env: buildEnv(), stdio: ['pipe', 'pipe', 'pipe'], detached: !EH_WIN });
   } else {
-    proc = spawnBin(CLAUDE_BIN, args, { cwd: opts.cwd || HOME, env: buildEnv(), stdio: ['pipe', 'pipe', 'pipe'] });
+    proc = spawnBin(CLAUDE_BIN, args, { cwd: opts.cwd || HOME, env: buildEnv(), stdio: ['pipe', 'pipe', 'pipe'], detached: !EH_WIN });
   }
   const st = { proc, buf: '' };
   const decoder = new StringDecoder('utf8');
@@ -1063,7 +1091,9 @@ function claudeStop(paneId) {
   if (st) {
     st.parandoDeProposito = true;
     claudePanes.delete(paneId);
-    try { st.proc.kill('SIGTERM'); } catch {}
+    // mata o GRUPO, nao so' o processo: filho que o Claude tenha disparado (MCP server) senao
+    // fica orfao rodando escondido (precisa do spawn com detached: !EH_WIN acima)
+    matarGrupoExtra(st.proc);
   }
   const delta = filaDelta.get(paneId);
   if (delta) { clearTimeout(delta.timer); filaDelta.delete(paneId); }
@@ -1105,10 +1135,13 @@ function imagensDoResultado(content) {
   const lista = Array.isArray(content) ? content
     : (content && Array.isArray(content.content) ? content.content : []);
   const out = [];
+  // conta quantas sumiram por tamanho, pra quem chama poder avisar em vez de sumir calado
+  out.descartadas = 0;
   for (const x of lista) {
     if (!x || x.type !== 'image') continue;
     const dados = (x.source && x.source.type === 'base64' && x.source.data) || x.data || '';
-    if (!dados || typeof dados !== 'string' || dados.length > LIM_IMG_PASSO) continue;
+    if (!dados || typeof dados !== 'string') continue;
+    if (dados.length > LIM_IMG_PASSO) { out.descartadas++; continue; }
     out.push({ mime: (x.source && x.source.media_type) || x.mimeType || 'image/png', dados });
     if (out.length >= MAX_IMG_PASSO) break;
   }
@@ -1172,6 +1205,8 @@ function claudeMessage(paneId, m) {
         if (typeof c.content === 'string') txt = c.content;
         else if (Array.isArray(c.content)) txt = c.content.map(x => x && x.type === 'text' ? x.text : '').join('\n');
         const imagens = imagensDoResultado(c.content);
+        // imagem grande demais (>3MB base64) sumia sem nenhum aviso; agora entra no texto
+        if (imagens.descartadas) txt = (txt ? txt + '\n' : '') + '(' + (imagens.descartadas === 1 ? '1 imagem' : imagens.descartadas + ' imagens') + ' grande(s) demais para mostrar)';
         emit(paneId, 'tool-end', { id: c.tool_use_id, output: txt, error: !!c.is_error, ...(imagens.length ? { imagens } : {}) });
       }
     }
@@ -1248,7 +1283,8 @@ function claudeToolArg(name, inp) {
    patch em texto. Aqui sai o par (antes, depois) de cada pedaco mexido, para o outro lado
    pintar de verde e vermelho — e para dar de desfazer depois. */
 const PEDACO_MAX = 40000;               // nao adianta mandar arquivo gigante pelo cano do IPC
-const corta = (s) => { s = String(s == null ? '' : s); return s.length > PEDACO_MAX ? s.slice(0, PEDACO_MAX) + '\n… (cortado)' : s; };
+const CORTADO_MARCA = '\n… (cortado)';  // sufixo de corte: usado tambem no desfazer pra saber que o texto nao e' literal
+const corta = (s) => { s = String(s == null ? '' : s); return s.length > PEDACO_MAX ? s.slice(0, PEDACO_MAX) + CORTADO_MARCA : s; };
 
 function dadosDaEdicao(name, inp) {
   if (!inp) return null;
@@ -1274,13 +1310,19 @@ function dadosDaEdicao(name, inp) {
 handle('arquivo:desfazer', (_e, { arquivo, antes, depois }) => {
   try {
     if (!arquivo) return { error: 'sem arquivo' };
-    const atual = fs.readFileSync(arquivo, 'utf8');
+    const antesStr = String(antes == null ? '' : antes);
     const novo = String(depois == null ? '' : depois);
+    // texto cortado (edicao grande) nunca existe literal no arquivo: desfazer aqui so recusaria com
+    // mensagem falsa ("arquivo mudou") ou, pior, cortaria o arquivo de verdade - bloqueia direto e honesto
+    if (novo.endsWith(CORTADO_MARCA) || antesStr.endsWith(CORTADO_MARCA)) {
+      return { error: 'edição grande demais para desfazer automaticamente' };
+    }
+    const atual = fs.readFileSync(arquivo, 'utf8');
     if (!novo) return { error: 'não sei o que tirar' };
     const onde = atual.indexOf(novo);
     if (onde < 0) return { error: 'o arquivo mudou depois dessa edição — desfazer aqui ia estragar' };
     if (atual.indexOf(novo, onde + 1) >= 0) return { error: 'esse trecho aparece mais de uma vez no arquivo' };
-    fs.writeFileSync(arquivo, atual.slice(0, onde) + String(antes == null ? '' : antes) + atual.slice(onde + novo.length), 'utf8');
+    fs.writeFileSync(arquivo, atual.slice(0, onde) + antesStr + atual.slice(onde + novo.length), 'utf8');
     return { ok: true };
   } catch (e) { return { error: e.message }; }
 });
@@ -1425,8 +1467,8 @@ function motivoDoSsh(txt, r) {
    uma sonda inteira que aqui nao faz falta). Mesmo assim nada e prometido: se a ida COM socket
    falhar, o noServidorSsh tenta UMA vez sem ele; se ai der certo, o multiplexing sai de cena
    pelo resto da sessao e tudo segue funcionando do jeito de sempre. */
-let muxLigado = true;      // desligado se uma ida com socket falhar e a sem socket der certo
-let muxProvado = false;    // ja vi uma ida COM socket dar certo: dai nao se tenta de novo sem
+let muxLigado = true;      // fica sempre ligado; socket preso se descarta sozinho, nao se desiste dele
+let muxProvado = false;    // true so' enquanto a ULTIMA ida com socket deu certo (nao e' permanente)
 const sockUsados = new Set();   // sockets que ESTE app abriu — so nesses o "-O exit" pode mandar
 
 function pastaSsh() {
@@ -1518,13 +1560,24 @@ async function noServidorSsh(r, comando, ms) {
   const sock = muxLigado ? caminhoDoSocket(r) : '';
   let x = await sshUmaVez(r, comando, ms, sock);
   if (sock && !x.falhou && !x.estourou && x.code === 0) muxProvado = true;
-  /* Falhou COM socket e o multiplexing ainda nao tinha sido provado? Pode ser o socket, pode
-     ser a rede. Tenta UMA vez sem ele: se ai der certo, a culpa era do socket e o multiplexing
-     sai de cena pelo resto da sessao — nada quebra, so volta a ser lento. */
-  else if (sock && !muxProvado && (x.falhou || x.estourou || x.code === 255)) {
-    const y = await sshUmaVez(r, comando, ms, '');
+  /* Antes so' tentava recuperar sem socket ATE a primeira prova de sucesso (!muxProvado): depois
+     disso, socket preso ou morto (Mac dormiu, trocou de rede/VPN, ControlPersist de 120s expirou)
+     fazia TODA chamada seguinte falhar pelo resto da sessao — a VPS parecia fora do ar com ela
+     100% no ar. Agora tenta sem socket em QUALQUER falha; se der certo, descarta o socket velho
+     (em vez de desligar o multiplexing pra sempre) pra' proxima chamada nascer um socket novo. */
+  else if (sock && (x.falhou || x.estourou || x.code === 255)) {
+    /* R1-008: a 1a tentativa (com socket) ja gastou ate' 'ms' inteiro. Repetir do zero com o
+       MESMO teto dobrava a espera de cada clique quando a VPS esta fora do ar (o log real ja
+       mostra ETIMEDOUT). Se ela ESTOUROU o tempo, o host esta inacessivel: tentar de novo nao
+       muda o resultado, entao pula a 2a rodada. Nas outras falhas (recusa do socket, sai 255)
+       da' um teto curto (8s) pra 2a tentativa em vez do 'ms' inteiro — piso decente pra' nao
+       cortar uma recuperacao real que so' precisava de mais um instante. */
+    if (x.estourou) return { code: -1, out: x.out, errout: x.errout, error: 'a VPS demorou demais para responder' };
+    const y = await sshUmaVez(r, comando, Math.min(ms || 20000, 8000), '');
     if (!y.falhou && !y.estourou && y.code === 0) {
-      muxLigado = false; fecharMestresSsh();
+      muxProvado = false;
+      fecharMestresSsh();
+      try { fs.unlinkSync(sock); } catch {}
       return { code: 0, out: y.out, errout: y.errout };
     }
     x = y;
@@ -1968,7 +2021,9 @@ async function compactarTexto() {
   let vivos = 0;
   for (const k of Object.keys(carim)) vivos += (carim[k] && carim[k].b) || 0;
   if (tam < 4 * 1024 * 1024 || tam < vivos * 1.5) return false;
-  const tmp = IND_TEXTO + '.faxina';
+  // R1-006: nome fixo colidia com uma 2a copia do processo rodando por cima (reforco: a
+  // trava acima ja evita isso na maioria dos casos, mas o PID nao custa nada)
+  const tmp = IND_TEXTO + '.faxina.' + process.pid;
   try { fs.writeFileSync(tmp, ''); } catch { return false; }
   const feitos = new Set();
   let balde = [], baldeTam = 0, deuRuim = false;
@@ -2804,6 +2859,8 @@ function juntarSkills(nativas, disco) {
 // antigo sem copiar nem mexer nele
 const skillsDoDisco = (engine) => HANDLERS['skills:list'](null, engine);
 
+// R1-010: guarda {quando, lista} em vez da lista crua, com a mesma validade (SKILL_CODEX_VALE)
+// do cache de skills nativas do Codex — sem prazo, skill nova so aparecia reabrindo o app
 let skillCache = { claude: null, codex: null };
 handle('skills:list', (_e, engine) => {
   /* NOVO: o painel passou a mandar { engine, cwd }. A forma antiga — so' a string do motor —
@@ -2820,7 +2877,8 @@ handle('skills:list', (_e, engine) => {
      listava as skills do Codex, que ele não tem como usar. */
   if (motorAcp(engine)) return [];
   if (engine === 'gemini') return cli.comandos();
-  if (skillCache[engine]) return skillCache[engine];
+  const cacheAtual = skillCache[engine];
+  if (cacheAtual && Date.now() - cacheAtual.quando < SKILL_CODEX_VALE) return cacheAtual.lista;
   let dirs;
   if (engine === 'claude') {
     dirs = [path.join(HOME, '.claude/skills'), path.join(HOME, '.claude/commands')];
@@ -2844,7 +2902,7 @@ handle('skills:list', (_e, engine) => {
   const seen = new Set(); const out = [];
   for (const s of readSkillDirs(dirs)) { if (seen.has(s.name)) continue; seen.add(s.name); out.push(s); }
   out.sort((a, b) => a.name.localeCompare(b.name));
-  skillCache[engine] = out;
+  skillCache[engine] = { quando: Date.now(), lista: out };
   return out;
 });
 
@@ -3078,6 +3136,10 @@ handle('mcp:list', async (_e, engine) => {
 });
 
 handle('mcp:acao', async (_e, { engine, acao, nome, url, comando }) => {
+  // R1-045: diferente dos outros canais sensiveis deste arquivo, faltava a trava de origem.
+  // Adicionar conector por COMANDO local roda um executavel qualquer no Mac com acesso total
+  // (RCE) — o celular so pode adicionar conector por URL remota, nunca por comando local.
+  if (souRemoto(_e) && acao === 'add' && comando) return { error: 'Conector local só pode ser adicionado no Mac.' };
   if (motorAcp(engine) || engine === 'gemini') return { error: 'Adicione pelo terminal do próprio agente ACP.' };
   const bin = engine === 'claude' ? CLAUDE_BIN : 'codex';
   const cru = engine === 'claude' ? CLAUDE_BIN : acharBin('codex');
@@ -3117,10 +3179,16 @@ const tokenDoClaude = plataforma.tokenClaude;
 
 // fica guardado na memoria: assim o Chaveiro so e consultado uma vez por sessao do app,
 // em vez de a cada leitura da faixa de uso
-let credGuardada = null;
+let credGuardada = null, credQuando = 0;
 function credClaude(denovo) {
-  if (denovo) credGuardada = null;
-  if (!credGuardada) credGuardada = tokenDoClaude();
+  if (denovo) { credGuardada = null; credQuando = 0; }
+  // R1-049: token BOM continua em cache pra sessao inteira, como antes (um so achado no
+  // Chaveiro). So o "nao achei" ganha prazo de 90s — sem isso, Chaveiro bloqueado/trancado
+  // repetia a chamada SINCRONA de ate 8s (travando a janela inteira) a cada leitura de uso.
+  if (!credGuardada && Date.now() - credQuando > 90000) {
+    credGuardada = tokenDoClaude();
+    credQuando = Date.now();
+  }
   return credGuardada;
 }
 
@@ -3181,7 +3249,7 @@ function janelaClaude(x, velho) {
 const usoCodex = { dados: null, quando: 0 };
 // trocou de conta: o ultimo numero bom era da conta ANTERIOR e nao pode aparecer como desta
 function esquecerUso(engine) {
-  if (engine === 'claude') { credGuardada = null; Object.assign(usoClaude, { dados: null, quando: 0, pausaAte: 0, pausa: 0 }); }
+  if (engine === 'claude') { credGuardada = null; credQuando = 0; Object.assign(usoClaude, { dados: null, quando: 0, pausaAte: 0, pausa: 0 }); }
   if (engine === 'codex') Object.assign(usoCodex, { dados: null, quando: 0 });
   if (engine === 'grok') Object.assign(usoGrok, { dados: null, quando: 0, pausaAte: 0, pausa: 0 });
   if (engine === 'gemini') Object.assign(usoGemini, { dados: null, quando: 0, pausaAte: 0, pausa: 0 });
@@ -3768,7 +3836,7 @@ handle('codex:reiniciar', async (_e) => {
     const fim = () => { if (feito) return; feito = true; clearTimeout(prazo); r(); };
     const prazo = setTimeout(fim, 4000);   // nao trava a tela se ele emperrar
     p.once('close', fim);
-    matarProcesso(p);
+    matarGrupoExtra(p);   // mata o grupo: filho de comando/sandbox nao pode sobrar orfao
   });
   // pelo prazo pode ter escapado sem passar pelo 'close': solta o ouvinte do processo velho
   // pra ele nao continuar despejando resposta na fila do novo, e insiste na morte dele
@@ -4267,7 +4335,8 @@ function createWindow() {
      app.on('activate') recria a janela quando ele clica no Dock com tudo fechado, e a janela
      nova nasceria sem eles. A cada carga da tela (abertura e ⌘R) tudo que sobrou na caixa e
      anunciado de novo. */
-  win.webContents.on('did-start-loading', () => { inboxOuvinte = false; });   // ⌘R: a tela nova ainda nao ouve
+  // ⌘R: a tela nova ainda nao ouve, e nao tem como fechar terminal que ja ficou pra tras (pty orfao)
+  win.webContents.on('did-start-loading', () => { inboxOuvinte = false; for (const id of [...terms.keys()]) termMatar(id); });
   win.webContents.on('did-finish-load', () => { inboxVistos.clear(); });      // e o que sobrou volta a ser anunciado quando ela avisar
 
   // menu do botao direito: copiar, colar, procurar, etc. — o do sistema mesmo
@@ -4373,7 +4442,7 @@ function shutdown() {
     for (const [, pending] of c.pend) pending.reject(new Error('A janela do Cockpit foi fechada.'));
     c.pend.clear();
     limparPaineisCodex(c.destino);
-    if (proc) { try { proc.kill('SIGTERM'); } catch {} }
+    if (proc) matarGrupoExtra(proc);   // mata o grupo, nao so' o codex (filho de sandbox pode sobrar)
   }
 }
 
@@ -4530,7 +4599,10 @@ handle('voz:transcrever', async (_e, { audio }) => {
     const whisper = acharBin('whisper-cli');
     const ff = acharBin('ffmpeg');
     if (!whisper || !ff) return { error: 'falta o whisper-cli ou o ffmpeg' };
-    const base = path.join(os.tmpdir(), 'ck-voz-' + process.pid);
+    // R1-011: so' o pid repetia por toda a vida do app; duas ditacoes ao mesmo tempo (dois
+    // paineis, ou Mac + celular) escreviam/apagavam o MESMO arquivo temporario uma por cima
+    // da outra e um chat recebia o texto ditado no outro. Um id por chamada resolve.
+    const base = path.join(os.tmpdir(), 'ck-voz-' + process.pid + '-' + crypto.randomUUID());
     fs.writeFileSync(base + '.webm', Buffer.from(audio, 'base64'));
     // o whisper so aceita wav de 16 kHz mono: o navegador grava em webm/opus
     const conv = await rodar(ff, ['-y', '-i', base + '.webm', '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', base + '.wav'], 60000);
@@ -4703,7 +4775,13 @@ handle('navegador:aba', async () => {
     ['Google Chrome', 'tell application "Google Chrome" to return (URL of active tab of front window) & "\\n" & (title of active tab of front window)'],
     ['Safari', 'tell application "Safari" to return (URL of front document) & "\\n" & (name of front document)'],
   ];
+  let algumAberto = false;
   for (const [nome, script] of roteiros) {
+    // R1-012: "tell application" ABRE o app sozinho se ele nao estiver rodando; checar se o
+    // processo ja existe antes evita abrir Chrome/Safari escondido so pra nao achar aba nenhuma
+    const check = await rodar('/usr/bin/osascript', ['-e', 'tell application "System Events" to (name of processes) contains "' + nome + '"'], 3000);
+    if (String(check.out || '').trim() !== 'true') continue;
+    algumAberto = true;
     const r = await rodar('/usr/bin/osascript', ['-e', script], 8000);
     const saida = String(r.out || '').trim();
     if (saida && /^https?:/i.test(saida)) {
@@ -4714,6 +4792,7 @@ handle('navegador:aba', async () => {
       return { error: 'o Mac ainda não deixou o Cockpit falar com o ' + nome + '. Ajustes do Sistema › Privacidade › Automação › Cockpit' };
     }
   }
+  if (!algumAberto) return { error: 'abra o Chrome ou o Safari primeiro' };
   return { error: 'não achei nenhuma aba aberta no Chrome nem no Safari' };
 });
 
@@ -4744,10 +4823,34 @@ handle('config:claude', () => {
     arquivoAjustes: path.join(casa, 'settings.json'),
   };
 });
-handle('shell:open', (_e, p) => shell.openPath(p));
+/* R1-046: "Abrir no Mac" chamava shell.openPath sem checar nada. O caminho que chega aqui
+   pode vir de QUALQUER texto do agente (linkarArquivos autolinka caminho solto na fala, sem
+   precisar de sintaxe de link) — inclusive um .command criado por conteudo externo malicioso.
+   Tipo que roda codigo (extensao conhecida OU bit de execucao ligado) pergunta antes de abrir;
+   o resto (imagem, pdf, pasta, doc) continua abrindo direto, sem fricção nova. */
+const EXTENSOES_EXECUTAVEIS = new Set(['.command', '.app', '.pkg', '.scpt', '.workflow', '.applescript']);
+async function abrirComCuidado(p) {
+  try {
+    const ext = path.extname(String(p || '')).toLowerCase();
+    let roda = EXTENSOES_EXECUTAVEIS.has(ext);
+    if (!roda) { try { roda = !!(fs.statSync(p).mode & 0o111); } catch {} }
+    if (roda) {
+      const r = await dialog.showMessageBox(win, {
+        type: 'warning',
+        buttons: ['Cancelar', 'Abrir mesmo assim'],
+        defaultId: 0, cancelId: 0,
+        message: 'Este arquivo roda código quando aberto.',
+        detail: p,
+      });
+      if (r.response !== 1) return '';
+    }
+  } catch {}
+  return shell.openPath(p);
+}
+handle('shell:open', (_e, p) => abrirComCuidado(p));
 handle('shell:link', (_e, url) => {
   if (/^https?:\/\//i.test(url)) return shell.openExternal(url);
-  return shell.openPath(url);
+  return abrirComCuidado(url);
 });
 handle('shell:openUrl', (_e, u) => {
   if (!/^https?:\/\//i.test(String(u || ''))) return { error: 'link inválido' };
@@ -6018,13 +6121,17 @@ function senhaDoTelefone() {
    Esta função montava "http://IP:7788" na mão, e ninguém atende nessa porta pelo Tailscale: o
    endereço escrito nos Ajustes só girava no Safari do iPhone até dar tempo esgotado. Agora
    perguntamos ao próprio Tailscale qual endereço ele está entregando para a porta 7788. */
-function enderecoTailscale() {
+// R1-013/R1-047: execFileSync trava o processo principal INTEIRO ate' o tailscale responder
+// (ja' registrou ETIMEDOUT de verdade no log) — nenhum IPC, nenhuma janela pinta nesse tempo.
+// rodar() e' o mesmo helper assincrono usado no resto do arquivo: nao bloqueia o event loop.
+async function enderecoTailscale() {
   try {
-    const { execFileSync } = require('child_process');
     const bin = acharBin('tailscale');
     const socket = path.join(HOME, '.tailscale', 'tailscaled.sock');
     const pre = fs.existsSync(socket) ? ['--socket=' + socket] : [];
-    const sv = JSON.parse(execFileSync(bin, [...pre, 'serve', 'status', '--json'], { encoding: 'utf8', timeout: 5000 }));
+    const r = await rodar(bin, [...pre, 'serve', 'status', '--json'], 5000);
+    if (r.err) throw r.err;
+    const sv = JSON.parse(r.out);
     const web = (sv && sv.Web) || {};
     for (const alvo of Object.keys(web)) {
       const hs = (web[alvo] && web[alvo].Handlers) || {};
@@ -6055,7 +6162,7 @@ handle('web:ligar', async (_e, ligar) => {
       web = sw.criar({
         pastaRenderer: path.join(__dirname, 'renderer'),
         handlers: HANDLERS, ouvintes: ouvintesWeb,
-        porta: 7788, senha: senhaDoTelefone(), somenteTailscale: true, endereco: enderecoTailscale(),
+        porta: 7788, senha: senhaDoTelefone(), somenteTailscale: true, endereco: await enderecoTailscale(),
       });
       // espera o servidor ESCUTAR de verdade antes de dizer que ligou: com a porta ocupada
       // a tela mostrava endereco e senha e o telefone nunca conectava
@@ -6162,7 +6269,11 @@ function varrerInbox() {
     }
     win.webContents.send('inbox', { arquivo: f, nome: n, tipo: ehImagem ? 'imagem' : 'texto', texto, legenda, quando: st.mtimeMs });
   }
-  if (inboxVistos.size > 500) inboxVistos.clear();
+  // R1-014: limpar tudo de uma vez reabria como "novo" um arquivo que ainda esta pendente
+  // na pasta (o Homero nao clicou "usar"). Poda so o que ja sumiu da pasta (`conjunto`).
+  if (inboxVistos.size > 500) {
+    for (const k of [...inboxVistos]) if (!conjunto.has(k.slice(0, k.lastIndexOf(':')))) inboxVistos.delete(k);
+  }
 }
 function ligarInbox() {
   try { fs.mkdirSync(PASTA_INBOX(), { recursive: true }); } catch {}
@@ -6229,8 +6340,13 @@ app.whenReady().then(() => { anota('app iniciou'); usarClaudeDeCaminhoFixo(); me
     }
     if (cfgInicial.webLigado && cfgInicial.webSeguroConfirmado) {
       const sw = require('./servidor-web.js');
+      // R1-013/R1-047: o boot nao pode virar `await` (atrasaria janela/menu/tudo que vem
+      // depois neste mesmo bloco), entao sobe com um endereco provisorio e troca sozinho
+      // quando o tailscale responder; a tela de Ajustes busca o estado de novo toda vez
+      // que abre (web:estado), entao o valor certo aparece assim que ele olhar.
       web = sw.criar({ pastaRenderer: path.join(__dirname, 'renderer'), handlers: HANDLERS,
-        ouvintes: ouvintesWeb, porta: 7788, senha: senhaDoTelefone(), somenteTailscale: true, endereco: enderecoTailscale() });
+        ouvintes: ouvintesWeb, porta: 7788, senha: senhaDoTelefone(), somenteTailscale: true, endereco: 'Endereço: carregando…' });
+      enderecoTailscale().then((end) => { if (web) web.endereco = end; }).catch((e) => anota('tailscale:', (e && e.message) || e));
       manterAcordado(true);
       // no boot nao da pra esperar; mas o erro tem de aparecer no log e o estado tem de ficar
       // honesto, senao o app acha que o telefone esta ligado e ele nunca conecta

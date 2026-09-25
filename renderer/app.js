@@ -212,12 +212,7 @@ const AGENTES_ACP = [
 /* Enquanto o radar não respondeu, tudo conta como instalado: dizer "não está instalado" sem
    ter olhado seria pior do que não dizer nada. */
 const agenteAcpTem = (m) => !m.bin || !MOTORES_OK || !MOTORES_OK.acpBins || !!MOTORES_OK.acpBins[m.bin];
-// o primeiro agente que EXISTE nesta máquina; '' quando não há nenhum (ou o radar ainda não voltou)
-const melhorAgenteAcp = () => {
-  if (!MOTORES_OK || !MOTORES_OK.acpBins) return '';
-  const bom = AGENTES_ACP.find(agenteAcpTem);
-  return bom ? bom.id : '';
-};
+// (quem decide o agente ACP e' o dropdown de modelos, via agenteAcpTem acima)
 
 const MODELOS_GEMINI = [{ id: '', nome: 'Padrão do Gemini', desc: 'Usa o Gemini da sua conta Google', efforts: [], padrao: true }];
 const MODELOS_GROK = [{ id: '', nome: 'Padrão do Grok', desc: 'Usa o modelo configurado no Grok', efforts: [], padrao: true }];
@@ -434,6 +429,7 @@ async function fecharAba(A) {
     P.tamanhoObserver?.disconnect();
     if (P.fecharTerminal) { try { P.fecharTerminal(); } catch {} }
     paraParar.push({ pid, engine: P.engine });
+    guardarFechado(P);   // fechar a aba tambem alimenta o "Reabrir o ultimo chat fechado"
     P.el.remove(); panes.delete(pid);
   }
   A.ordem = [];
@@ -566,7 +562,8 @@ function pedirCaminhoVps(P) {
     $('#vpsAtalhos', cx).appendChild(b);
   }
   const ir = () => {
-    const c = (inp.value || '').trim();
+    // tira um "vps:" que o usuário já tenha digitado, senão dobra o prefixo
+    const c = semPrefixo((inp.value || '').trim());
     fecharModal(P);
     if (!c) return;
     levarChatPara(P, 'vps:' + (c.startsWith('/') ? c : '/' + c));
@@ -883,6 +880,11 @@ function newPane(opts = {}) {
     // abriria o menu sozinha segundos depois, por cima do que estivesse na tela)
     else { if (menuDeArquivosNaTela(P)) fecharMenus(); pararBuscaEmVoo(); }
   });
+  // apagou o campo na mao com o quadro colado e sem anexo: o metadado do quadro tem que
+  // sair junto, senao send() acha que ainda ha algo pra mandar e envia mensagem vazia
+  inp.addEventListener('input', () => {
+    if (!inp.value.trim() && !(P.anexos || []).length) P.quadroColado = null;
+  });
   // barra no comeco da linha abre o menu de acoes, e vai filtrando conforme digita
   inp.addEventListener('input', () => {
     const v = inp.value;
@@ -1098,7 +1100,9 @@ function savePanes(fechou) {
     }).filter(Boolean),
   })).filter(a => a.chats.length).concat(abasQueNaoVoltaram);
   cfg.abaAberta = Math.max(0, listaAbas.indexOf(abaAtiva));
-  Promise.resolve(window.api.setConfig(cfg, fechou ? { fechou: true } : null))
+  // 'agrupou' e' fusao automatica no boot, nao clique dele: usa === pra nao confundir com fechou boolean
+  const origemGravacao = fechou === true ? { fechou: true } : (fechou === 'agrupou' ? { agrupou: true } : null);
+  Promise.resolve(window.api.setConfig(cfg, origemGravacao))
     .then(r => {
       if (r && (r.ok === false || r.error)) throw new Error(r.error || 'Não consegui salvar as conversas.');
       document.querySelector('[data-aviso="config-nao-salvou"]')?.remove();
@@ -1160,7 +1164,8 @@ async function restaurarAbas() {
      mesmo cliente viram uma so (agruparPorCliente). Essa gravacao tem licenca pra diminuir.
      Se sobrou alguma que nao voltou, nao tem: ai a conta so pode cair por causa da falha, e o
      Mac guarda as abas de volta. */
-  savePanes(!abasQueNaoVoltaram.length);
+  // nenhuma aba faltou: a conta so caiu por causa do agrupamento automatico, nao de um clique dele
+  savePanes(abasQueNaoVoltaram.length ? false : 'agrupou');
   return true;
 }
 
@@ -1734,11 +1739,21 @@ function legendaDaFala(texto) {
   const ult = linhas[linhas.length - 1] || '';
   return ult.length > 90 ? ult.slice(0, 88).trimEnd() + '…' : ult;
 }
+// diz se o texto INTEIRO (nao so a cauda) esta com uma cerca de codigo (```/~~~) aberta
+// agora: bloco de codigo com mais de 600 caracteres sem linha em branco escapava da cauda
+// e a ultima linha (crua) virava legenda por engano
+function dentroDeCerca(texto) {
+  const linhas = String(texto || '').split('\n');
+  let dentro = false;
+  for (const linha of linhas) if (/^\s{0,3}(```|~~~)/.test(linha)) dentro = !dentro;
+  return dentro;
+}
 /* No local quem escreve a linha do "trabalhando" e o pintaTrab, de segundo em segundo:
    escrever direto no .trab-txt seria apagado no proximo tique. Entao aqui so guarda a
    legenda em P.trabOque e manda repintar. */
 function legendarTrabalho(P, texto) {
   if (!P || !P.busy || !P.trabEl) return;
+  if (dentroDeCerca(texto)) return;   // cerca aberta ha muito tempo: mantem a legenda anterior em vez de mostrar linha de codigo crua
   P.trabOque = legendaDaFala(texto);
   pintaTrab(P);
 }
@@ -1987,6 +2002,7 @@ function ramificarDaqui(P, d) {
   pintarNome(Q);
   avisoTemp(Q, 'Este chat continua de onde aquela mensagem estava. O chat de origem segue intacto.');
   $('.p-input', Q.el).focus();
+  savePanes();   // sem isto o ramo reabria com o cwd da aba, não o cwd de onde saiu
 }
 
 /* ---- ramificar de VERDADE (leva 8.3) ----
@@ -3244,10 +3260,10 @@ function verImagemGrande(P, src) {
   const v = $('.p-visor', P.el);
   const corpo = $('.visor-corpo', v);
   v.classList.remove('hidden');
-  v.onclick = (e) => { if (e.target === v) fecharVisor(); };
+  v.onclick = (e) => { if (e.target === v) fecharVisor(P); };
   $('.visor-nome', v).textContent = 'Print do agente';
   $('.visor-x', v).innerHTML = ico('x');
-  $('.visor-x', v).onclick = fecharVisor;
+  $('.visor-x', v).onclick = () => fecharVisor(P);
   // este print nao e' um arquivo no disco: nao ha o que abrir no Mac
   const abrir = $('.visor-abrir', v);
   abrir.classList.remove('hidden');   // ver um arquivo da VPS antes esconde este botao: repoe
@@ -3378,6 +3394,10 @@ function invalidarConversa(P) {
   P.revisaoConversa = (P.revisaoConversa || 0) + 1;
   clearTimeout(P.filaTimer); P.filaTimer = null;
   P.carregandoHistorico = false; P.settingsSend = null;
+  // se a conversa muda no meio de um envio, o pontinho "pendente" nao pode ficar
+  // aceso pra sempre: os pontos de guarda de send()/agendarFila saem antes de
+  // concluirEscolhasEnvio quando isso acontece, entao centraliza aqui
+  P.settingsPending = false;
 }
 
 /* A fila continua pertencendo ao painel durante os 150 ms de espera. Tirar antes
@@ -4362,10 +4382,14 @@ function barraEsforco(P) {
     const util = Math.max(1, r.width - larg);
     return clamp01(((clientX - r.left - larg / 2) / util) * ULT, 0, ULT);
   };
+  // Pointer Events cobrem mouse e toque com a mesma API (R1-021: no iPhone o
+  // arrasto de dedo não gerava mousemove e a tela só rolava).
   const comecar = (e) => {
     e.preventDefault(); e.stopPropagation();
     cancelAnimationFrame(frameMola);
     arrastando = true; box.classList.add('pegando');
+    // mantém o arrasto recebendo eventos mesmo se o dedo/cursor sair da régua
+    if (shell.setPointerCapture) shell.setPointerCapture(e.pointerId);
     amostras = [{ t: performance.now(), v: valor }];
     pintar(ima(valorDoX(e.clientX)));
     const mover = (ev) => {
@@ -4375,16 +4399,21 @@ function barraEsforco(P) {
       amostras = amostras.filter(a => agora - a.t < 90).slice(-5);
       pintar(v);
     };
-    const soltar = () => {
-      window.removeEventListener('mousemove', mover);
-      window.removeEventListener('mouseup', soltar);
+    const soltar = (ev) => {
+      shell.removeEventListener('pointermove', mover);
+      shell.removeEventListener('pointerup', soltar);
+      shell.removeEventListener('pointercancel', soltar);
+      if (shell.releasePointerCapture && ev && ev.pointerId != null) {
+        try { shell.releasePointerCapture(ev.pointerId); } catch {}
+      }
       arrastando = false; box.classList.remove('pegando');
       encaixar();
     };
-    window.addEventListener('mousemove', mover);
-    window.addEventListener('mouseup', soltar);
+    shell.addEventListener('pointermove', mover);
+    shell.addEventListener('pointerup', soltar);
+    shell.addEventListener('pointercancel', soltar);
   };
-  shell.addEventListener('mousedown', comecar);
+  shell.addEventListener('pointerdown', comecar);
   thumb.addEventListener('keydown', (e) => {
     const alvos = { ArrowLeft: ix - 1, ArrowDown: ix - 1, ArrowRight: ix + 1, ArrowUp: ix + 1, Home: 0, End: ULT };
     if (!(e.key in alvos)) return;
@@ -4637,8 +4666,9 @@ document.addEventListener('keydown', (e) => {
   if (qdPainelAberto()) { if (window.Quadro) window.Quadro.fechar(); return; }
   // o painel dos agentes vem logo depois
   if (agPainelAberto()) { fecharPainelAgentes(); return; }
-  const visorAberto = [...panes.values()].some(P => !$('.p-visor', P.el).classList.contains('hidden'));
-  if (visorAberto) { fecharVisor(); return; }
+  // fecha so o painel que de fato esta com o visor aberto, nunca todos de uma vez
+  const abertoEm = [...panes.values()].find(P => !$('.p-visor', P.el).classList.contains('hidden'));
+  if (abertoEm) { fecharVisor(abertoEm); return; }
   const popupAberto = [...panes.values()].some(P => !$('.p-modal', P.el).classList.contains('hidden'));
   if (popupAberto) { fecharMenus(); for (const P of panes.values()) fecharModal(P); return; }
   // sem popup: para o que a IA estiver fazendo
@@ -4778,8 +4808,10 @@ async function menuModelos(P) {
   };
   pintar();
   if (P.engine === 'codex' && !MODELOS_CODEX) {
-    MODELOS_CODEX = traduzCodex(await window.api.codexModels()) || null;
-    if (MODELOS_CODEX && MODELOS_CODEX.length) { fillModels(P); pintar(); }
+    // NAO gravar array vazio em MODELOS_CODEX: [] e verdadeiro em JS, entao o "!MODELOS_CODEX"
+    // acima nunca mais buscaria de novo mesmo com o Codex de volta ao ar (mesmo padrao do boot)
+    const ms = await window.api.codexModels();
+    if (ms && ms.length) { MODELOS_CODEX = traduzCodex(ms); fillModels(P); pintar(); }
   }
 }
 
@@ -5320,9 +5352,13 @@ async function janelaConectores(P) {
       $$('.co-bt', el).forEach(bt => bt.onclick = async () => {
         const ac = bt.dataset.ac;
         if (ac === 'remove' && !confirm('Tirar o conector "' + c.nome + '" do ' + motor + '?')) return;
+        // clique duplo aqui mandava dois mcpAcao juntos e abria DOIS terminais pro mesmo
+        // login, um deles orfao: trava o botao ate a resposta voltar
+        if (bt.disabled) return;
+        bt.disabled = true;
         bt.textContent = '…';
         const r = await window.api.mcpAcao({ engine: P.engine, acao: ac, nome: c.nome });
-        if (r && r.error) { bt.textContent = 'erro'; alert(r.error); return; }
+        if (r && r.error) { bt.disabled = false; bt.textContent = 'erro'; alert(r.error); return; }
         if (r && r.terminal) janelaTerminal(P, r.terminal, r.titulo || nomeLimpo(c.nome), () => janelaConectores(P));
         else janelaConectores(P);
       });
@@ -5436,8 +5472,15 @@ function formConector(P) {
     const r = await window.api.mcpAcao({ engine: P.engine, acao: 'add', nome, url, comando });
     if (r && r.error) { erro.style.display = 'block'; erro.textContent = r.error; $('#cnOk', cx).textContent = 'Tentar de novo'; return; }
     fecharModal(P);
-    avisoTemp(P, 'Conector "' + nome + '" adicionado. Vale na próxima conversa deste painel.');
+    // aplicar o conector desliga o motor AGORA: com trabalho rodando, pergunta antes
+    // (mesmo padrao de trocar de motor e trocar de modo), em vez de matar sem avisar
+    const estavaRodando = !!P.busy || agTrabalhando(P);
+    if (!confirmarCorte(P, 'Adicionar conector')) {
+      avisoTemp(P, 'Conector "' + nome + '" adicionado. Vale quando este painel reiniciar (fim do turno atual ou próxima troca de motor).');
+      return;
+    }
     await desligarMotor(P);
+    avisoTemp(P, 'Conector "' + nome + '" adicionado.' + (estavaRodando ? ' O que estava em andamento parou aqui.' : ''));
   };
 }
 
@@ -5474,6 +5517,12 @@ async function abrirTerminalVps(P) {
 
 function janelaTerminal(P, linha, titulo, aoFechar, opcoes) {
   const op = opcoes || {};
+  // ja havia um terminal (ou outra janelinha larga) aberto NESTE painel (ex.: duplo clique em
+  // "Entrar" nos conectores): fecha o antigo ANTES de montar o novo, senao o processo dele
+  // fica rodando escondido para sempre — a unica forma de mata-lo era por P.fecharTerminal,
+  // que estamos prestes a trocar. `.silencioso`: se o antigo tambem for um terminal, so mata
+  // processo/limpa tela, sem chamar o aoFechar dele, que poderia reabrir por cima do novo.
+  if (P.fecharTerminal) { const f = P.fecharTerminal; P.fecharTerminal = null; f.silencioso = true; try { f(); } catch {} }
   fecharMenus();
   const modal = $('.p-modal', P.el), cx = $('.modal-cx', modal);
   modal.classList.remove('hidden');
@@ -5574,6 +5623,10 @@ function janelaTerminal(P, linha, titulo, aoFechar, opcoes) {
     try { term.dispose(); } catch {}
     termsVivos.delete(id);
     cx.className = 'modal-cx';
+    // fechar.silencioso: um terminal NOVO esta assumindo este mesmo painel agora (marcado
+    // pelo proprio janelaTerminal antes de chamar). Fechar o modal ou chamar aoFechar aqui
+    // reabriria por cima do terminal novo que acabou de montar.
+    if (fechar.silencioso) return;
     fecharModal(P);
     aoFechar && aoFechar();
   };
@@ -5710,6 +5763,20 @@ function agEstado(P) {
   if (!P.ag) P.ag = { tarefas: new Map(), ordem: [] };
   return P.ag;
 }
+// numa sessao longa (o chat nunca fecha, so acumula OS/workflow/ultracode ao longo de dias) a
+// lista de tarefas do painel de agentes nunca era limpa: podar as mais VELHAS e ja TERMINADAS
+// quando passa do teto, pra memoria e o tempo de repintura (a cada segundo) nao crescer pra sempre
+const AG_TETO_TAREFAS = 300;
+function agPodarTarefas(A) {
+  while (A.ordem.length > AG_TETO_TAREFAS) {
+    const maisVelha = A.ordem[0];
+    const t = A.tarefas.get(maisVelha);
+    // nunca remover tarefa ainda rodando: so as que ja chegaram no estado final
+    if (!t || (!t.fim && !AG_FINAL.has(t.estado))) break;
+    A.ordem.shift();
+    A.tarefas.delete(maisVelha);
+  }
+}
 /* Um evento do motor entra aqui e vira estado. A tela so e redesenhada se o painel estiver
    aberto — com o painel fechado isto custa quase nada, e por isso pode ficar sempre ligado. */
 function agentesEvento(P, ev) {
@@ -5720,6 +5787,7 @@ function agentesEvento(P, ev) {
       t = { id, classe: '', desc: '', tipo: '', workflow: '', inicio: Date.now(), fim: 0,
         estado: 'rodando', ferramenta: '', resumo: '', uso: null, fases: [], agentes: new Map() };
       A.tarefas.set(id, t); A.ordem.push(id);
+      agPodarTarefas(A);
     }
     return t;
   };
@@ -6336,9 +6404,18 @@ async function menuEsquecerConta(P, eng) {
 
 async function trocarParaConta(P, eng, apelido) {
   if (motoresTrocandoConta.has(eng)) return;
+  const nomeEng = eng === 'codex' ? 'Codex' : 'Claude';
+  // troca de conta derruba TODO painel deste motor, mesmo o de outra aba que o usuario nao
+  // esta olhando; se algum estiver ocupado, perguntar antes de cortar (igual fechar aba/trocar motor)
+  const ocupados = [...panes.values()].filter(Q => Q.engine === eng && (Q.busy || agTrabalhando(Q)));
+  if (ocupados.length) {
+    const msg = ocupados.length === 1
+      ? 'O ' + nomeEng + ' está trabalhando em “' + ((ocupados[0].titulo || '').trim().slice(0, 40) || 'um chat') + '”.\n\nTrocar de conta agora joga fora o que ele está fazendo. Continuar mesmo assim?'
+      : 'O ' + nomeEng + ' está trabalhando em ' + ocupados.length + ' chats (em outras abas).\n\nTrocar de conta agora joga fora o que eles estão fazendo. Continuar mesmo assim?';
+    if (!confirm(msg)) return;
+  }
   motoresTrocandoConta.add(eng);
   try {
-  const nomeEng = eng === 'codex' ? 'Codex' : 'Claude';
   /* PRIMEIRO parar os motores. Um CLI vivo renova o token e reescreve o arquivo da credencial:
      trocar com ele rodando podia ser desfeito calado, minutos depois. */
   let religados = 0;
@@ -6521,6 +6598,9 @@ function pintarUso(P) {
       + '<span class="uso-pt">·</span>')
     + '<span>Semana <b>' + (pw === null ? '—' : pw + '%') + '</b></span>'
     + (zera && zera.reseta ? '<span class="uso-pt">·</span><span class="uso-zera">zera ' + quandoFuturo(zera.reseta) + '</span>' : '')
+    // leitura atual falhou e este numero e' reaproveitado de antes: avisar que esta desatualizado,
+    // senao a tarja mais importante da tela passa um numero velho como se fosse o de agora
+    + (u.velho ? '<span class="uso-pt">·</span><span class="uso-velho">dado de ' + haQuanto(u.velho) + ' atrás</span>' : '')
     + '<span class="uso-gap"></span>'
     + '<button class="uso-x" title="Fechar este aviso">✕</button>';
   faixa.title = 'Plano do ' + nomeDoMotor(P.engine) + ': '
@@ -6845,6 +6925,9 @@ function pintarAnexos(P) {
   for (const a of P.anexos) {
     barra.appendChild(fichaAnexo(a, true, (x) => {
       P.anexos = P.anexos.filter(y => y.path !== x.path);
+      // removeu o ultimo anexo: se era o do quadro, o metadado nao pode ficar preso
+      // (senao send() acha que ainda ha algo pra mandar e sai uma mensagem vazia)
+      if (!P.anexos.length) P.quadroColado = null;
       pintarAnexos(P);
     }, null, P));   // 5o parametro: clique na fichinha abre o arquivo no visor, e so isso
   }
@@ -7029,7 +7112,13 @@ window.abrirQuadroTexto = (P, txt, resumo) => {
 };
 
 /* ============ visualizador de arquivo ============ */
-function fecharVisor() { $$('.p-visor').forEach(v => { v.classList.add('hidden'); $('.visor-corpo', v).innerHTML = ''; }); }
+// escopado ao painel: $$('.p-visor') pegava TODOS os paineis e fechar o visor de um fechava o
+// de outro, mesmo os dois com arquivos diferentes abertos ao mesmo tempo (2 paineis lado a lado)
+function fecharVisor(P) {
+  if (!P || !P.el) return;
+  const v = $('.p-visor', P.el); if (!v) return;
+  v.classList.add('hidden'); $('.visor-corpo', v).innerHTML = '';
+}
 
 /* O recado do visor entra como TEXTO, nunca como HTML: o "a.erro" carrega nome de arquivo
    vindo do statSync, e nome de arquivo pode ter < e > — no innerHTML isso some da tela ou
@@ -7051,10 +7140,10 @@ async function verArquivo(P, caminho) {
   const pedido = {}; v.pedidoArquivo = pedido;
   const corpo = $('.visor-corpo', v);
   v.classList.remove('hidden');
-  v.onclick = (e) => { if (e.target === v) fecharVisor(); };
+  v.onclick = (e) => { if (e.target === v) fecharVisor(P); };
   $('.visor-nome', v).textContent = caminho.split('/').pop();
   $('.visor-x', v).innerHTML = ico('x');
-  $('.visor-x', v).onclick = fecharVisor;
+  $('.visor-x', v).onclick = () => fecharVisor(P);
   $('.visor-abrir', v).innerHTML = ico('upload');
   $('.visor-abrir', v).onclick = () => window.api.openPath(caminho);
   // repoe o rotulo: ver um print do agente deixa aqui "nao e' um arquivo no Mac"
@@ -7863,7 +7952,10 @@ async function paintHist(engine, listaCrua) {
     const alvoGrupo = filtroGrupo[engine];
     if (alvoGrupo) {
       const g = grupoPorId(alvoGrupo);
-      const doGrupo = list.filter(s => grupoDaSessao(s) === alvoGrupo);
+      // grupo cruza pasta DE PROPOSITO (o mesmo grupo pode ter conversa de clientes diferentes):
+      // filtra da lista CRUA, sem o corte de filtrarPorPasta, senao a conversa do grupo que mora
+      // noutra pasta some da tela sem aviso quando a aba ativa muda
+      const doGrupo = listaCrua.filter(s => grupoDaSessao(s) === alvoGrupo);
       if (!doGrupo.length) {
         box.appendChild(Object.assign(document.createElement('div'),
           { className: 'hist-load', textContent: 'Nada em “' + (g ? g.nome : '') + '” ainda.' }));
@@ -7881,7 +7973,9 @@ async function paintHist(engine, listaCrua) {
     let restantes = list.filter(s => !ehFavorita(s));
     /* os grupos aparecem sempre, mesmo vazios: é neles que ele enxerga onde pôr a conversa */
     for (const g of listaGrupos()) {
-      const doGrupo = restantes.filter(s => grupoDaSessao(s) === g.id);
+      // conta e mostra cruzando pasta, igual ao alvoGrupo acima: sem isso o numero do cabecalho
+      // do grupo mudava sozinho conforme a aba ativa, mesmo grupo sem ele ter mexido em nada
+      const doGrupo = listaCrua.filter(s => grupoDaSessao(s) === g.id);
       restantes = restantes.filter(s => grupoDaSessao(s) !== g.id);
       box.appendChild(linhaGrupo(g, doGrupo));
     }
@@ -7984,6 +8078,7 @@ async function openSession(s, el) {
   mostrarPastaNoPainel(P); atualizarGit(P);   // leva 10: tira o "⎇ nome" e repõe o chip do git
   pintarModo(P); pintarNome(P);
   setFocus(P); savePanes();
+  marcarAbertas();   // repinta a borda de "aberta" na lista, senao so aparece depois do 1o redesenho
 
   note(P, 'Conversa: ' + s.title);
   /* Conversa que rodou na VPS mora no disco DELA: o arquivo daqui não existe, e sem este
@@ -8163,13 +8258,7 @@ function soltarPane(P, alvo) {
   if (alvo.tipo === 'pilha' || alvo.tipo === 'coluna') {
     organizarPainel(P, alvo.Q, alvo.tipo === 'pilha', alvo.antes); return;
   }
-  let idx = alvo.indice;
-  if (A0 === alvo.A) {
-    const cur = A0.ordem.indexOf(P.id);
-    if (idx > cur) idx--;
-    if (idx === cur) return;
-  }
-  moverPane(P, alvo.A, idx);
+  // alvoDoPane so devolve 'outraAba', 'pilha' ou 'coluna': nao ha 4o tipo com .indice, era codigo morto
 }
 
 // arrastar a propria aba de projeto para trocar a ordem no topo
@@ -8222,8 +8311,9 @@ function comecarArrasteAba(A, e0) {
     const lista = $('#abasLista');
     const els = [...lista.children];
     const cur = els.indexOf(A.el);
-    let idx = indice;
-    if (idx > cur) idx--;
+    const idx = indice;
+    // a aba arrastada NUNCA sai do HTML (so fica com opacidade .4 via .saindo), entao
+    // 'els' e 'indice' ja contam com ela: nao compensar de novo, senao o alvo fica 1 casa atras
     if (idx === cur) return;
     lista.insertBefore(A.el, lista.children[idx] || null);
     // a ordem do Map segue a ordem da tela, para o cmd+1..9 bater
@@ -8393,8 +8483,6 @@ $('#novaAba').addEventListener('mousedown', (e) => { if (e.target.id === 'novaAb
 // o + da barra de cima saiu: quem abre chat novo e o "+ chat" da barra de abas
 $('#btnNovaAba').addEventListener('click', () => telaNovaAba());
 $('#btnNovoChat').addEventListener('click', () => novoChatNaAba());
-const btPasta = $('#btnPickFolder');
-if (btPasta) btPasta.addEventListener('click', () => { if (abaAtiva) trocarPastaDaAba(abaAtiva); });
 function aplicarTema(t) {
   document.documentElement.setAttribute('data-tema', t || 'escuro');
   pintarCorFoco();

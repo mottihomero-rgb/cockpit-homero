@@ -171,16 +171,15 @@ select{font:inherit;color:inherit;background:none;border:none;outline:none;curso
 .dica.on{opacity:1;transform:none}
 
 /* ---------- paineis lado a lado ---------- */
-#panes{flex:1;display:flex;min-width:0;overflow-x:auto;overflow-y:hidden;scroll-behavior:smooth}
+/* regra de #panes com overflow-x/scroll tirada daqui: era sobrescrita pela da linha ~1207 (overflow:hidden), essa que vale */
 #panes::-webkit-scrollbar{height:9px}
 #panes::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:5px;border:2px solid transparent;background-clip:content-box}
 #panes::-webkit-scrollbar-thumb:hover{background:var(--line2);background-clip:content-box;border:2px solid transparent}
-.pane{position:relative;flex:1 0 auto;width:max(240px,calc((100% - 26px) / 5));min-width:max(240px,calc((100% - 26px) / 5));display:flex;flex-direction:column;border-left:1px solid var(--line);
+/* width/min-width tirados: layout antigo de "5 lado a lado", quem manda hoje eh .espaco > .coluna > .pane (linha 1819) */
+.pane{position:relative;flex:1 0 auto;display:flex;flex-direction:column;border-left:1px solid var(--line);
   background:var(--bg);overflow:hidden}
 .pane:first-child{border-left:none}
-.pane-split{width:5px;flex:none;cursor:col-resize;background:var(--line);
-  border-left:2px solid var(--bg);border-right:2px solid var(--bg)}
-.pane-split:hover{background:var(--accent)}
+/* .pane-split ficava duplicada aqui; a regra que vale esta la embaixo, perto de "divisor entre os chats" */
 .pane.focus{background:var(--bg-foco)}
 .pane.eng-codex{--accent:var(--codex)}
 .pane.eng-claude{--accent:var(--claude)}
@@ -576,7 +575,8 @@ mark.acha.agora{background:var(--yellow);color:#1a1a1a}
 
 .ef-axis{display:flex;justify-content:space-between;margin-top:9px;
   font-size:10.5px;color:var(--fg-fraco);letter-spacing:.1px}
-.ef-shell{position:relative;height:30px;margin-top:5px}
+/* touch-action:none impede o navegador de rolar a tela ao arrastar com o dedo (R1-021) */
+.ef-shell{position:relative;height:30px;margin-top:5px;touch-action:none}
 .ef-track{position:absolute;inset:3px 0;overflow:hidden;border-radius:9px;
   background:var(--fundo-fundo);box-shadow:inset 0 1px 2px var(--sombra1)}
 .ef-fill{position:absolute;top:0;bottom:0;left:1px;border-radius:8px 0 0 8px;
@@ -1125,6 +1125,7 @@ html[data-tema="jornal"] .pane.eng-acp{--accent:#2aa198}
 .p-uso b{color:var(--fg-strong);font-weight:600}
 .p-uso .uso-pt{opacity:.4}
 .p-uso .uso-zera{opacity:.75}
+.p-uso .uso-velho{opacity:.75} /* dado de Xh atras: aviso discreto, igual ao "zera" */
 .p-uso .uso-alerta{color:var(--yellow);font-weight:600}
 .p-uso .uso-ic{flex:none;color:var(--yellow);font-size:11px}
 .p-uso .uso-gap{flex:1;min-width:8px}

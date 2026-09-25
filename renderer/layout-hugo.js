@@ -181,7 +181,8 @@ function normalizarPlano(itens) {
 function desenharPlano(P, itens) {
   P.plano = normalizarPlano(itens);
   let cx = $('.pane-plano', P.el);
-  if (!P.plano.length) { cx?.remove(); return; }
+  // sem unobserve o nó antigo fica preso no ResizeObserver pra sempre (mesmo padrão de limparPlano)
+  if (!P.plano.length) { if (cx) { P.tamanhoObserver?.unobserve(cx); cx.remove(); } return; }
   if (!cx) {
     cx = document.createElement('section'); cx.className = 'pane-plano';
     P.el.insertBefore(cx, $('.pane-perm', P.el));

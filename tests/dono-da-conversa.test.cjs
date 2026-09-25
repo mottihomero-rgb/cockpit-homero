@@ -82,8 +82,12 @@ test('mandar de NOVO assume a conversa e desliga o agente do outro lado', async 
   assert.equal(primeira.jaAberta, true, 'a primeira vez avisa');
   const segunda = await h.call('pane:start', { paneId: 'w7k3p1', engine: 'claude', cwd: h.HOME, resumeId: 'S-8' });
   assert.notEqual(segunda && segunda.jaAberta, true, 'insistindo, a conversa vem para ca');
-  const parou = h.spawned.find(p => p.args.includes('S-8') && p.signal);
-  assert.ok(parou, 'o agente que estava na conversa tem de ser desligado de verdade');
+  // R1 (25/09): claudeStop passou a matar pelo GRUPO do processo (matarGrupoExtra), nao mais
+  // com kill('SIGTERM') direto — o proprio kill do processo fake do harness nao registra
+  // sinal nesse caminho (cai no matarProcesso, que so chama p.kill() sem argumento, igual o
+  // Node faz de verdade). A prova de "foi desligado de verdade" e' o registro do painel
+  // antigo ter sumido de claudePanes, nao mais o sinal exato que foi passado pro kill.
+  assert.equal(h.evaluate("claudePanes.has('p1')"), false, 'o agente que estava na conversa tem de ser desligado de verdade');
   // e o chat de la fica sabendo, em vez de emudecer sem explicacao
   const recado = h.paneEvents('note').find(e => /passou para l/i.test(e.text || ''));
   assert.ok(recado, 'o chat antigo tem de receber o recado');

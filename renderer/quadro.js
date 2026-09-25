@@ -98,6 +98,7 @@
     editando: null,
     ponteiros: new Map(),
     pinch: null,
+    saiuDoPinch: false,      // solto do 2o dedo da pinca nao pode contar como toque de duplo-toque
     bloqueado: false,
     espaco: false,
     desenhoPedido: false,
@@ -106,7 +107,7 @@
     rascunho: { timer: null, ultimo: '', ultimoEnviadoEm: 0, enviadoEm: 0, gravando: false, promessa: null, sujo: false },
     /* desenho que o Claude grava pela skill planejar-sistema: 'visto' e o carimbo ja carregado,
        'cena' e a foto do jeito que chegou (se ele mexer, o Claude nao passa mais por cima) */
-    claude: { visto: 0, cena: '', timer: null },
+    claude: { visto: 0, cena: '', timer: null, semNovidade: 0 },
     setasTimer: null,        // junta uma rajada de setas do teclado num passo so
     ultimoToque: { t: 0, x: 0, y: 0 },
     limparArmado: 0,
@@ -1020,6 +1021,7 @@
   function aoDescer(e) {
     const t = pontoDoEvento(e);
     e.preventDefault();
+    Q.saiuDoPinch = false;   // flag so vale pro toque imediatamente seguinte a pinca
     try { Q.el.canvas.setPointerCapture(e.pointerId); } catch (_) {}
     Q.ponteiros.set(e.pointerId, t);
 
@@ -1256,13 +1258,15 @@
     const t = pontoDoEvento(e);
     Q.ponteiros.delete(e.pointerId);
     if (Q.pinch) {
-      if (Q.ponteiros.size < 2) { Q.pinch = null; Q.bloqueado = Q.ponteiros.size > 0; }
+      if (Q.ponteiros.size < 2) { Q.pinch = null; Q.bloqueado = Q.ponteiros.size > 0; Q.saiuDoPinch = true; }
       return;
     }
     if (Q.ponteiros.size === 0) Q.bloqueado = false;
 
     const g = Q.gesto;
-    if (!g) { detectarDuploToque(e, t); return; }
+    // o solto do ultimo dedo da pinca nao e um toque: sem isso, repetir a pinca no mesmo
+    // ponto em menos de 320ms abria uma caixa de texto vazia sozinha (duplo-toque falso)
+    if (!g) { if (Q.saiuDoPinch) { Q.saiuDoPinch = false; Q.ultimoToque.t = 0; return; } detectarDuploToque(e, t); return; }
     Q.gesto = null;
     Q.alvoSeta = null;
 
@@ -1636,15 +1640,24 @@
     return !!Q.claude.visto && JSON.stringify(limparCena(Q.cena)) === Q.claude.cena;
   }
 
-  /* enquanto o quadro esta aberto, olha o rascunho a cada 2 s: se o Claude gravou um desenho
-     novo e ele nao mexeu no anterior, o quadro se redesenha sozinho (conversa ao vivo) */
+  /* enquanto o quadro esta aberto, olha o rascunho: se o Claude gravou um desenho novo e ele
+     nao mexeu no anterior, o quadro se redesenha sozinho (conversa ao vivo). Sem novidade,
+     o intervalo cresce (2s -> 5s -> 15s) pra nao ficar lendo disco a troco de nada com a
+     tela vazia; volta pra 2s assim que reabrir ou quando algo novo realmente chegar. */
   function vigiarClaude() {
     clearTimeout(Q.claude.timer);
     const abertura = Q.abertura;
-    const volta = () => {
+    Q.claude.semNovidade = 0;
+    const proximoIntervalo = () => (Q.claude.semNovidade >= 15 ? 15000 : Q.claude.semNovidade >= 5 ? 5000 : 2000);
+    const volta = async () => {
       if (!Q.aberto || Q.abertura !== abertura) return;   // fechou: o vigia morre junto
-      if (!Q.gesto && !Q.editando && (cenaVazia() || desenhoDoClaudeIntocado())) recuperarRascunho();
-      Q.claude.timer = setTimeout(volta, 2000);
+      if (!Q.gesto && !Q.editando && (cenaVazia() || desenhoDoClaudeIntocado())) {
+        const trouxeNovidade = await recuperarRascunho();
+        Q.claude.semNovidade = trouxeNovidade ? 0 : Q.claude.semNovidade + 1;
+      } else {
+        Q.claude.semNovidade++;
+      }
+      Q.claude.timer = setTimeout(volta, proximoIntervalo());
     };
     Q.claude.timer = setTimeout(volta, 2000);
   }
@@ -1660,8 +1673,12 @@
     if (!Q.aberto || Q.abertura !== abertura || Q.revisao !== revisao || !(cenaVazia() || desenhoDoClaudeIntocado())) return;
     if (!r || !r.cena) return;
     const doClaude = Number(r.cena.doClaude) || 0;
+    // desenho do Claude ja visto nao volta sozinho, MESMO com a tela vazia: senao o
+    // "Limpar" (que so grava a tela vazia no disco ~2s depois) podia ser desfeito pelo
+    // proprio vigia relendo o rascunho.json antigo nesse intervalo
+    if (doClaude && doClaude === Q.claude.visto) return;
     // com o desenho do Claude na tela, so troca se o arquivo tiver um desenho NOVO dele
-    if (!cenaVazia() && (!doClaude || doClaude === Q.claude.visto)) return;
+    if (!cenaVazia() && !doClaude) return;
     /* desenho que ja foi mandado pro chat nao ressuscita: dias depois ele voltaria na tela
        e seria mandado de novo, colado no fluxo novo (o Claude receberia A+B como um so) */
     if (r.enviadoEm) return;
@@ -1679,6 +1696,7 @@
       Q.claude.cena = JSON.stringify(limparCena(Q.cena));
       toast('O Claude atualizou o desenho.', 'Começar do zero', () => limpar(true));
     } else toast('Voltei o seu último rascunho.', 'Começar do zero', () => limpar(true));
+    return true;   // trouxe algo novo pra tela: o vigia (vigiarClaude) volta a checar rapido
   }
 
   /* ---------------- exportar PNG ---------------- */

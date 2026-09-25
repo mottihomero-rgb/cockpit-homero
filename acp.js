@@ -285,12 +285,18 @@ function pastaAcp(pastaDados) { return path.join(pastaDados(), 'acp'); }
 function arquivoDaSessao(pastaDados, id) {
   return path.join(pastaAcp(pastaDados), String(id || '').replace(/[^\w.-]/g, '_') + '.jsonl');
 }
-function anotar(arquivo, obj) {
+/* R1-039: antes o catch ficava vazio e a falha de disco (cheio, sem permissao)
+   sumia calada -- o historico parecia ok na tela (emit roda antes/fora daqui)
+   mas nunca era gravado. aoFalhar e' opcional pra nao quebrar quem ja chama
+   anotar(arquivo, obj) direto (ex.: tests/teste-acp.js, tests/teste-acp-ponte.js). */
+function anotar(arquivo, obj, aoFalhar) {
   if (!arquivo) return;
   try {
     fs.mkdirSync(path.dirname(arquivo), { recursive: true });
     fs.appendFileSync(arquivo, JSON.stringify({ t: Date.now(), ...obj }) + '\n', 'utf8');
-  } catch {}
+  } catch (e) {
+    if (typeof aoFalhar === 'function') { try { aoFalhar(e); } catch {} }
+  }
 }
 function linhasDoTranscrito(bruto) {
   const meta = {};
@@ -398,6 +404,12 @@ function criarAcp(dep) {
   const responder = (st, id, result) => escrever(st, { jsonrpc: '2.0', id, result });
   const responderErro = (st, id, code, message) => escrever(st, { jsonrpc: '2.0', id, error: { code, message } });
   const pararFala = (st) => { if (st.timerFala) { clearTimeout(st.timerFala); st.timerFala = null; } st.ultimaFala = null; };
+  // R1-039: 1 aviso por sessao (nao spamar o painel a cada fala que falha gravar)
+  const avisarFalhaDeGravar = (st) => (e) => {
+    if (st.avisouErroGravar) return;
+    st.avisouErroGravar = true;
+    emit(st.paneId, 'note', { text: 'Não consegui salvar esta mensagem no Mac: ' + e.message, error: true });
+  };
 
   /* fala com freio: no maximo 10 desenhos por segundo, e o fecho sai na hora */
   function despachar(st, ev) {
@@ -406,7 +418,7 @@ function criarAcp(dep) {
       if (ev.fecha) {
         pararFala(st);
         emit(st.paneId, 'text-final', { id: ev.id, text: ev.text });
-        anotar(st.arquivo, { role: 'bot', text: ev.text });
+        anotar(st.arquivo, { role: 'bot', text: ev.text }, avisarFalhaDeGravar(st));
         return;
       }
       st.ultimaFala = { id: ev.id, text: ev.text };
@@ -417,7 +429,7 @@ function criarAcp(dep) {
       }, 100);
       return;
     }
-    if (kind === 'tool-start') anotar(st.arquivo, { role: 'tool', name: data.name, arg: data.arg });
+    if (kind === 'tool-start') anotar(st.arquivo, { role: 'tool', name: data.name, arg: data.arg }, avisarFalhaDeGravar(st));
     emit(st.paneId, kind, data);
   }
 
@@ -573,6 +585,7 @@ function criarAcp(dep) {
       sessionId: '', nova: false, caps: {}, info: {}, modos: [], modoAtual: '', modelos: [], modeloAtual: '', comandos: [],
       ferramentas: new Map(), msgId: null, acc: '', seq: 0, carregando: false, ocupado: false, cancelando: false,
       arquivo: '', timerFala: null, timerFila: null, ultimaFala: null, parandoDeProposito: false, contextoAntigo: null,
+      avisouErroGravar: false, // R1-039: um aviso de "falhou gravar" por sessao, nao um por fala
     };
     paineis.set(paneId, st);
     try {
@@ -709,7 +722,7 @@ function criarAcp(dep) {
     // cabecalho: sessao nova, ou retomada cujo arquivo sumiu (sem ele a lista
     // mostraria comando errado e pasta vazia)
     if (st.nova || !fs.existsSync(st.arquivo)) {
-      anotar(st.arquivo, { cabecalho: 1, id: st.sessionId, comando: st.comando, cwd: st.cwd, criado: Date.now(), agente: st.info.title || st.info.name || bin });
+      anotar(st.arquivo, { cabecalho: 1, id: st.sessionId, comando: st.comando, cwd: st.cwd, criado: Date.now(), agente: st.info.title || st.info.name || bin }, avisarFalhaDeGravar(st));
     }
     const retomou = !!(queria && st.sessionId === queria);
     if (queria && !retomou) {
@@ -797,7 +810,7 @@ function criarAcp(dep) {
     }
     // grava o que VOCE escreveu; o prefixo de contexto vai so' pro agente
     // (gravado, virava o titulo da conversa e um balao seu de 14 KB ao reabrir)
-    anotar(st.arquivo, { role: 'user', text: t, ...(st.contextoAntigo ? { comContexto: true } : {}) });
+    anotar(st.arquivo, { role: 'user', text: t, ...(st.contextoAntigo ? { comContexto: true } : {}) }, avisarFalhaDeGravar(st));
     if (st.contextoAntigo) { t = textoDoContextoAntigo(st.contextoAntigo) + t; st.contextoAntigo = null; }
     prompt.push({ type: 'text', text: t });
     st.ocupado = true; st.cancelando = false; st.ferramentas.clear(); st.msgId = null; st.acc = '';

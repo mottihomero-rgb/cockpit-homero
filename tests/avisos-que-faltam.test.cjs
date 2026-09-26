@@ -87,59 +87,9 @@ function montarRotinas() {
   return ctx;
 }
 
-test('o icone de Rotinas ganha o numero de robos DELE que pararam', () => {
-  const c = montarRotinas();
-  c.pintar([{ nome: 'com.homero.espelho', dele: true, falhou: true },
-    { nome: 'com.homero.radar', dele: true, falhou: false },
-    { nome: 'com.apple.qualquer', dele: false, falhou: true }]);
-  assert.equal(c.selo.textContent, '1', 'robo do sistema nao conta, e o que esta em dia tambem nao');
-  assert.equal(c.selo.escondido, false);
-  assert.equal(c.botao.title, 'Rotinas · 1 parada');
 
-  c.pintar([{ nome: 'com.homero.espelho', dele: true, falhou: false }]);
-  assert.equal(c.selo.escondido, true, 'robo voltou: o selo some');
-  assert.ok(!/·/.test(c.botao.title), 'sem falha o titulo volta ao normal');
-});
 
-test('so a falha NOVA vira tarja; a primeira leitura nunca vira parede de tarjas', () => {
-  const c = montarRotinas();
-  // 1a leitura do app: ja tem duas paradas, mas isso e passado — nao avisa nada
-  c.pintar([{ nome: 'com.homero.a', dele: true, falhou: true },
-    { nome: 'com.homero.b', dele: true, falhou: true }]);
-  assert.equal(c.avisos.length, 0, 'abrir o Cockpit nao pode virar parede de tarja velha');
 
-  // 2a leitura, mesma situacao: nada de novo
-  c.pintar([{ nome: 'com.homero.a', dele: true, falhou: true },
-    { nome: 'com.homero.b', dele: true, falhou: true }]);
-  assert.equal(c.avisos.length, 0, 'falha repetida nao repete tarja');
-
-  // agora um robo NOVO caiu
-  c.pintar([{ nome: 'com.homero.a', dele: true, falhou: true },
-    { nome: 'com.homero.b', dele: true, falhou: true },
-    { nome: 'com.adsure.wa', dele: true, falhou: true }]);
-  assert.equal(c.avisos.length, 1);
-  assert.equal(c.avisos[0].texto, 'Rotina parada · wa', 'so rotulo e nome, sem o prefixo comum');
-  assert.equal(c.avisos[0].acao, 'ver');
-});
-
-test('leitura que nao trouxe lista nenhuma nao mexe no que ja foi visto', () => {
-  const c = montarRotinas();
-  c.pintar([]);                       // launchd nao respondeu ainda
-  assert.equal(c.selo.escondido, true);
-  c.pintar([{ nome: 'com.homero.a', dele: true, falhou: true }]);
-  assert.equal(c.avisos.length, 0, 'a 1a lista boa e o ponto de partida, nao um alarme');
-  assert.equal(c.selo.textContent, '1', 'mas o selo aparece na hora');
-});
-
-test('o Mac e lido de 5 em 5 minutos mesmo com a coluna de Rotinas fechada', () => {
-  assert.ok(/if \(!rotinasVisivel\(\)\) pintarRotinas\(true\);\s*\}, 300000\)/.test(app),
-    'sem esta leitura de fundo o selo so existiria para quem ja abriu a coluna');
-  // o selo tem de ser pintado ANTES do return que corta a coluna fechada
-  const f = pegar('pintarRotinas');
-  const iSelo = f.indexOf('pintarSeloRotinas()');
-  const iSai = f.indexOf('if (!rotinasVisivel()) return;');
-  assert.ok(iSelo > 0 && iSai > iSelo, 'o selo tem de ser pintado antes de a funcao desistir');
-});
 
 /* ---------- 3. motor que nao esta instalado neste Mac ---------- */
 function montarMotores() {
@@ -233,7 +183,6 @@ test('a tarja de alarme dos 90% continua como era', () => {
 
 /* ---------- o molde da tela e as tres cores ---------- */
 test('a tela do Mac tem o selo do icone e o numero do plano', () => {
-  assert.ok(/data-view="rotinas"[\s\S]{0,300}act-selo/.test(html), 'o selo tem de morar no botao de Rotinas');
   assert.ok(/<span class="p-limite"><\/span>\s*\n\s*<button class="p-model"/.test(html),
     'o numero do plano fica ao lado do botao do modelo');
 });

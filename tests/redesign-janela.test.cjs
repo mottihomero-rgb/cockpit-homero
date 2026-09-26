@@ -109,7 +109,6 @@ test('tarja de chat esperando usa o sinal de espera; rotina parada é erro', () 
   const app = ler('renderer/app.js');
   assert.match(app, /id, tipo: 'espera', fixo: true, acao: 'ir'/);
   assert.match(app, /\{ espera: e\.txt \}/);
-  assert.match(app, /mostrarAviso\(\{ id: 'rotina-' \+ t\.nome, tipo: 'erro', fixo: true, acao: 'ver'/);
   // o triângulo é de alerta/erro; espera é o círculo com "!" desenhado no CSS
   assert.match(app, /function icoDoAviso\(tipo\) \{ return tipo === 'espera' \? ''/);
   assert.match(css, /\.fx-espera \.fx-ic::before\{content:"!"[^}]*background:var\(--status-wait\)/);

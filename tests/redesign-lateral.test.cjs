@@ -127,12 +127,6 @@ test('toggle verde, cartão fill-4 com raio 10, e nada de caixa alta espaçada',
 });
 
 test('rotina com ▶ de 26 e torre com o logo da IA e o sinal de estado', () => {
-  const rot = pegar('linhaDaRotina');
-  assert.match(rot, /bt\.innerHTML = ico\('play'\)/);
-  assert.match(rot, /bt\.setAttribute\('aria-label', 'Disparar agora'\)/);
-  assert.doesNotMatch(rot, /textContent = 'disparar'/, 'a palavra "disparar" virou o ▶');
-  assert.match(rot, /ico\('warn'\)/, 'a que parou ganha o triângulo');
-  assert.doesNotMatch(pegar('dispararRotina'), /textContent = 'disparando…'/);
   const torre = pegar('linhaDaTorre');
   assert.match(torre, /svgMotor\(engine\)/, 'logo oficial da IA');
   assert.match(torre, /' rd-anel' : estado\.cls === 'espera' \? ' rd-espera'/, 'anel = trabalhando, "!" = esperando você');
@@ -156,16 +150,6 @@ test('torre e rotinas sem linha de resumo e com as palavras curtas do desenho', 
   assert.match(lt, /estado\.cls === 'espera' \? 'esperando você'/);
   assert.match(lt, /'parado, motor ligado' \? 'pronto'/);
   assert.match(lt, /' rd-nova'/, 'resposta nova = ponto azul');
-  const rot = pegar('linhaDaRotina');
-  assert.match(rot, /'parou: ' \+ \(t\.motivo/);
-  assert.match(rot, /'rodou bem'/);
-  assert.match(rot, /'última '/);
-  assert.doesNotMatch(rot, /parou de funcionar' \+ \(ultima/, 'o horário saiu da linha vermelha');
-  const pr = pegar('pintarRotinas');
-  assert.match(pr, /\$\('#rotConta'\)/, 'a contagem vai para o cabeçalho');
-  assert.match(pr, /if \(falhas\.length\) box\.appendChild\(grupoDeRotinas\('As outras suas'/, 'sem parada não há cabeçalho "Em dia"');
-  for (const pagina of ['renderer/index.html', 'renderer/index-web.html'])
-    assert.match(ler(pagina), /<span class="sh-conta" id="rotConta"><\/span><button class="mini" id="btnRotinasAtualizar"/);
   const c = semComentario(css);
   // o ▶ desativado é o do botão normal da folha do Sistema (label-4 sobre fill-4 sumia no claro)
   assert.match(c, /\.ri-acao:disabled,\.ri-acao:disabled:hover\{opacity:1;background:var\(--fill-3\);color:var\(--label-3\)/);

@@ -7,4 +7,322 @@
    Seletores de hoje: .exec*, .think*, .tool*, .dif*, .dl, .tar*, .trab*.
    Carrega DEPOIS do style.css e do quadro.css (e do celular.css no iPhone): ganha deles sem
    !important. Usar os tokens (../cockpit-tokens.css) e as peças rd- do base.css.
+   Medidas: "Cockpit Janela.dc.html", telas 03, 08, 09, 10 e E1 (estilo inline de cada bloco) e a
+   folha "Passo do trabalho: fechado · aberto · com erro" do "Cockpit Sistema.dc.html".
+   A coluna de leitura (700 de largura, centrada, 22 entre um bloco e outro) é da conversa
+   (.pane-chat), não daqui: os blocos desta área não têm margem nem recuo lateral próprios.
    ============================================================================ */
+
+/* ---------- os blocos desta área na conversa ----------
+   O style.css e o celular.css davam a cada um o recuo antigo de 18 (12 no iPhone) e um pé de
+   8–14: a coluna agora é da conversa, e o espaço entre blocos também. */
+.exec,.think,.trab,.equipe{padding:0}
+
+/* ---------- abrir e fechar (passo, grupo, pensamento) ----------
+   200ms, cubic-bezier(.45,0,.25,1), altura + opacidade (README, "Movimento"). O Chromium do
+   Electron anima height até auto com interpolate-size, e o display entra na transição com
+   allow-discrete: fechado continua display:none (fora da leitura de tela e do ⌘F). */
+.exec-card,.exec-bd,.think-in{interpolate-size:allow-keywords;overflow:clip;
+  transition:height var(--dur-base) var(--ease-in-out),opacity var(--dur-base) var(--ease-in-out),
+    display var(--dur-base) allow-discrete}
+
+/* ---------- disclosure: "Executou 5 comandos 38s" e "Pensou por 6s" ----------
+   Chevron de 12 em --label-3 ANTES do rótulo (gap 4), rótulo 13/16 em --label-2, tempo em
+   --label-3 tabular a 4 do rótulo. Linha de 20. Hover acende o rótulo, sem fundo. */
+.exec{display:flex;flex-direction:column;align-items:stretch;gap:6px}
+.exec-hd,.think-hd{display:inline-flex;align-items:center;gap:4px;align-self:flex-start;max-width:100%;
+  height:20px;padding:0;border:0;border-radius:4px;background:transparent;
+  font:400 13px/16px var(--font-sans);color:var(--label-2);text-align:left;cursor:pointer;user-select:none;
+  animation:none;transition:color var(--dur-fast) ease-out}
+.exec-hd:hover,.think-hd:hover{color:var(--label-1)}
+.exec-hd:focus-visible,.think-hd:focus-visible{outline:none;box-shadow:var(--anel-foco)}
+.exec-nm2{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.exec-tempo{flex:none;margin-left:4px;color:var(--label-3);font-variant-numeric:tabular-nums}
+.exec-tempo:empty{display:none}
+/* o chevron de 12: fechado aponta para a direita, aberto para baixo (gira 90°, no mesmo tempo) */
+.exec-cv,.think-cv{flex:none;display:flex;color:var(--label-3);opacity:1;
+  transition:transform var(--dur-base) var(--ease-in-out)}
+.exec-cv .ic,.think-cv .ic{width:12px;height:12px}
+.exec.aberto>.exec-hd .exec-cv,.exec-it.aberto>.exec-t .exec-cv,.think.aberto .think-cv{transform:rotate(90deg)}
+
+/* aberto: os passos recuados 6, com a guia de 1pt e 12 de respiro; 10 entre um passo e outro.
+   Sem cartão em volta (o design tirou a moldura e as linhas entre os passos). */
+.exec-card{display:none;flex-direction:column;gap:10px;width:auto;margin:0 0 0 6px;padding:2px 0 2px 12px;
+  border:0;border-left:1px solid var(--separator-strong);border-radius:0;box-shadow:none;opacity:0;height:0}
+.exec.aberto>.exec-card{display:flex;opacity:1;height:auto}
+@starting-style{.exec.aberto>.exec-card{opacity:0;height:0}}
+.exec-card>.exec-it{padding:0}
+.exec-card>.exec-it+.exec-it{border-top:0}
+
+/* ---------- um passo: verbo + objeto (mono) + chevron ---------- */
+.exec-it{display:flex;flex-direction:column;gap:6px;min-width:0}
+.exec-t{display:flex;align-items:center;gap:6px;align-self:stretch;min-width:0;max-width:100%;height:20px;
+  font:400 13px/16px var(--font-sans);color:var(--label-2);cursor:pointer;user-select:none}
+/* o .exec-nm só agrupa verbo e objeto para a cópia (⌘A ⌘C): na tela os dois são itens da linha */
+.exec-nm{display:contents;user-select:text}
+.exec-verbo{flex:none;white-space:nowrap;color:var(--label-2);transition:color var(--dur-fast) ease-out}
+.exec-t:hover .exec-verbo{color:var(--label-1)}
+.exec-obj{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font:400 12px/16px var(--font-mono);color:var(--label-1)}
+.exec-obj:empty{display:none}
+/* edição: "+1 −1" em mono 11 ao lado do arquivo, cada número na cor do diff */
+.exec-cnt{flex:none;font:400 11px/16px var(--font-mono);white-space:nowrap}
+.exec-cnt b{font-weight:400}
+.exec-cnt .v{color:var(--diff-add-fg)}
+.exec-cnt .r{color:var(--diff-del-fg);margin-left:0}
+/* passo com erro: triângulo + verbo em --status-error (forma + cor); o objeto fica em --label-1 */
+.exec-erro-ic{flex:none;display:flex;color:var(--status-error)}
+.exec-erro-ic .ic{width:12px;height:12px}
+.exec-it.erro .exec-nm{color:inherit}
+.exec-it.erro .exec-verbo{color:var(--status-error)}
+
+/* ---------- aberto: o bloco "$ comando" e, depois de um separador, a saída ----------
+   --code-bg, raio 8, contorno de 1pt por dentro, padding 8 10, SF Mono 12/18. */
+.exec-bd{display:none;flex-direction:column;gap:0;min-width:0;padding:8px 10px;border-radius:8px;
+  background:var(--code-bg);box-shadow:inset 0 0 0 1px var(--separator);
+  font:400 12px/18px var(--font-mono);color:var(--label-1);opacity:0;height:0}
+.exec-it.aberto>.exec-bd{display:flex;opacity:1;height:auto}
+@starting-style{.exec-it.aberto>.exec-bd{opacity:0;height:0}}
+/* o comando: "$" em --label-3 e o texto. Comando comprido quebra a linha em vez de sumir
+   atrás de reticências (é o comando que rodou de verdade no Mac dele). */
+.exec-cmd{display:flex;gap:1px;min-width:0;padding:0;border-radius:0;background:transparent;box-shadow:none;
+  font:inherit;color:var(--label-1);white-space:pre-wrap;overflow-wrap:anywhere;overflow:visible}
+.exec-cifr{flex:none;color:var(--label-3);user-select:none}
+.exec-arg{min-width:0}
+.exec-out{margin-top:6px;padding-top:6px;border-top:1px solid var(--separator);max-height:400px;overflow-y:auto;
+  font:inherit;color:var(--label-2);white-space:pre-wrap;overflow-wrap:anywhere;user-select:text}
+.exec-out:empty{display:none}
+.exec-it.erro .exec-out{color:var(--status-error)}
+
+/* edição: o passo aberto é o próprio diff (sem "$ index.html" em cima nem caixa em volta).
+   Se a edição deu erro, a saída de texto toma o lugar do diff e a caixa de código volta. */
+.exec-it.tem-dif:not(.erro) .exec-cmd,.exec-it.tem-tar .exec-cmd{display:none}
+.exec-it.tem-dif:not(.erro)>.exec-bd,.exec-it.tem-tar>.exec-bd{padding:0;border-radius:0;background:transparent;box-shadow:none}
+.exec-it.tem-dif:not(.erro) .exec-out,.exec-it.tem-tar .exec-out{margin:0;padding:0;border:0;max-height:none;
+  overflow:visible;white-space:normal}
+.exec-it.tem-dif:not(.erro) .exec-out{overflow:clip}
+
+/* prints que o agente tirou no passo: miniatura de raio 10 com o contorno de 1pt por cima */
+.pa-imgs{display:flex;flex-wrap:wrap;gap:6px;margin:0}
+.pa-img{max-width:min(220px,100%);max-height:132px;border:0;border-radius:10px;
+  outline:1px solid var(--separator);outline-offset:-1px;cursor:zoom-in}
+.pa-img:hover{outline-color:var(--separator-strong)}
+
+/* ---------- diff (o passo de edição e a janela "ver mudanças") ----------
+   --code-bg, raio 8, contorno de 1pt. Cabeçalho de 30: arquivo em mono 12 + "abrir" de 22.
+   Linhas de 20 em mono 12: número (34, --label-3, tabular) + sinal (14) + texto. O fundo só
+   tinge (--diff-*-bg); o texto das linhas mudadas fica em --label-1, o contexto em --label-2. */
+.dif{margin:0;border:0;border-radius:8px;overflow:hidden;background:var(--code-bg);
+  box-shadow:inset 0 0 0 1px var(--separator);font:400 12px/20px var(--font-mono);color:var(--label-1)}
+.dif-hd{box-sizing:content-box;height:30px;display:flex;align-items:center;gap:8px;padding:0 6px 0 10px;
+  background:transparent;border-bottom:1px solid var(--separator);cursor:pointer;font-family:var(--font-sans)}
+.dif.fechado .dif-hd{border-bottom:0}
+.dif-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font:400 12px/16px var(--font-mono);color:var(--label-1)}
+.dif-cnt{flex:none;font:400 11px/16px var(--font-mono);letter-spacing:0}
+.dif-cnt b{font-weight:400}
+.dif-cnt .v{color:var(--diff-add-fg)}
+.dif-cnt .r{color:var(--diff-del-fg);margin-left:0}
+/* dentro do passo a contagem já está na linha do verbo: no cartão fica só o arquivo e o abrir */
+.exec-it .dif-cnt{display:none}
+.dif-abrir{flex:none;width:22px;height:22px;display:grid;place-items:center;padding:0;border:0;border-radius:6px;
+  background:transparent;color:var(--label-2);cursor:pointer;
+  transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
+.dif-abrir:hover{background:var(--fill-3);color:var(--label-1)}
+.dif-abrir:active{background:var(--fill-2)}
+.dif-abrir:focus-visible{outline:none;box-shadow:var(--anel-foco)}
+.dif-abrir .ic{width:12px;height:12px}
+/* linha comprida não some atrás de reticências: o pedaço rola de lado e a faixa de cor vai
+   junto até o fim da linha (min-width:100% + max-content) */
+.dif-bloco{padding:4px 0;border-top:1px solid var(--separator);overflow-x:auto}
+.dif-bloco:first-of-type,.dif-hd+.dif-bloco{border-top:0}
+.dl{display:flex;width:max-content;min-width:100%;box-sizing:border-box;min-height:20px;padding:0;
+  font:400 12px/20px var(--font-mono);color:var(--label-1);white-space:pre;word-break:normal}
+.dl-n{flex:none;box-sizing:content-box;width:34px;padding-right:8px;text-align:right;
+  color:var(--label-3);font-variant-numeric:tabular-nums;user-select:none}
+.dif.sem-num .dl-n{width:10px;padding:0}
+.dl-s{flex:none;width:14px;user-select:none}
+.dl-x{padding-right:10px}
+.dl.igual{color:var(--label-2)}
+.dl.mais{background:var(--diff-add-bg);color:var(--label-1)}
+.dl.menos{background:var(--diff-del-bg);color:var(--label-1)}
+.dl.mais .dl-s{color:var(--diff-add-fg)}
+.dl.menos .dl-s{color:var(--diff-del-fg)}
+/* linha sem colunas: o "⋯ 3 linhas sem mudança" e o diff agregado que o Codex manda pronto */
+.dl:not(:has(.dl-n)){padding:0 10px}
+.dl.pula{color:var(--label-3);background:var(--fill-4);font-size:11px}
+.dif-git{padding:4px 0;max-height:60vh;overflow:auto}
+.dif-git .dl.mais{color:var(--diff-add-fg)}
+.dif-git .dl.menos{color:var(--diff-del-fg)}
+/* desfazer: botão small normal (24, fill-2, raio 6) */
+.dif-desfaz{display:inline-flex;align-items:center;height:24px;margin:6px 10px 4px;padding:0 10px;border:0;border-radius:6px;
+  background:var(--fill-2);color:var(--label-1);font:500 12px/15px var(--font-sans);cursor:pointer;
+  transition:background-color var(--dur-fast) ease-out}
+.dif-desfaz:hover{background:var(--fill-1)}
+.dif-desfaz:active{background:var(--separator-strong)}
+.dif-desfaz:disabled{background:var(--fill-3);color:var(--label-3);cursor:default}
+.dif-desfaz:focus-visible{outline:none;box-shadow:var(--anel-foco)}
+.dif-desfaz.feito{border:0;color:var(--status-ok)}
+.dif-desfaz.falhou{border:0;color:var(--status-error)}
+
+/* ---------- lista de tarefas (o passo "Organizando as tarefas 3 de 4", aberto) ----------
+   Igual ao plano do design: itens de 20 em 12px. Feito: check em --label-3, SEM risco.
+   Em andamento: anel, --label-1. Pendente: círculo vazio em --label-4. */
+.tar{display:flex;flex-direction:column;padding:0}
+.tar-l{display:flex;align-items:center;gap:8px;min-height:20px;padding:0;
+  font:400 12px/16px var(--font-sans);color:var(--label-2)}
+.tar-ic{flex:none;width:12px;height:12px;margin:0;display:grid;place-items:center}
+.tar-ic .ic{width:12px;height:12px}
+.tar-l.ok{color:var(--label-3)}
+.tar-l.ok .tar-t{text-decoration:none}
+.tar-l.ok .tar-ic{color:var(--label-3)}
+.tar-l.agora{color:var(--label-1);font-weight:400}
+.tar-l.agora .tar-ic .ic{display:none}
+.tar-l.agora .tar-ic::before{content:"";box-sizing:border-box;width:10px;height:10px;border-radius:50%;
+  border:1.5px solid var(--fill-1);border-top-color:var(--label-1);border-right-color:var(--label-1)}
+.tar-l.espera .tar-ic::before{content:"";box-sizing:border-box;width:10px;height:10px;border-radius:50%;
+  border:1.2px solid var(--label-4)}
+
+/* ---------- pensamento: "Pensou por 6s" ----------
+   Aberto, o texto dele recuado 6 com a guia de 1pt e 12 de respiro, 13/20 em --label-2.
+   (Era itálico, 12px, guia de 2pt e caixa de 150 de altura com rolagem.) */
+.think{display:flex;flex-direction:column;gap:6px}
+.think-in{display:none;max-height:none;margin:0 0 0 6px;padding:0 0 0 12px;
+  border:0;border-left:1px solid var(--separator-strong);
+  font:400 13px/20px var(--font-sans);font-style:normal;color:var(--label-2);
+  white-space:pre-wrap;overflow-wrap:anywhere;text-wrap:pretty;user-select:text;opacity:0;height:0}
+.think.aberto .think-in{display:block;opacity:1;height:auto}
+@starting-style{.think.aberto .think-in{opacity:0;height:0}}
+
+/* ---------- trabalhando: anel de 12 + verbo + objeto em mono + tempo tabular ----------
+   "Lendo index.html 22s", "Escrevendo 4s". O anel é o .rd-anel do base.css (1 volta/s,
+   parado em Reduzir movimento, o tempo continua contando). Gap de 8, linha de 20. */
+.trab{display:flex;align-items:center;gap:8px;height:20px;min-width:0;
+  font:400 13px/16px var(--font-sans);color:var(--label-2)}
+.trab-anel{flex:none}
+.trab-txt{flex:none;min-width:0;overflow:visible;white-space:nowrap;color:var(--label-2)}
+.trab-obj{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font:400 12px/16px var(--font-mono);color:var(--label-1)}
+.trab-tempo{flex:none;color:var(--label-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+/* ---------- time de agentes na conversa ----------
+   Cartão com contorno de 1pt e raio 10. Cabeçalho de 30 (ícone de 14 + "Time de agentes" 600
+   + "2 de 3" tabular, 12px em --label-2); linhas de 40: sinal + nome (500) + "o que faz · em
+   que" (11, --label-2, o "em que" em mono) + tempo (11, --label-3, tabular). O clique abre o
+   painel grande do time. */
+.equipe{display:flex;flex-direction:column;border-radius:10px;box-shadow:inset 0 0 0 1px var(--separator);
+  overflow:hidden;font:400 13px/16px var(--font-sans);color:var(--label-1);cursor:pointer;
+  transition:background-color var(--dur-fast) ease-out}
+.equipe:hover{background:var(--fill-4)}
+.equipe:focus-visible{outline:none;box-shadow:inset 0 0 0 1px var(--separator),var(--anel-foco)}
+.equipe-hd{box-sizing:border-box;height:30px;display:flex;align-items:center;gap:6px;padding:0 10px;
+  border-bottom:1px solid var(--separator);font-size:12px;color:var(--label-2)}
+.equipe-ic{display:flex}
+.equipe-ic .ic{width:14px;height:14px}
+.equipe-tit{font-weight:600}
+.equipe-gap{flex:1}
+.equipe-conta{font-variant-numeric:tabular-nums}
+.equipe-l{box-sizing:border-box;display:flex;align-items:center;gap:8px;min-height:40px;padding:4px 10px}
+.equipe-l+.equipe-l{border-top:1px solid var(--separator)}
+.equipe-sinal{flex:none;display:flex;align-items:center;justify-content:center;width:12px;height:12px;color:var(--label-2)}
+.equipe-sinal .rd-anel{width:10px;height:10px}
+.equipe-sinal .ic{width:12px;height:12px}
+.equipe-l.erro .equipe-sinal{color:var(--status-error)}
+.equipe-l.espera .equipe-sinal::before{content:"";box-sizing:border-box;width:10px;height:10px;border-radius:50%;
+  border:1.2px solid var(--label-4)}
+.equipe-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.equipe-nome{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.equipe-fase{font:400 11px/14px var(--font-sans);color:var(--label-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.equipe-l.erro .equipe-faz{color:var(--status-error)}
+.equipe-em{font-family:var(--font-mono)}
+.equipe-em::before{content:" · ";font-family:var(--font-sans)}
+.equipe-tempo{flex:none;font-size:11px;color:var(--label-3);font-variant-numeric:tabular-nums}
+.equipe-tempo:empty{display:none}
+.equipe-mais{box-sizing:border-box;height:28px;display:flex;align-items:center;padding:0 10px;
+  border-top:1px solid var(--separator);font-size:11px;color:var(--label-3)}
+
+/* modo foco some com o que a IA fez (o style.css ja tira passos e pensamento): o cartão do time vai junto */
+body.foco .equipe{display:none}
+
+/* ---------- o painel grande do time de agentes (#agPainel) ----------
+   Mesma linguagem do resto: fundo --bg-elevated com raio 16 sobre o --scrim, barra de 44,
+   cartões --fill-4 com contorno de 1pt e raio 10, o sinal de estado do design (anel girando
+   trabalhando, check pronto, triângulo com erro, círculo vazio na fila) e nada de CAIXA ALTA
+   com letra espaçada. A cor do motor não entra: as linhas do fluxo são neutras.
+   :where(#agPainel) deixa estas regras com o peso de uma classe só: o sheets.css (dono das
+   janelas grandes) carrega depois e ganha se também desenhar este painel. */
+#agPainel{background:var(--scrim);-webkit-backdrop-filter:none;backdrop-filter:none}
+:where(#agPainel) .ag-cx{background:var(--bg-elevated);border:0;border-radius:16px;box-shadow:var(--shadow-float)}
+:where(#agPainel) .ag-top{height:44px;box-sizing:border-box;padding:0 8px 0 16px;gap:8px;
+  background:transparent;border-bottom:1px solid var(--separator)}
+:where(#agPainel) .ag-tit{font:var(--f-title3);letter-spacing:0;color:var(--label-1)}
+:where(#agPainel) .ag-sub{font:var(--f-sub);color:var(--label-3)}
+:where(#agPainel) .ag-conta{font:var(--f-sub);color:var(--label-2);font-variant-numeric:tabular-nums}
+:where(#agPainel) .ag-x{width:26px;height:26px;border-radius:6px;color:var(--label-2);
+  transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
+:where(#agPainel) .ag-x:hover{background:var(--fill-3);color:var(--label-1)}
+:where(#agPainel) .ag-x:active{background:var(--fill-2)}
+:where(#agPainel) .ag-x .ic{width:14px;height:14px}
+:where(#agPainel) .ag-corpo{background:transparent;padding:24px 20px 32px}
+/* rótulos: 11px normais em --label-3, no lugar da caixa alta espaçada */
+:where(#agPainel) :is(.ag-no-rot,.ag-bloco-rot,.ag-fase-rot){font:400 11px/14px var(--font-sans);
+  text-transform:none;letter-spacing:0;color:var(--label-3)}
+:where(#agPainel) .ag-no{background:var(--fill-4);border:0;box-shadow:inset 0 0 0 1px var(--separator);border-radius:10px;padding:8px 14px}
+:where(#agPainel) .ag-no-txt{font:var(--f-body);color:var(--label-1)}
+:where(#agPainel) .ag-inicio{box-shadow:inset 0 0 0 1px var(--separator-strong)}
+:where(#agPainel) .ag-fim.ok{box-shadow:inset 0 0 0 1px var(--separator)}
+:where(#agPainel) .ag-fim.ok .ag-no-rot{color:var(--status-ok)}
+:where(#agPainel) .ag-fim.esperando{box-shadow:inset 0 0 0 1px var(--separator)}
+:where(#agPainel) :is(.ag-liga,.ag-tronco){width:1px;border-radius:0;background:var(--separator-strong);opacity:1;animation:none}
+:where(#agPainel) .ag-liga.feita,:where(#agPainel) .ag-liga.viva,:where(#agPainel) .ag-grupo.rodando .ag-tronco{background:var(--label-3)}
+:where(#agPainel) .ag-perna{width:1px;background:var(--separator-strong)}
+:where(#agPainel) .ag-cards.varios .ag-col::after{height:1px;background:var(--separator-strong);left:-8px;right:-8px}
+/* o traço de cima atravessa o vão de 16 entre os cartões (antes ficava cortado entre um e outro) */
+:where(#agPainel) .ag-cards.varios .ag-col:first-child::after{left:50%}
+:where(#agPainel) .ag-cards.varios .ag-col:last-child::after{right:50%}
+:where(#agPainel) .ag-grupo.rodando .ag-perna,:where(#agPainel) .ag-grupo.rodando .ag-cards.varios .ag-col::after{background:var(--label-3)}
+:where(#agPainel) .ag-titulo-bloco{background:var(--fill-3);border:0;border-radius:var(--r-capsule);padding:4px 12px}
+:where(#agPainel) .ag-bloco-nome{font:var(--f-headline);color:var(--label-1)}
+:where(#agPainel) :is(.ag-fase,.ag-fase-futura){background:var(--fill-4);border:0;box-shadow:inset 0 0 0 1px var(--separator);
+  border-radius:8px;padding:6px 12px;gap:8px}
+:where(#agPainel) .ag-fase-futura{opacity:1;box-shadow:inset 0 0 0 1px var(--separator)}
+:where(#agPainel) .ag-fase-futura :is(.ag-fase-tit,.ag-fase-cont){color:var(--label-3)}
+:where(#agPainel) .ag-grupo.rodando .ag-fase{background:var(--fill-3);box-shadow:inset 0 0 0 1px var(--separator-strong)}
+:where(#agPainel) .ag-grupo.pronto .ag-fase{box-shadow:inset 0 0 0 1px var(--separator)}
+:where(#agPainel) .ag-fase-tit{font:var(--f-headline);color:var(--label-1)}
+:where(#agPainel) .ag-fase-cont{font:var(--f-sub);color:var(--label-2);font-variant-numeric:tabular-nums}
+:where(#agPainel) .ag-card{background:var(--fill-4);border:0;box-shadow:inset 0 0 0 1px var(--separator);
+  border-radius:10px;padding:10px 12px;transition:none}
+:where(#agPainel) .ag-card-top{align-items:center;gap:8px;margin-bottom:4px}
+:where(#agPainel) .ag-card-top .ag-bola{margin-top:0}
+:where(#agPainel) .ag-nome{font:500 13px/16px var(--font-sans);color:var(--label-1)}
+:where(#agPainel) .ag-fazendo{font:var(--f-sub);color:var(--label-2);margin-bottom:2px}
+:where(#agPainel) .ag-detalhe{font:400 11px/14px var(--font-mono);color:var(--label-2);margin-bottom:4px}
+:where(#agPainel) .ag-pe{font:var(--f-sub);letter-spacing:0;color:var(--label-3);font-variant-numeric:tabular-nums}
+/* o sinal de cada agente: o mesmo do resto do app, nunca só uma bolinha colorida */
+:where(#agPainel) .ag-bola{box-sizing:border-box;width:12px;height:12px;border-radius:50%;background:transparent;
+  border:1.2px solid var(--label-4);animation:none;box-shadow:none}
+:where(#agPainel) .ag-card.agora{background:var(--fill-3);box-shadow:inset 0 0 0 1px var(--separator-strong)}
+:where(#agPainel) .ag-card.agora .ag-bola{background:transparent;border:1.5px solid var(--fill-1);border-top-color:var(--label-1);
+  border-right-color:var(--label-1);animation:ck-spin 1s linear infinite}
+:where(#agPainel) .ag-card.agora .ag-fazendo{color:var(--label-1);font-weight:400}
+:where(#agPainel) :is(.ag-card.pronto,.ag-card.erro) .ag-bola{border:0;border-radius:0;
+  -webkit-mask:var(--ag-glifo) center/12px 12px no-repeat;mask:var(--ag-glifo) center/12px 12px no-repeat}
+:where(#agPainel) .ag-card.pronto{box-shadow:inset 0 0 0 1px var(--separator)}
+:where(#agPainel) .ag-card.pronto .ag-bola{background:var(--label-2);
+  --ag-glifo:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='%23000' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+:where(#agPainel) .ag-card.erro{box-shadow:inset 0 0 0 1px var(--separator)}
+:where(#agPainel) .ag-card.erro .ag-bola{background:var(--status-error);
+  --ag-glifo:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cg fill='none' stroke='%23000' stroke-width='1.4' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M8 2.5l6 10.5H2z'/%3E%3Cpath d='M8 6.5v3'/%3E%3C/g%3E%3Ccircle cx='8' cy='11.2' r='.75' fill='%23000'/%3E%3C/svg%3E")}
+:where(#agPainel) .ag-card.erro .ag-fazendo{color:var(--status-error)}
+:where(#agPainel) .ag-card.espera{border-style:none;opacity:1}
+:where(#agPainel) .ag-card.espera :is(.ag-nome,.ag-fazendo){color:var(--label-3)}
+:where(#agPainel) .ag-vazio-tit{font:var(--f-title3);color:var(--label-1)}
+:where(#agPainel) .ag-vazio-txt{font:var(--f-body);color:var(--label-2)}
+
+/* ---------- Reduzir movimento ----------
+   Abrir e fechar vira instantâneo e o chevron só troca de posição; o anel já para no base.css. */
+@media (prefers-reduced-motion: reduce){
+  .exec-card,.exec-bd,.think-in,.exec-cv,.think-cv,.exec-hd,.think-hd,.exec-verbo,.equipe{transition:none}
+  :where(#agPainel) .ag-card.agora .ag-bola{animation:none}
+}

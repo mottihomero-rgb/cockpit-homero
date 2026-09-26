@@ -1809,25 +1809,31 @@ function fraseCrua(nome, a, curto) {
     case 'Read': return { txt: 'Lendo', det: soNome(a) };
     case 'Write': return { txt: 'Criando', det: soNome(a) };
     case 'Edit': case 'Editando arquivo': return { txt: 'Editando', det: soNome(a) };
-    case 'Grep': case 'Buscando no código': return { txt: 'Buscando no código', det: curto };
+    case 'Grep': case 'Buscando no código': return { txt: 'Buscando', det: curto };   // "Buscando checkout" (o objeto ja diz o que)
     case 'Glob': case 'Procurando arquivos': return { txt: 'Procurando arquivos', det: curto };
     case 'WebSearch': case 'Pesquisando na web': return { txt: 'Pesquisando na web', det: curto };
     case 'WebFetch': case 'Abrindo link': return { txt: 'Abrindo a página', det: curto };
     case 'Task': case 'Agente': return { txt: 'Agente', det: curto };
-    case 'TodoWrite': case 'Lista de tarefas': return { txt: 'Organizando as tarefas', det: '' };
+    case 'TodoWrite': case 'Lista de tarefas': return { txt: 'Organizando tarefas', det: '' };
     case 'Skill': return { txt: 'Usando a skill', det: curto };
     default: return { txt: toolLabel(nome), det: curto };
   }
 }
 
-/* ---- execucao: cartao de comandos, no layout do Claude Code na web ---- */
+/* ---- execucao: cartao de comandos, no layout do Claude Code na web ----
+   Redesenho de 26/09 (handoff do Claude Design, "Pensamento e grupo de passos"): o grupo e um
+   disclosure — chevron de 12 ANTES do rotulo, "Executou 5 comandos" e o tempo que os comandos
+   levaram. Aberto, os passos ficam recuados com uma guia de 1pt, sem cartao em volta. Cada
+   passo e verbo + objeto (o objeto em mono) + chevron; o erro ganha o triangulo na frente. */
 function grupoExec(P) {
   let g = P.execEl;
   if (!g || !g.isConnected) {
     g = document.createElement('div');
     g.className = 'exec';
-    g.innerHTML = '<button type="button" class="exec-hd" aria-expanded="false" title="Clique para ver os comandos"><span class="exec-nm2"></span>'
-      + '<span class="exec-cv">' + ico('chevron-right') + '</span></button>'
+    g.dataset.t0 = String(Date.now());          // de quando conta o "38s" do cabecalho
+    g.innerHTML = '<button type="button" class="exec-hd" aria-expanded="false" title="Clique para ver os comandos">'
+      + '<span class="exec-cv">' + ico('chevron-right') + '</span><span class="exec-nm2"></span>'
+      + '<span class="exec-tempo"></span></button>'
       + '<div class="exec-card"></div>';
     $('.exec-hd', g).addEventListener('click', () => {
       const aberto = g.classList.toggle('aberto');
@@ -1841,12 +1847,28 @@ function grupoExec(P) {
   return g;
 }
 
+// "38s", "1m 02s", "2m" (o jeito do design). Serve ao cabecalho do grupo, ao "Pensou por" e a
+// linha do trabalhando.
+function tempoCurto(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60), r = s % 60;
+  return r ? m + 'm ' + String(r).padStart(2, '0') + 's' : m + 'm';
+}
+/* "Executou 5 comandos 38s": o tempo vai do primeiro passo ate o ultimo que terminou. Menos
+   de 1s (conversa reaberta, em que os passos voltam todos de uma vez) nao mostra tempo nenhum
+   em vez de mentir um "0s". Grupo em que tudo deu errado diz isso ("1 passo com erro"). */
 function tituloGrupo(g) {
-  const n = $('.exec-card', g).children.length;
+  const card = $('.exec-card', g);
+  const n = card.children.length;
+  const erros = card.querySelectorAll(':scope > .exec-it.erro').length;
   g.classList.toggle('solo', n === 1);
-  $('.exec-nm2', g).textContent = n === 1
-    ? 'Executado 1 comando'
-    : 'Executado ' + n + ' comandos';
+  $('.exec-nm2', g).textContent = erros && erros === n
+    ? (n === 1 ? '1 passo com erro' : n + ' passos com erro')
+    : (n === 1 ? 'Executou 1 comando' : 'Executou ' + n + ' comandos') + (erros ? ' · ' + erros + ' com erro' : '');
+  const ms = Date.now() - Number(g.dataset.t0 || Date.now());
+  const tempo = $('.exec-tempo', g);
+  if (tempo) tempo.textContent = ms >= 1000 ? tempoCurto(ms) : '';
 }
 
 function passo(P, frase, id) {
@@ -1857,29 +1879,44 @@ function passo(P, frase, id) {
   const d = document.createElement('div');
   d.className = 'exec-it';
   if (id) d.dataset.id = id;
-  d.innerHTML = '<div class="exec-t"><span class="exec-nm"></span>'
+  // verbo (label-2) + objeto (mono, label-1) + chevron. O espaco entre os dois nao aparece na
+  // tela (o flex ignora), mas vai junto quando ele copia a conversa com ⌘A ⌘C.
+  d.innerHTML = '<div class="exec-t"><span class="exec-nm"><span class="exec-verbo"></span> <span class="exec-obj"></span></span>'
     + '<span class="exec-cv">' + ico('chevron-right') + '</span></div>'
     + '<div class="exec-bd"><div class="exec-cmd"><span class="exec-cifr">$&nbsp;</span>'
     + '<span class="exec-arg"></span></div><div class="exec-out"></div></div>';
-  $('.exec-nm', d).textContent = frase.det ? frase.txt + ' · ' + frase.det : frase.txt;
+  $('.exec-verbo', d).textContent = frase.txt;
+  $('.exec-obj', d).textContent = frase.det || '';
   $('.exec-arg', d).textContent = frase.cmd || frase.det || frase.txt;
   $('.exec-t', d).addEventListener('click', () => { d.classList.toggle('aberto'); scroll(P); });
   card.appendChild(d);
   tituloGrupo(g);
   P.chat.appendChild(g);
-  if (P.trabEl) P.chat.appendChild(P.trabEl);
+  // a linha do "trabalhando" mostra o passo que esta rodando agora (verbo + objeto)
+  (P.trabPassos = P.trabPassos || []).push({ id, verbo: frase.txt, obj: frase.det || '' });
+  P.trabFazendo = '';               // o texto de antes acabou: quando o passo terminar, e "Pensando"
+  if (P.trabEl) { pintaTrab(P); P.chat.appendChild(P.trabEl); }
   scroll(P);
   return d;
 }
 
 function passoPronto(P, id, erro) {
+  if (P.trabPassos && P.trabPassos.length) {
+    const i = P.trabPassos.findIndex(x => x.id === id);
+    if (i >= 0) { P.trabPassos.splice(i, 1); if (P.trabEl) pintaTrab(P); }
+  }
   const g = P.execEl;
   if (!g) return;
   const d = [...$('.exec-card', g).children].reverse().find(x => x.dataset.id === id);
-  if (d && erro) d.classList.add('erro');
+  if (d && erro && !d.classList.contains('erro')) {
+    d.classList.add('erro');
+    // passo com erro: triangulo na frente do verbo (forma + cor, nunca so a cor)
+    $('.exec-t', d).insertAdjacentHTML('afterbegin', '<span class="exec-erro-ic">' + ico('warn') + '</span>');
+  }
+  tituloGrupo(g);
 }
 
-function limparPassos(P) { P.execEl = null; }
+function limparPassos(P) { P.execEl = null; P.thinkEl = null; P.trabPassos = []; }
 
 /* ===================== CONTINUAR A UM CLIQUE =====================
    Chip fixo em cima da caixa de texto quando o chat esta parado e ja tem conversa;
@@ -1951,26 +1988,46 @@ function trabalhando(P, oque) {
   clearEmpty(P);
   let t = P.trabEl;
   if (!t || !t.isConnected) {
+    /* Redesenho de 26/09: anel de 12 girando + verbo + objeto em mono + tempo tabular
+       ("Lendo index.html 22s", "Escrevendo 4s"). Nada de "trabalhando" nem de logo pulsando:
+       o anel ja diz que esta vivo. A legenda da ultima fala continua guardada em P.trabOque
+       (a torre usa) e aparece no title da linha. */
     t = document.createElement('div');
     t.className = 'trab';
-    t.innerHTML = '<span class="trab-ast">' + svgMotor(P.engine) + '</span><span class="trab-txt"></span>';
+    t.innerHTML = '<span class="rd-anel trab-anel" aria-hidden="true"></span><span class="trab-txt"></span>'
+      + '<span class="trab-obj"></span><span class="trab-tempo"></span>';
     P.chat.appendChild(t);
     P.trabEl = t;
     P.trabT0 = Date.now();
+    P.trabFazendo = '';
     clearInterval(P.trabTimer);
     P.trabTimer = setInterval(() => pintaTrab(P), 1000);
   }
   if (oque !== undefined) P.trabOque = oque || '';
+  if (oque) P.trabFazendo = oque[0].toUpperCase() + oque.slice(1);   // "pensando" -> "Pensando"
   pintaTrab(P);
   P.chat.appendChild(t);            // mantem sempre no fim
   scroll(P);
+}
+/* O que a linha diz, do mais concreto para o mais vago: o passo que esta rodando (o ultimo que
+   comecou e ainda nao terminou), o texto sendo escrito, o recado de quem chamou (resumindo a
+   conversa) e, no silencio entre uma coisa e outra, "Pensando". */
+function verboDoTrabalho(P) {
+  const rodando = (P.trabPassos || []).at(-1);
+  if (rodando) return { verbo: rodando.verbo, obj: rodando.obj };
+  if (P.trabFazendo) return { verbo: P.trabFazendo, obj: '' };
+  return { verbo: 'Pensando', obj: '' };
 }
 function pintaTrab(P) {
   const t = P.trabEl;
   if (!t || !t.isConnected) { clearInterval(P.trabTimer); P.trabTimer = null; return; }
   const s = Math.max(0, Math.round((Date.now() - (P.trabT0 || Date.now())) / 1000));
-  const tempo = s < 60 ? s + 's' : Math.floor(s / 60) + 'min ' + (s % 60) + 's';
-  $('.trab-txt', t).textContent = tempo + ' · ' + (P.trabOque || 'trabalhando');
+  const tempo = tempoCurto(s * 1000);
+  const { verbo, obj } = verboDoTrabalho(P);
+  $('.trab-txt', t).textContent = verbo;
+  const o = $('.trab-obj', t); if (o) o.textContent = obj;
+  const tp = $('.trab-tempo', t); if (tp) tp.textContent = tempo;
+  t.title = P.trabOque || '';
 }
 function pararTrabalho(P) {
   clearInterval(P.trabTimer); P.trabTimer = null;
@@ -2363,6 +2420,7 @@ function textDelta(P, key, text) {
     P.execEl = null;                                  // proximo comando abre cartao novo
   }
   b.raw += text; pintarPonta(b);
+  P.trabFazendo = 'Escrevendo';                     // a linha do trabalhando diz o que ele faz agora
   // o texto ACUMULADO, nao o pedaco de 50ms que chegou agora: sozinho ele quase nunca
   // e uma frase inteira
   legendarTrabalho(P, b.raw);
@@ -2374,6 +2432,46 @@ function thinkDelta(P, text) {
   trabalhando(P, 'pensando');
   const agora = Date.now();
   if (agora - ultimoPensar > 8000) ultimoPensar = agora;
+  pensamento(P, text, agora);
+}
+/* "Pensou por 6s" (redesenho de 26/09): o pensamento vira um disclosure fechado, igual ao
+   grupo de passos. Fechado, e so a linha; aberto, o texto dele recuado com a guia de 1pt.
+   O mesmo bloco serve ao turno inteiro enquanto so passos vieram depois dele (pensa, roda,
+   pensa de novo = um "Pensou por" so, em cima do "Executou"); texto da resposta no meio abre
+   um bloco novo embaixo dele. O texto so e escrito na tela com o bloco aberto: o pensamento
+   chega em pedacinhos, e pintar cada um fechado seria trabalho jogado fora. */
+function pensamento(P, text, agora) {
+  if (!P.busy) return;
+  let d = P.thinkEl;
+  let vale = !!(d && d.isConnected);
+  for (let n = vale ? d.nextElementSibling : null; vale && n; n = n.nextElementSibling)
+    if (!n.classList.contains('exec') && !n.classList.contains('trab')) vale = false;
+  if (!vale) {
+    clearEmpty(P);
+    d = document.createElement('div');
+    d.className = 'think';
+    d.innerHTML = '<button type="button" class="think-hd" aria-expanded="false" title="Clique para ver o que ele pensou">'
+      + '<span class="think-cv">' + ico('chevron-right') + '</span><span class="think-nm"></span></button>'
+      + '<div class="think-in"></div>';
+    d._ms = 0; d._ultimo = 0; d._raw = '';
+    $('.think-hd', d).addEventListener('click', () => {
+      const aberto = d.classList.toggle('aberto');
+      $('.think-hd', d).setAttribute('aria-expanded', String(aberto));
+      if (aberto) $('.think-in', d).textContent = d._raw;
+      scroll(P);
+    });
+    P.chat.appendChild(d);
+    P.thinkEl = d;
+    if (P.trabEl) P.chat.appendChild(P.trabEl);
+  }
+  // so soma o pensamento corrido: um buraco de mais de 3s entre dois pedacos foi outra coisa
+  if (d._ultimo && agora - d._ultimo < 3000) d._ms += agora - d._ultimo;
+  d._ultimo = agora;
+  d._raw += String(text || '');
+  if (d._raw.length > 40000) d._raw = d._raw.slice(-40000);
+  $('.think-nm', d).textContent = 'Pensou por ' + tempoCurto(Math.max(1000, d._ms));
+  if (d.classList.contains('aberto')) $('.think-in', d).textContent = d._raw;
+  scroll(P);
 }
 /* ---- buscar DENTRO da conversa aberta (⌘F) ----
    Conversa de tres horas so se navegava rolando. Aqui as ocorrencias sao marcadas de amarelo
@@ -3188,23 +3286,54 @@ function comContexto(linhas) {
   return saida;
 }
 
+/* O patch (Codex) diz em que linha do arquivo cada pedaco esta ("@@ -211,4 +211,4 @@"): da
+   para numerar as linhas como o diff do design. O antes/depois do Claude nao diz — ali a coluna
+   do numero fica de fora, em vez de inventar um numero que nao e o do arquivo. */
+function numerarPatch(cru) {
+  let velho = 0, novo = 0, achou = false;
+  for (const l of cru) {
+    if (l.t === '@') {
+      const m = /^@@ -(\d+)(?:,\d+)? \+(\d+)/.exec(l.txt);
+      if (m) { velho = +m[1]; novo = +m[2]; achou = true; }
+      continue;
+    }
+    if (!achou) continue;
+    if (l.t === '-') l.n = velho++;
+    else if (l.t === '+') l.n = novo++;
+    else { l.n = novo++; velho++; }
+  }
+  return achou;
+}
 function cartaoDeDiff(P, ed) {
   const cx = document.createElement('div');
   cx.className = 'dif';
   const nome = (ed.arquivo || '').split('/').pop();
   const partes = ed.patch ? [{ patch: ed.patch }] : (ed.partes || []);
-  let mais = 0, menos = 0;
+  let mais = 0, menos = 0, comNumero = false;
   const corpos = [];
 
   for (const p of partes) {
     const cru = p.patch ? linhasDoPatch(p.patch) : linhasDoDiff(p.antes, p.depois);
+    if (p.patch && numerarPatch(cru)) comNumero = true;
     for (const l of cru) { if (l.t === '+') mais++; else if (l.t === '-') menos++; }
     const bloco = document.createElement('div');
     bloco.className = 'dif-bloco';
+    const numerado = p.patch && cru.some(l => l.n != null);
+    let hunks = 0;
     for (const l of comContexto(cru)) {
       const linha = document.createElement('div');
       linha.className = 'dl ' + (l.t === '+' ? 'mais' : l.t === '-' ? 'menos' : l.t === '@' ? 'pula' : 'igual');
-      linha.textContent = (l.t === '@' ? '' : l.t === ' ' ? '  ' : l.t + ' ') + l.txt;
+      // com as linhas numeradas, o "@@ -211,4 +211,4 @@" so repete o que o numero ja diz: o
+      // primeiro some e os outros viram so a marca de pulo entre um pedaco e outro
+      if (numerado && l.t === '@' && /^@@ /.test(l.txt)) { if (!hunks++) continue; linha.textContent = '⋯'; }
+      else if (l.t === '@') linha.textContent = l.txt;
+      else {
+        // numero (34, label-3) + sinal (14) + texto: cada um no seu span para alinhar em coluna
+        linha.innerHTML = '<span class="dl-n"></span><span class="dl-s"></span><span class="dl-x"></span>';
+        linha.firstChild.textContent = l.n != null ? String(l.n) : '';
+        linha.children[1].textContent = l.t === '+' ? '+' : l.t === '-' ? '−' : '';
+        linha.lastChild.textContent = l.txt;
+      }
       bloco.appendChild(linha);
     }
     if (!p.patch && ed.arquivo) {
@@ -3222,11 +3351,15 @@ function cartaoDeDiff(P, ed) {
     corpos.push(bloco);
   }
 
+  if (!comNumero) cx.classList.add('sem-num');
   const cab = document.createElement('div');
   cab.className = 'dif-hd';
   cab.innerHTML = '<span class="dif-nm"></span><span class="dif-cnt"></span>'
-    + '<button class="dif-abrir" title="Abrir o arquivo">' + ico('file-text') + '</button>';
-  $('.dif-nm', cab).textContent = (ed.novo ? 'criou ' : '') + nome;
+    + '<button class="dif-abrir" title="Abrir o arquivo">' + ico('external') + '</button>';
+  // a pasta de cima + o nome ("oficina/index.html"), como no design: so o nome nao diz qual
+  // dos tres index.html do projeto foi mexido. O caminho inteiro fica no title.
+  const trecho = String(ed.arquivo || '').split('/').filter(Boolean).slice(-2).join('/') || nome;
+  $('.dif-nm', cab).textContent = (ed.novo ? 'criou ' : '') + trecho;
   $('.dif-nm', cab).title = ed.arquivo || '';
   $('.dif-cnt', cab).innerHTML = '<b class="v">+' + mais + '</b> <b class="r">−' + menos + '</b>';
   $('.dif-abrir', cab).onclick = (e) => { e.stopPropagation(); verArquivo(P, caminhoDoPainel(P, ed.arquivo)); };
@@ -3265,8 +3398,13 @@ function toolStart(P, id, name, arg, extra) {
   if (ex.edicao) {
     const alvo = $('.exec-out', d);
     alvo.textContent = '';
-    alvo.appendChild(cartaoDeDiff(P, ex.edicao));
+    const cartao = cartaoDeDiff(P, ex.edicao);
+    alvo.appendChild(cartao);
     d.classList.add('tem-dif');
+    // "+1 −1" sobe para a linha do passo, ao lado do nome do arquivo (no cartao fica so o
+    // arquivo e o "abrir"). O cartao continua com a contagem para a janela "ver mudanças".
+    const cnt = $('.dif-cnt', cartao);
+    if (cnt) $('.exec-nm', d).insertAdjacentHTML('afterend', '<span class="exec-cnt">' + cnt.innerHTML + '</span>');
     P.tools.get(id).semTexto = true;            // o resultado cru não sobrescreve o diff
     P.edicoes = P.edicoes || [];
     P.edicoes.push(ex.edicao);                  // guardado para o "voltar no tempo"
@@ -3279,6 +3417,10 @@ function toolStart(P, id, name, arg, extra) {
     alvo.textContent = '';
     alvo.appendChild(cartaoDeTarefas(ex.tarefas));
     P.tools.get(id).semTexto = true;
+    d.classList.add('tem-tar');
+    // "Organizando tarefas 3 de 4": quantas ja estao feitas, no lugar do objeto
+    const feitas = ex.tarefas.filter(t => t && t.status === 'completed').length;
+    $('.exec-obj', d).textContent = feitas + ' de ' + ex.tarefas.length;
   }
 }
 function toolOutput(P, id, text) {
@@ -6303,6 +6445,7 @@ function agentesEvento(P, ev) {
   }
   pintarBotaoAgentes(P);
   agRepintarAba(P);
+  agCartaoNaConversa(P, ev);
   if (agPaneAberto === P) agAgendarDesenho();
 }
 
@@ -6614,6 +6757,108 @@ function agDesenhar() {
   corpo.appendChild(fluxo);
 }
 
+
+/* ---- Time de agentes DENTRO da conversa (redesenho de 26/09) ----
+   O painel grande (#agPainel) continua sendo o mapa completo, fase por fase. Na conversa fica
+   um cartao curto no lugar em que o time comecou a trabalhar: cabecalho de 30 ("Time de
+   agentes" + "2 de 3") e uma linha de 40 por agente (sinal + nome + "o que faz · em que" +
+   tempo). O clique abre o painel grande. So le o estado que o agentesEvento ja montou (P.ag):
+   nao decide nada sobre os agentes. Um cartao por pedido: agente que nasce depois de uma
+   mensagem nova dele abre outro cartao embaixo, em vez de mexer num la de cima. */
+const AG_CARTAO_TETO = 8;           // mais que isso vira "+N agentes" (o resto esta no painel)
+function agLinhasDoCartao(P, ids, agora) {
+  const A = P.ag; const linhas = [];
+  const fazendo = (est, ferramenta) => est === 'pronto' ? 'Pronto' : est === 'erro' ? 'Deu erro'
+    : est === 'espera' ? 'Na fila' : agBonito(agNomeFerramenta(ferramenta)) || 'Pensando';
+  for (const id of ids) {
+    const t = A && A.tarefas.get(id); if (!t) continue;
+    if (t.agentes.size) {
+      for (const a of [...t.agentes.values()].sort((x, y) => x.i - y.i)) {
+        const est = a.estado === 'done' ? 'pronto' : a.estado === 'error' ? 'erro'
+          : (a.estado === 'progress' || a.estado === 'start') ? 'agora' : 'espera';
+        linhas.push({ est, nome: agBonito(a.rotulo) || 'Agente ' + a.i, fazendo: fazendo(est, a.ferramenta),
+          em: a.detalhe || '', ms: a.duracao || (est === 'agora' ? agora - (a.desde || agora) : 0), dica: a.pedido || '' });
+      }
+    } else if (t.classe === 'local_agent') {
+      const est = t.estado === 'rodando' ? 'agora' : t.estado === 'pronto' ? 'pronto' : t.estado === 'parado' ? 'espera' : 'erro';
+      linhas.push({ est, nome: t.desc || agNomeAgente(t.tipo) || 'Agente', fazendo: fazendo(est, t.ferramenta),
+        em: '', ms: t.uso && t.uso.duration_ms ? t.uso.duration_ms : (t.fim ? t.fim - t.inicio : agora - t.inicio), dica: t.prompt || '' });
+    }
+  }
+  return linhas;
+}
+function agCartaoNaConversa(P, ev) {
+  if (!P || !P.chat || !ev) return;
+  let c = P.agCartao;
+  /* o cartao de agora so vale enquanto nenhuma mensagem DELE veio depois dele. Cartao que
+     ainda nao apareceu (so tarefa sem agente, como servidor em segundo plano) vale enquanto o
+     turno em que nasceu nao acabou. */
+  let vale = !!(c && (c.el ? c.el.isConnected : c.turno === P.t0));
+  for (let n = vale && c.el ? c.el.nextElementSibling : null; vale && n; n = n.nextElementSibling)
+    if (n.classList.contains('msg') && n.classList.contains('user')) vale = false;
+  if (ev.ev === 'inicio') {
+    if (!vale) { c = P.agCartao = { el: null, ids: new Set(), turno: P.t0 }; }
+    c.ids.add(ev.id);
+  } else if (!c || !c.ids.has(ev.id)) return;      // lista geral ou tarefa de um cartao antigo
+  agPintarCartaoConversa(P);
+}
+function agPintarCartaoConversa(P) {
+  const c = P.agCartao; if (!c) return;
+  const agora = Date.now();
+  const linhas = agLinhasDoCartao(P, c.ids, agora);
+  if (!linhas.length) return;                       // so servidor em segundo plano: nao e time
+  if (!c.el) {
+    clearEmpty(P);
+    c.el = document.createElement('div');
+    c.el.className = 'equipe';
+    c.el.setAttribute('role', 'button');
+    c.el.tabIndex = 0;
+    c.el.title = 'Ver o time de agentes inteiro';
+    c.el.addEventListener('click', () => abrirPainelAgentes(P));
+    c.el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirPainelAgentes(P); } });
+    P.chat.appendChild(c.el);
+    if (P.trabEl) P.chat.appendChild(P.trabEl);
+    scroll(P);
+  }
+  const ativos = linhas.filter(l => l.est === 'agora').length;
+  const prontos = linhas.filter(l => l.est === 'pronto').length;
+  const cab = document.createElement('div');
+  cab.className = 'equipe-hd';
+  cab.innerHTML = '<span class="equipe-ic">' + ico('team') + '</span><span class="equipe-tit">Time de agentes</span>'
+    + '<span class="equipe-gap"></span><span class="equipe-conta"></span>';
+  const conta = $('.equipe-conta', cab);
+  conta.textContent = (ativos ? ativos : prontos) + ' de ' + linhas.length;
+  conta.title = ativos ? ativos + ' trabalhando agora' : prontos + (prontos === 1 ? ' pronto' : ' prontos');
+  const corpo = [cab];
+  for (const l of linhas.slice(0, AG_CARTAO_TETO)) {
+    const d = document.createElement('div');
+    d.className = 'equipe-l ' + l.est;
+    d.innerHTML = '<span class="equipe-sinal">' + (l.est === 'agora' ? '<span class="rd-anel"></span>'
+        : l.est === 'pronto' ? ico('check') : l.est === 'erro' ? ico('warn') : '') + '</span>'
+      + '<span class="equipe-txt"><span class="equipe-nome"></span><span class="equipe-fase"><span class="equipe-faz"></span>'
+      + '<span class="equipe-em"></span></span></span><span class="equipe-tempo"></span>';
+    $('.equipe-nome', d).textContent = l.nome;
+    $('.equipe-faz', d).textContent = l.fazendo;
+    const em = $('.equipe-em', d);
+    if (l.em) em.textContent = l.em; else em.remove();
+    $('.equipe-tempo', d).textContent = l.ms ? tempoCurto(l.ms) : '';
+    if (l.dica) d.title = l.dica.slice(0, 300);
+    corpo.push(d);
+  }
+  if (linhas.length > AG_CARTAO_TETO) {
+    const mais = document.createElement('div');
+    mais.className = 'equipe-mais';
+    mais.textContent = '+' + (linhas.length - AG_CARTAO_TETO) + ' agentes';
+    corpo.push(mais);
+  }
+  c.el.replaceChildren(...corpo);
+  // o tempo de quem ainda trabalha anda sozinho; ninguem trabalhando, o relogio para
+  if (ativos && !c.relogio) c.relogio = setInterval(() => {
+    if (!c.el.isConnected || P.agCartao !== c) { clearInterval(c.relogio); c.relogio = null; return; }
+    agPintarCartaoConversa(P);
+  }, 1000);
+  else if (!ativos && c.relogio) { clearInterval(c.relogio); c.relogio = null; }
+}
 
 /* ============ conta e limite fixos na barra lateral ============ */
 const contaCache = { claude: null, codex: null, acp: null, gemini: null, grok: null };

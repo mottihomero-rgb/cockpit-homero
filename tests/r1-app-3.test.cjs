@@ -60,7 +60,9 @@ test('painel de agentes limita a lista ao teto, sem nunca apagar tarefa ainda ro
     + pegar('agEstado') + '\n'
     + pegarConst('AG_TETO_TAREFAS') + '\n'
     + pegar('agPodarTarefas') + '\n'
-    + 'function pintarBotaoAgentes(){} function agRepintarAba(){} function agAgendarDesenho(){}\n'
+    // 26/09: o agentesEvento tambem repinta o cartao "Time de agentes" da conversa; aqui so
+    // importa a poda da lista, entao o cartao entra como os outros desenhos: vazio
+    + 'function pintarBotaoAgentes(){} function agRepintarAba(){} function agAgendarDesenho(){} function agCartaoNaConversa(){}\n'
     + 'let agPaneAberto = null;\n'
     + pegar('agentesEvento') + '\n'
     + 'this.agEstado = agEstado; this.agentesEvento = agentesEvento; this.AG_TETO_TAREFAS = AG_TETO_TAREFAS;',

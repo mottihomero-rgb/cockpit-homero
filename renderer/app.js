@@ -5155,7 +5155,7 @@ function mostrarPlano(P, ev) {
   const d = document.createElement('div');
   d.className = 'plano-pronto';
   d.innerHTML = '<div class="pl-cab"><span class="pl-ic">' + ico('clipboard-list') + '</span><span class="pl-tit">Plano</span></div>'
-    + '<div class="pl-corpo md"></div>'
+    + '<div class="msg bot pl-msg"><div class="msg-body pl-corpo"></div></div>'
     + '<div class="pl-acoes"><button class="pl-ajustar" type="button">Ajustar</button><span class="pq-gap"></span>'
     + '<button class="pl-executar" type="button">Executar</button></div>';
   const corpo = $('.pl-corpo', d);

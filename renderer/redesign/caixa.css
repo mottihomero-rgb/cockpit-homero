@@ -273,6 +273,7 @@
   /* modo de envio (26/09): ícone + a palavra, numa pílula discreta em fill-3 — raio "Entra" ou
      fila "Fila". O modo tem de estar escrito: só o fundo mudando ninguém percebia. */
   .cmp-bar .p-modoenvio{width:auto;height:26px;padding:0 8px 0 6px;gap:4px;justify-content:center;
+    display:inline-flex;flex-direction:row;align-items:center;white-space:nowrap;flex:none;
     border-radius:13px;background:var(--fill-3);color:var(--label-2)}
   .cmp-bar .p-modoenvio:hover{background:var(--fill-2);color:var(--label-1)}
   .p-modoenvio span{display:inline;font:500 12px/15px var(--font-sans)}

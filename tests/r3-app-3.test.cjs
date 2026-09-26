@@ -277,25 +277,24 @@ test('R3-008 (regressão): painel recém-criado continua recebendo o worktree sa
 
 /* ================= R3-024 — "terminal" e "terminal na VPS" não podem aparecer no iPhone =================
    (redesenho 26/09: os nomes ganharam inicial maiúscula, como os outros itens do menu /) */
-test('R3-024: os itens de terminal somem do menu quando window.SEM_ELECTRON (iPhone)', () => {
-  const re1 = /\.\.\.\(window\.SEM_ELECTRON \? \[\] : \[\{ sec: 'Painel', ic: 'terminal', nome: 'Terminal',[\s\S]*?\}\]\),/;
-  const re2 = /\.\.\.\(window\.SEM_ELECTRON \|\| !NA_VPS\(P\.cwd\) \? \[\] : \[\{ sec: 'Painel', ic: 'terminal', nome: 'Terminal na VPS',[\s\S]*?\}\]\),/;
-  const linha1 = trecho(re1, "item 'terminal' do menu do painel");
-  const linha2 = trecho(re2, "item 'terminal na VPS' do menu do painel");
-
-  const c = { window: {}, NA_VPS: () => true, janelaTerminal: () => {}, abrirTerminalVps: () => {}, nomePasta: () => 'pasta' };
+test('R3-024: o item Terminal some do menu quando window.SEM_ELECTRON (iPhone)', () => {
+  // 26/09: "Terminal" e "Terminal na VPS" viraram UM item — no chat da VPS ele abre o de lá
+  const re1 = /\.\.\.\(window\.SEM_ELECTRON \? \[\] : \[\{ sec: 'Ferramentas', ic: 'terminal', nome: 'Terminal',[\s\S]*?\}\]\),/;
+  const linha1 = trecho(re1, "item 'terminal' do menu /");
+  const chamou = [];
+  const c = { window: {}, NA_VPS: (cwd) => String(cwd).startsWith('vps:'), janelaTerminal: () => chamou.push('mac'),
+    abrirTerminalVps: () => chamou.push('vps'), nomePasta: () => 'pasta', JSON };
   vm.createContext(c);
+  const acoesDe = (P) => vm.runInContext('(function(P){ const acoes = [' + linha1 + ']; return acoes; })', c)(P);
 
-  // no Mac (SEM_ELECTRON=false): os dois itens aparecem, inclusive na VPS
   c.window.SEM_ELECTRON = false;
-  const P1 = { cwd: 'vps:/projeto' };
-  const noVps = vm.runInContext('(function(P){ const acoes = [' + linha1 + linha2 + ']; return acoes; })', c)(P1);
-  assert.equal(noVps.length, 2, 'no Mac, com painel na VPS, os dois itens de terminal aparecem (hoje)');
+  const noVps = acoesDe({ cwd: 'vps:/projeto' });
+  assert.equal(noVps.length, 1, 'no Mac aparece um Terminal só');
+  noVps[0].act();
+  acoesDe({ cwd: '/Users/x' })[0].act();
+  assert.equal(chamou.join(','), 'vps,mac', 'na VPS abre o terminal de lá; no Mac, o daqui');
 
-  // no iPhone (SEM_ELECTRON=true): NENHUM dos dois pode aparecer, nem no painel da VPS
   c.window.SEM_ELECTRON = true;
-  const P2 = { cwd: 'vps:/projeto' };
-  const noIphone = vm.runInContext('(function(P){ const acoes = [' + linha1 + linha2 + ']; return acoes; })', c)(P2);
-  assert.equal(noIphone.length, 0,
-    'sem o conserto, os dois itens de terminal continuam aparecendo no iPhone e term:run falha sempre');
+  assert.equal(acoesDe({ cwd: 'vps:/projeto' }).length, 0, 'no iPhone o terminal não aparece nem no chat da VPS');
+  assert.doesNotMatch(source, /nome: 'Terminal na VPS'/, 'o segundo item saiu');
 });

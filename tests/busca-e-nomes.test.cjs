@@ -129,8 +129,9 @@ test('perguntar aos outros motores nao tem mais o par Claude/Codex cravado', () 
 test('abrir chat novo tem UM nome, igual nos quatro lugares', () => {
   const NOME = 'Inicie um novo chat';
   const linhasDoMenu = app.split('\n').filter(l => /sec: '(Chat|Contexto)'/.test(l) && /novoChatNaAba|novaConversa\(P\.engine\)/.test(l));
-  assert.equal(linhasDoMenu.length, 1, 'o menu do "/" tem de ter UMA linha de chat novo, nao duas');
-  assert.match(linhasDoMenu[0], new RegExp("nome: '" + NOME + "'"));
+  // 26/09: o / ficou sem "chat novo" (tem na lateral, no + Chat e no ⌘T); se voltar, é UM só
+  assert.ok(linhasDoMenu.length <= 1, 'o menu do "/" não pode ter duas linhas de chat novo');
+  for (const l of linhasDoMenu) assert.match(l, new RegExp("nome: '" + NOME + "'"));
   assert.match(principal, new RegExp("label: '" + NOME + "', accelerator: 'CmdOrCtrl\\+T'"), 'menu do Mac');
   for (const [nome, fonte] of [['index.html', html], ['index-web.html', htmlWeb]]) {
     assert.equal((fonte.match(/class="new-chat"/g) || []).length,

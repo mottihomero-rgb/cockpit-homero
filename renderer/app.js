@@ -6279,68 +6279,42 @@ async function menuSkills(P, filtroInicial, focar) {
   corpo.className = 'menu-corpo';
   m.appendChild(corpo);
 
-  /* A ORDEM aqui e a ordem na tela: a secao nasce quando muda de nome. Antes as linhas estavam
-     misturadas (Contexto, Chat, Contexto de novo…) e "Contexto" aparecia tres vezes no mesmo
-     menu. Agora vem tudo junto por secao, com Modelo e Conta no topo — que e o que ele mais
-     abre o menu para mexer. */
+  /* 26/09 — "menos é mais" (pedido dele): o / ficou só com o que NÃO tem outro lugar de 1
+     clique. Saíram Modelo, Esforço, Modo de permissão (botões da caixa), Assistente (abas
+     Claude/Codex no topo do chat), Conta (anéis do topo e Ajustes › Contas), Anexar arquivo (+),
+     Mencionar a pasta, Ditar (microfone), Inicie um novo chat (lateral, ⌘T, "+ Chat") e Trocar a
+     pasta (ícone de pasta). Terminal e Terminal na VPS viraram um só; "Apagar um prompt salvo"
+     virou o × na linha de cada prompt; guardar/esquecer conta foram para a janela da Conta.
+     Duas seções: Conversa (o que mexe nesta conversa) e Ferramentas. */
   const acoes = [
-    // nomes do design: o item diz O QUE é (Modelo, Modo de permissão), o valor atual fica à direita
-    { sec: 'Modelo', ic: 'brain', nome: 'Modelo', tag: modeloAtual(P).nome, act: () => menuModelos(P) },
-    { sec: 'Modelo', ic: 'sliders-horizontal', nome: 'Esforço', tag: EF_PT[P.effort] || P.effort, act: () => menuModelos(P) },
-    { sec: 'Modelo', ic: 'lock', nome: 'Modo de permissão', tag: modoDe(P).nome, act: () => menuModos(P) },
-    { sec: 'Modelo', ic: 'arrow-left-right', nome: 'Assistente', tag: nomeDoMotor(P.engine), desc: 'escolher Claude, Codex, Gemini ou Grok', act: () => menuMotores(P) },
-    // Eram cinco linhas aqui (trocar conta, entrar com codigo, logout, conta, ver conta) e as
-    // cinco levavam ao mesmo lugar. Ficou UMA: a janela da conta ja tem todos esses botoes.
-    { sec: 'Conta', ic: 'user', nome: 'Conta', tag: (contaCache[P.engine] && contaCache[P.engine].email) || '', desc: 'quem está entrado, limite de uso, trocar ou sair' + (NA_VPS(P.cwd) ? ' · na VPS' : ''), act: () => janelaConta(P) },
-    /* Linha NOVA, e o nome dela nao pode ser "Trocar de conta": esse botao ja existe na janela
-       da Conta e faz OUTRA coisa (sai e entra pelo CLI, com navegador). Aqui e' so alternar
-       entre contas ja logadas, trocando o arquivo de credencial guardado. */
-    { sec: 'Conta', ic: 'arrow-left-right', nome: 'Contas guardadas…', desc: 'alternar entre contas já logadas, sem refazer login', act: () => menuContas(P) },
-    { sec: 'Contexto', ic: 'upload', nome: 'Anexar arquivo…', act: () => menuAnexo(P) },
-    { sec: 'Contexto', ic: 'folder', nome: 'Mencionar a pasta deste painel', act: () => inserirNoInput(P, P.cwd) },
-    { sec: 'Contexto', ic: 'eraser', nome: 'Limpar a tela', desc: 'a conversa continua', act: () => { P.chat.innerHTML = ''; P.blocks.clear(); P.tools.clear(); P.rolagem = null; } },
-    { sec: 'Contexto', ic: 'file-text', nome: 'Resumir a conversa', desc: 'libera espaço sem perder o fio', act: () => compactarConversa(P) },
-    { sec: 'Contexto', ic: 'search', nome: 'Buscar nesta conversa', desc: '⌘F', act: () => abrirBuscaConversa(P) },
-    { sec: 'Contexto', ic: 'lock', nome: 'Modo foco', desc: 'esconde os passos, deixa só pergunta e resposta · ⌘⇧F', tag: document.body.classList.contains('foco') ? 'ligado' : '', act: () => alternarFoco() },
+    { sec: 'Conversa', ic: 'search', nome: 'Buscar nesta conversa', desc: '⌘F', act: () => abrirBuscaConversa(P) },
+    { sec: 'Conversa', ic: 'file-text', nome: 'Resumir a conversa', desc: 'libera espaço sem perder o fio', act: () => compactarConversa(P) },
+    { sec: 'Conversa', ic: 'eraser', nome: 'Limpar a tela', desc: 'a conversa continua · ⌘K', act: () => { P.chat.innerHTML = ''; P.blocks.clear(); P.tools.clear(); P.rolagem = null; voltarVazio(P); } },
+    { sec: 'Conversa', ic: 'lock', nome: 'Modo foco', desc: 'esconde os passos, deixa só pergunta e resposta · ⌘⇧F', tag: document.body.classList.contains('foco') ? 'ligado' : '', act: () => alternarFoco() },
+    { sec: 'Conversa', ic: 'rotate-cw', nome: 'Reabrir o último chat fechado', desc: '⌘⇧W', act: () => reabrirUltimoFechado() },
+    { sec: 'Conversa', ic: 'columns-2', nome: 'Perguntar aos outros motores', desc: 'a mesma pergunta nos outros chats desta aba · ⌘D', act: () => perguntarAosOutros(P) },
     /* Estes dois so acontecem no MAC: o navegador que se le e o de la, e o vault mora no disco
-       de la. No telefone o toque nao fazia nada e o app nao dizia por que — entao aqui eles
-       nem aparecem, do mesmo jeito que o "Recortar a tela" ja fazia no menu do +. */
+       de la. No telefone o toque nao fazia nada e o app nao dizia por que. */
     ...(window.SEM_ELECTRON ? [] : [
-      { sec: 'Contexto', ic: 'plug', nome: 'Puxar a aba aberta do navegador', desc: 'manda o endereço e o título da aba de agora', act: () => puxarAbaDoNavegador(P) },
-      { sec: 'Contexto', ic: 'book', nome: 'Salvar no Obsidian', desc: 'vira nota no vault, na pasta do cliente', act: () => salvarConversaNoVault(P) },
+      { sec: 'Conversa', ic: 'book', nome: 'Salvar no Obsidian', desc: 'vira nota no vault, na pasta do cliente · ⌘S', act: () => salvarConversaNoVault(P) },
+      { sec: 'Conversa', ic: 'plug', nome: 'Puxar a aba aberta do navegador', desc: 'manda o endereço e o título da aba de agora', act: () => puxarAbaDoNavegador(P) },
     ]),
-    // ditar FICA no telefone: ele grava pelo microfone do proprio celular e o Mac so passa o
-    // texto a limpo (o mesmo caminho da foto e do OCR)
-    { sec: 'Contexto', ic: 'mic', nome: 'Ditar', desc: 'falar em vez de digitar · ⌘⇧D', act: () => alternarDitado(P) },
-    /* UMA linha so para "abrir chat novo", e com o MESMO nome que o menu do Mac (⌘T), o botao
-       do topo e a coluna lateral usam. Antes havia outra linha aqui em cima, na secao Contexto
-       ("Comecar conversa nova"), que por dentro chamava esta mesma funcao: duas portas com
-       nomes diferentes para a mesma coisa. */
-    { sec: 'Chat', ic: 'plus', nome: 'Inicie um novo chat', desc: '⌘T', act: () => { novoChatNaAba(P.engine); } },
-    { sec: 'Chat', ic: 'rotate-cw', nome: 'Reabrir o último chat fechado', desc: '⌘⇧W', act: () => reabrirUltimoFechado() },
-    { sec: 'Chat', ic: 'columns-2', nome: 'Perguntar aos outros motores', desc: 'a mesma pergunta nos outros chats desta aba · ⌘D', act: () => perguntarAosOutros(P) },
-    { sec: 'Painel', ic: 'folder-open', nome: 'Trocar a pasta deste painel', tag: nomePasta(P.cwd), act: () => $('.p-cwd', P.el).click() },
+    { sec: 'Ferramentas', ic: 'plug', nome: 'Conectores', desc: 'ver, reconectar ou adicionar um conector', act: () => janelaConectores(P) },
     // a memoria, os agentes e os hooks sao arquivos do MAC: no telefone a janela so abria para
-    // dizer que nao conseguiu ler. Fora da lista, como o "Recortar a tela".
-    ...(window.SEM_ELECTRON ? [] : [{ sec: 'Painel', ic: 'sliders-horizontal', nome: 'Configurar o Claude', desc: 'memória, agentes, hooks e permissões', act: () => janelaConfiguracao(P) }]),
-    // terminal abre um shell de verdade no Mac: term:run é bloqueado do celular, então o item some de lá (R3-024)
-    ...(window.SEM_ELECTRON ? [] : [{ sec: 'Painel', ic: 'terminal', nome: 'Terminal', desc: 'rodar comandos aqui dentro, sem abrir o Terminal do Mac', act: () => janelaTerminal(P, 'cd ' + JSON.stringify(P.cwd) + ' 2>/dev/null; exec ${SHELL:-/bin/zsh} -l', 'Terminal — ' + nomePasta(P.cwd)) }]),
-    /* Item NOVO, ao lado do terminal de sempre (que continua abrindo aqui no Mac). So aparece
-       em painel da VPS. Quem monta a linha do ssh e o main: host e usuario nao saem de la. */
-    ...(window.SEM_ELECTRON || !NA_VPS(P.cwd) ? [] : [{ sec: 'Painel', ic: 'terminal', nome: 'Terminal na VPS', desc: 'shell de verdade lá dentro, na pasta deste painel', act: () => abrirTerminalVps(P) }]),
+    // dizer que nao conseguiu ler
+    ...(window.SEM_ELECTRON ? [] : [{ sec: 'Ferramentas', ic: 'sliders-horizontal', nome: 'Configurar o Claude', desc: 'memória, agentes, hooks e permissões', act: () => janelaConfiguracao(P) }]),
+    /* terminal abre um shell de verdade no Mac: term:run é bloqueado do celular, então o item
+       some de lá (R3-024). Um item só: no chat da VPS ele abre o terminal de lá (quem monta a
+       linha do ssh é o main), senão o do Mac na pasta do chat. */
+    ...(window.SEM_ELECTRON ? [] : [{ sec: 'Ferramentas', ic: 'terminal', nome: 'Terminal', desc: NA_VPS(P.cwd) ? 'shell de verdade na VPS, na pasta deste chat' : 'rodar comandos aqui dentro, sem abrir o Terminal do Mac', act: () => NA_VPS(P.cwd) ? abrirTerminalVps(P) : janelaTerminal(P, 'cd ' + JSON.stringify(P.cwd) + ' 2>/dev/null; exec ${SHELL:-/bin/zsh} -l', 'Terminal — ' + nomePasta(P.cwd)) }]),
     /* leva 10.5: branch isolada. Aparece SEMPRE — inclusive no Codex e na VPS, onde entrar é
-       recusado com o motivo escrito, mas SAIR precisa continuar possível (ele pode ter
-       trocado de motor depois de entrar). */
-    { sec: 'Painel', ic: 'git-branch', nome: P.worktree ? 'Sair do worktree "' + P.worktree + '"' : 'Abrir em worktree…',
-      tag: P.worktree ? 'ativo' : '',   // era o símbolo de texto ⎇; o valor à direita diz o estado
+       recusado com o motivo escrito, mas SAIR precisa continuar possível. */
+    { sec: 'Ferramentas', ic: 'git-branch', nome: P.worktree ? 'Sair do worktree "' + P.worktree + '"' : 'Abrir em worktree…',
+      tag: P.worktree ? 'ativo' : '',
       desc: P.worktree ? 'volta a trabalhar na pasta principal deste chat'
         : 'branch isolada em .claude/worktrees: experimenta sem sujar a branch de verdade (só Claude)',
       act: () => alternarWorktree(P) },
-    { sec: 'Conectores', ic: 'plug', nome: 'Conectores', desc: 'ver, reconectar ou adicionar um conector', act: () => janelaConectores(P) },
-    /* As duas ultimas de propósito: a seção nasce quando o nome muda, então grudadas aqui no
-       FIM elas viram uma seção "Prompts" própria, sem quebrar nenhuma das de cima. */
-    { sec: 'Prompts', ic: 'star', nome: 'Salvar o texto do campo como prompt…', desc: 'para reaproveitar pedidos longos (fica em ~/.claude/cockpit-prompts.json)', act: () => salvarPromptDoCampo(P) },
-    { sec: 'Prompts', ic: 'eraser', nome: 'Apagar um prompt salvo…', act: () => apagarPromptSalvo(P) },
+    { sec: 'Ferramentas', ic: 'star', nome: 'Salvar o texto do campo como prompt…', desc: 'para reaproveitar pedidos longos (fica em ~/.claude/cockpit-prompts.json)', act: () => salvarPromptDoCampo(P) },
   ];
 
   let skills = [];
@@ -6382,11 +6356,26 @@ async function menuSkills(P, filtroInicial, focar) {
     const promptsVis = prompts.filter((p) => !q || String(p.nome || '').toLowerCase().includes(q) || String(p.texto || '').toLowerCase().includes(q)).slice(0, 40);
     if (promptsVis.length) {
       corpo.appendChild(elSecao('Prompts salvos (' + prompts.length + ')'));
-      for (const p of promptsVis) corpo.appendChild(elItem({ ic: 'star', nome: p.nome, desc: String(p.texto || '').replace(/\s+/g, ' ').slice(0, 90) }, () => {
-        const inp = $('.p-input', P.el);
-        if (inp.value.startsWith('/') && !inp.value.includes(' ')) inp.value = '';
-        inserirNoInput(P, p.texto);
-      }));
+      for (const p of promptsVis) {
+        const linha = elItem({ ic: 'star', nome: p.nome, desc: String(p.texto || '').replace(/\s+/g, ' ').slice(0, 90) }, () => {
+          const inp = $('.p-input', P.el);
+          if (inp.value.startsWith('/') && !inp.value.includes(' ')) inp.value = '';
+          inserirNoInput(P, p.texto);
+        });
+        /* 26/09: apagar é o × na própria linha (antes era um item "Apagar um prompt salvo…"
+           que abria outra lista igual a esta) */
+        const x = document.createElement('button');
+        x.className = 'mi-x'; x.type = 'button'; x.title = 'Apagar este prompt'; x.setAttribute('aria-label', 'Apagar este prompt');
+        x.innerHTML = ico('x');
+        x.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const r = await window.api.promptsSalvar(prompts.filter((y) => y !== p));
+          if (r && r.ok) { prompts = prompts.filter((y) => y !== p); pintar(busca.value); }
+          else note(P, 'Não consegui apagar: ' + ((r && r.error) || 'erro'), true);
+        });
+        linha.appendChild(x);
+        corpo.appendChild(linha);
+      }
     }
     const vis = (q ? [...porNome, ...porDesc] : skills).slice(0, 150);
     if (vis.length) {
@@ -6430,17 +6419,6 @@ async function salvarPromptDoCampo(P) {
   // R4: mensagem de sucesso por note() sem `true` nao aparece na tela. Sucesso vai por avisoTemp.
   if (r && r.ok) avisoTemp(P, 'Prompt “' + limpo + '” salvo. Aparece no menu / em “Prompts salvos”.');
   else note(P, 'Não consegui salvar: ' + ((r && r.error) || 'erro'), true);
-}
-async function apagarPromptSalvo(P) {
-  const lista = (await window.api.promptsLer()) || [];
-  if (!lista.length) { avisoTemp(P, 'Nenhum prompt salvo ainda.'); return; }
-  const m = novoMenu(P);
-  m.appendChild(tituloPopup('Apagar prompt salvo', 'Clique no que quer apagar.'));
-  for (const p of lista) m.appendChild(elItem({ ic: 'eraser', nome: p.nome, desc: String(p.texto || '').replace(/\s+/g, ' ').slice(0, 80) }, async () => {
-    const r = await window.api.promptsSalvar(lista.filter((x) => x !== p));
-    if (r && r.ok) avisoTemp(P, 'Prompt “' + p.nome + '” apagado.');
-    else note(P, 'Não consegui apagar: ' + ((r && r.error) || 'erro'), true);
-  }));
 }
 
 /* ================== ENTRADA VISUAL (leva 4) ==================
@@ -8057,6 +8035,13 @@ async function janelaConta(P, motorPedido) {
     b.onclick = () => { fecharModal(P); trocarParaConta(P, eng, g.apelido); };
     lista.appendChild(b);
   }
+  /* 26/09: guardar e esquecer conta moravam só no item "Contas guardadas…" do menu /, que saiu
+     (menos é mais). Ficam aqui, junto da lista, onde já se troca de conta guardada. */
+  let podeGuardar = false;
+  try { const d = await window.api.contasDisponivel(eng); podeGuardar = !!(d && d.ok); } catch {}
+  if (modal.classList.contains('hidden') || !lista.isConnected) return;
+  if (podeGuardar) acao('plus', 'Guardar esta conta…', () => { fecharModal(P); guardarContaAtual(P, eng); });
+  if (guardadas.length) acao('eraser', 'Esquecer uma guardada…', () => { fecharModal(P); menuEsquecerConta(P, eng); });
 }
 
 /* ---------- contas guardadas: alternar sem refazer login ----------

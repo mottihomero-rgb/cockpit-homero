@@ -7167,6 +7167,120 @@ function agTokens(n) {
   return n >= 1000 ? Math.round(n / 1000) + 'k palavras-token' : n + ' palavras-token';
 }
 
+/* ---- nome simples de cada agente (26/09) ----
+   O cartao do agente mostrava o nome tecnico do motor ("code-reviewer-1", "Explore codebase for
+   auth flow") e uma linha em letra de maquina com o comando da vez. Ele nao programa e nao
+   entendia quem fazia o que. Agora o cartao diz so um titulo de 2 palavras ("Revisando página") e
+   uma linha curta ("confere se os botões levam ao checkout"), escritos pelo Haiku no Mac
+   (agentes:nomes, ver nomes-agentes.js). Os agentes que nascem juntos vao num lote so, 700 ms
+   depois do ultimo aparecer; um lote por vez; se falhar, ninguem tenta de novo. Enquanto a
+   resposta nao chega (ou se nunca chegar), fica o nome local: o tipo do agente pelo dicionario e
+   a frase da ferramenta que ele usa agora ("Lendo um arquivo"). */
+const AG_NOMES = new Map();          // chave -> { titulo, linha } que a IA deu
+const AG_NOMES_PEDIDOS = new Set();  // chaves que ja foram num lote (deu certo ou nao): nunca de novo
+const AG_NOMES_FILA = new Map();     // chave -> o que se sabe do agente, esperando o proximo lote
+const AG_NOMES_LOTE = 12;            // o mesmo teto do main (MAX_AGENTES do nomes-agentes.js)
+const AG_NOMES_ESPERA = 700;         // silencio que fecha o lote
+const AG_NOMES_TETO = 600;           // memoria: acima disso saem os nomes mais velhos
+let agNomesTimer = null, agNomesDesde = 0, agNomesNoAr = false;
+
+// a chave de cada cartao: a tarefa (agente solto) ou a tarefa + o rotulo (agente de workflow)
+function agChaveAgente(t, a) {
+  return a ? t.id + '/' + (a.rotulo || a.i) : String(t.id);
+}
+function agTresPalavras(s) {
+  return String(s || '').split(/\s+/).filter(Boolean).slice(0, 3).join(' ');
+}
+/* O titulo local, enquanto a IA nao responde: no workflow, o rotulo arrumado; no agente solto, o
+   tipo pelo dicionario ("Explorador", "Revisor de código") ou, sem tipo, o comeco da descricao.
+   No maximo 3 palavras: a descricao inteira do motor ("Explore codebase for auth flow") era
+   justamente o que ele nao entendia. */
+function agTituloLocal(t, a) {
+  if (a) return agTresPalavras(agBonito(a.rotulo)) || 'Agente ' + a.i;
+  return agTresPalavras(t.tipo ? agNomeAgente(t.tipo) : agBonito(t.desc)) || 'Agente';
+}
+/* A linha local: a frase de gente da ferramenta ("Lendo um arquivo", "Procurando no código"), e
+   nao o verbo seco dos passos ("Lendo", "Terminal"). Pronto, erro, fila e "Pensando" saem do
+   agFazendo, o mesmo vocabulario do resto do app. */
+function agLinhaLocal(est, ferramenta) {
+  if (!ferramenta || est === 'pronto' || est === 'erro' || est === 'espera') return agFazendo(est, ferramenta);
+  const f = agNomeFerramenta(ferramenta);
+  return f ? f.charAt(0).toUpperCase() + f.slice(1) : agFazendo(est, ferramenta);
+}
+// o que o cartao mostra: o nome da IA quando ja chegou, o local enquanto isso
+function agNomeDoCartao(chave, tituloLocal, est, ferramenta) {
+  const n = chave ? AG_NOMES.get(chave) : null;
+  return { titulo: (n && n.titulo) || tituloLocal, linha: (n && n.linha) || agLinhaLocal(est, ferramenta) };
+}
+/* Poe na fila os agentes desta tarefa que ainda nao tem nome. So os que viram cartao: o agente
+   solto (local_agent) e o de workflow que ja tem rotulo ou instrucao. Servidor em segundo plano
+   nao e agente, e agente sem nada para ler ganharia um nome chutado para sempre. */
+function agNomesColetar(t) {
+  if (!t || !window.api || !window.api.agentesNomes) return;
+  const itens = [];
+  if (t.agentes.size) {
+    for (const a of t.agentes.values()) {
+      if (!a.rotulo && !a.pedido) continue;
+      itens.push([agChaveAgente(t, a), { desc: a.rotulo || '', tipo: '', prompt: a.pedido || '',
+        workflow: [agBonito(t.workflow), a.fase].filter(Boolean).join(' · ') }]);
+    }
+  } else if (t.classe === 'local_agent' && (t.desc || t.tipo || t.prompt)) {
+    itens.push([agChaveAgente(t), { desc: t.desc || '', tipo: t.tipo || '', prompt: t.prompt || '', workflow: '' }]);
+  }
+  let novos = 0;
+  for (const [chave, info] of itens) {
+    if (AG_NOMES.has(chave) || AG_NOMES_PEDIDOS.has(chave) || AG_NOMES_FILA.has(chave)) continue;
+    AG_NOMES_FILA.set(chave, Object.assign({ id: chave }, info));
+    novos++;
+  }
+  if (novos) agNomesAgendar(true);
+}
+/* O lote fecha 700 ms depois do ultimo agente novo: os de um workflow nascem em rajada e vao
+   juntos numa chamada so. Rajada que nao para nao segura o lote para sempre: 2,5 s depois do
+   primeiro ele sai de qualquer jeito. Com um lote no ar, o que chegar espera a resposta. */
+function agNomesAgendar(novo) {
+  if (agNomesNoAr) return;
+  if (agNomesTimer) {
+    if (!novo || Date.now() - agNomesDesde > 2500) return;
+    clearTimeout(agNomesTimer);
+  } else agNomesDesde = Date.now();
+  agNomesTimer = setTimeout(agNomesBuscar, AG_NOMES_ESPERA);
+}
+async function agNomesBuscar() {
+  agNomesTimer = null;
+  if (agNomesNoAr || !AG_NOMES_FILA.size) return;
+  const lote = [...AG_NOMES_FILA.values()].slice(0, AG_NOMES_LOTE);
+  // marcado como pedido ANTES da resposta: falhou, fica o nome local (sem tentar de novo)
+  for (const a of lote) { AG_NOMES_FILA.delete(a.id); AG_NOMES_PEDIDOS.add(a.id); }
+  agNomesNoAr = true;
+  let resp = null;
+  try { resp = await window.api.agentesNomes({ agentes: lote }); } catch {}
+  agNomesNoAr = false;
+  let chegou = false;
+  if (resp && typeof resp === 'object') {
+    // so as chaves que foram neste lote: resposta estranha nao escreve nome de outro agente
+    for (const a of lote) {
+      const n = resp[a.id];
+      if (!n || typeof n.titulo !== 'string' || !n.titulo.trim()) continue;
+      AG_NOMES.set(a.id, { titulo: n.titulo.trim().slice(0, 40),
+        linha: typeof n.linha === 'string' ? n.linha.trim().slice(0, 80) : '' });
+      chegou = true;
+    }
+  }
+  for (const conj of [AG_NOMES, AG_NOMES_PEDIDOS])
+    while (conj.size > AG_NOMES_TETO) conj.delete(conj.keys().next().value);
+  if (chegou) agNomesRepintar();
+  if (AG_NOMES_FILA.size) agNomesAgendar(false);
+}
+// o nome chegou: repinta o cartao do time de cada chat e o painel grande, se estiverem na tela
+function agNomesRepintar() {
+  for (const P of panes.values()) {
+    const c = P.agCartao;
+    if (c && c.el && c.el.isConnected) agPintarCartaoConversa(P);
+  }
+  if (agPaneAberto) agAgendarDesenho();
+}
+
 function agEstado(P) {
   if (!P.ag) P.ag = { tarefas: new Map(), ordem: [] };
   return P.ag;
@@ -7259,6 +7373,8 @@ function agentesEvento(P, ev) {
       setTimeout(() => agRepintarAba(P), 2600);
     }
   }
+  // agente novo (solto ou de workflow) entra na fila do nome simples (agNomesColetar)
+  if (ev.ev === 'inicio' || (ev.ev === 'andamento' && ev.fluxo && ev.fluxo.length)) agNomesColetar(A.tarefas.get(ev.id));
   pintarBotaoAgentes(P);
   agRepintarAba(P);
   agCartaoNaConversa(P, ev);
@@ -7433,18 +7549,21 @@ function agEl(classe, texto) {
   if (texto != null) d.textContent = texto;
   return d;
 }
-function agCartaoAgente(a, agora) {
+/* O cartao diz so duas coisas: o titulo de 2 palavras e uma linha do que ele faz (ver
+   agNomeDoCartao). A linha tecnica que ficava embaixo (comando e caminho de arquivo, em letra de
+   maquina) saiu do cartao em 26/09: era justamente o que ele nao entendia. O `chave` liga o
+   cartao ao nome que o Haiku deu; sem ele, fica o nome local. */
+function agCartaoAgente(a, agora, chave) {
   const est = a.estado === 'done' ? 'pronto'
     : a.estado === 'error' ? 'erro'
     : (a.estado === 'progress' || a.estado === 'start') ? 'agora' : 'espera';
   const c = agEl('ag-card ' + est);
+  const nm = agNomeDoCartao(chave, a.titulo || agTituloLocal(null, a), est, a.ferramenta);
   const topo = agEl('ag-card-top');
   topo.appendChild(agEl('ag-bola'));
-  topo.appendChild(agEl('ag-nome', agBonito(a.rotulo) || 'Agente ' + a.i));
+  topo.appendChild(agEl('ag-nome', nm.titulo));
   c.appendChild(topo);
-  const fazendo = agFazendo(est, a.ferramenta);
-  c.appendChild(agEl('ag-fazendo', fazendo));
-  if (a.detalhe && est !== 'espera') c.appendChild(agEl('ag-detalhe', a.detalhe));
+  c.appendChild(agEl('ag-fazendo', nm.linha));
   const pe = agEl('ag-pe');
   const dur = a.duracao || (est === 'agora' ? agora - (a.desde || agora) : 0);
   const bits = [];
@@ -7453,7 +7572,9 @@ function agCartaoAgente(a, agora) {
   if (a.chamadas) bits.push(a.chamadas + (a.chamadas === 1 ? ' passo' : ' passos'));
   pe.textContent = bits.join(' · ');
   c.appendChild(pe);
-  if (a.pedido) c.title = a.pedido.slice(0, 300);
+  // o mouse em cima mostra a mesma frase simples (inteira, se a linha cortou): a instrucao em
+  // ingles que o motor deu ao agente nao aparece mais nem aqui
+  c.title = nm.linha;
   return c;
 }
 /* Mais de quatro agentes na mesma fase nao cabem numa linha so. Em vez de deixar o leque
@@ -7527,13 +7648,12 @@ function agDesenhar() {
      ele nasce ANTES ou junto do workflow, e jogado la embaixo parecia uma etapa final. */
   if (soltos.length) {
     const cartoes = soltos.map(t => agCartaoAgente({
-      i: 0, rotulo: t.desc || agNomeAgente(t.tipo), estado: t.estado === 'rodando' ? 'progress'
+      i: 0, titulo: agTituloLocal(t), estado: t.estado === 'rodando' ? 'progress'
         : (t.estado === 'pronto' ? 'done' : (t.estado === 'parado' ? 'espera' : 'error')),
-      ferramenta: t.ferramenta, detalhe: t.resumo,
+      ferramenta: t.ferramenta,
       tokens: t.uso ? t.uso.total_tokens : 0, chamadas: t.uso ? t.uso.tool_uses : 0,
       duracao: t.uso ? t.uso.duration_ms : (t.fim ? t.fim - t.inicio : agora - t.inicio),
-      pedido: t.prompt,
-    }, agora));
+    }, agora, agChaveAgente(t)));
     const rodando = soltos.some(t => t.estado === 'rodando');
     fluxo.appendChild(agEl('ag-liga' + (rodando ? ' viva' : ' feita')));
     fluxo.appendChild(agGrupo('Agentes lançados direto', 'Sem fase', cartoes, rodando ? 'rodando' : 'pronto'));
@@ -7571,7 +7691,7 @@ function agDesenhar() {
           espera.appendChild(agEl('ag-fase-cont', 'Ainda não começou'));
           fluxo.appendChild(espera);
         } else {
-          fluxo.appendChild(agGrupo(agBonito(fase), 'Fase ' + n, ags.map(a => agCartaoAgente(a, agora)),
+          fluxo.appendChild(agGrupo(agBonito(fase), 'Fase ' + n, ags.map(a => agCartaoAgente(a, agora, agChaveAgente(t, a))),
             rodando ? 'rodando' : (tudoPronto ? 'pronto' : '')));
         }
         n++;
@@ -7594,27 +7714,30 @@ function agDesenhar() {
 /* ---- Time de agentes DENTRO da conversa (redesenho de 26/09) ----
    O painel grande (#agPainel) continua sendo o mapa completo, fase por fase. Na conversa fica
    um cartao curto no lugar em que o time comecou a trabalhar: cabecalho de 30 ("Time de
-   agentes" + "2 de 3") e uma linha de 40 por agente (sinal + nome + "o que faz · em que" +
-   tempo). O clique abre o painel grande. So le o estado que o agentesEvento ja montou (P.ag):
+   agentes" + "2 de 3") e uma linha de 40 por agente (sinal + titulo de 2 palavras + a frase
+   curta do que ele faz + tempo). O clique abre o painel grande. So le o estado que o agentesEvento ja montou (P.ag):
    nao decide nada sobre os agentes. Um cartao por pedido: agente que nasce depois de uma
    mensagem nova dele abre outro cartao embaixo, em vez de mexer num la de cima. */
 const AG_CARTAO_TETO = 8;           // mais que isso vira "+N agentes" (o resto esta no painel)
+/* Cada linha: o titulo de 2 palavras e a frase curta do que ele faz (agNomeDoCartao), os mesmos
+   do painel grande. O "· em que" em letra de maquina (comando, caminho) saiu em 26/09. */
 function agLinhasDoCartao(P, ids, agora) {
   const A = P.ag; const linhas = [];
-  const fazendo = (est, ferramenta) => agFazendo(est, ferramenta);
   for (const id of ids) {
     const t = A && A.tarefas.get(id); if (!t) continue;
     if (t.agentes.size) {
       for (const a of [...t.agentes.values()].sort((x, y) => x.i - y.i)) {
         const est = a.estado === 'done' ? 'pronto' : a.estado === 'error' ? 'erro'
           : (a.estado === 'progress' || a.estado === 'start') ? 'agora' : 'espera';
-        linhas.push({ est, nome: agBonito(a.rotulo) || 'Agente ' + a.i, fazendo: fazendo(est, a.ferramenta),
-          em: a.detalhe || '', ms: a.duracao || (est === 'agora' ? agora - (a.desde || agora) : 0), dica: a.pedido || '' });
+        const nm = agNomeDoCartao(agChaveAgente(t, a), agTituloLocal(t, a), est, a.ferramenta);
+        linhas.push({ est, nome: nm.titulo, linha: nm.linha,
+          ms: a.duracao || (est === 'agora' ? agora - (a.desde || agora) : 0) });
       }
     } else if (t.classe === 'local_agent') {
       const est = t.estado === 'rodando' ? 'agora' : t.estado === 'pronto' ? 'pronto' : t.estado === 'parado' ? 'espera' : 'erro';
-      linhas.push({ est, nome: t.desc || agNomeAgente(t.tipo) || 'Agente', fazendo: fazendo(est, t.ferramenta),
-        em: '', ms: t.uso && t.uso.duration_ms ? t.uso.duration_ms : (t.fim ? t.fim - t.inicio : agora - t.inicio), dica: t.prompt || '' });
+      const nm = agNomeDoCartao(agChaveAgente(t), agTituloLocal(t), est, t.ferramenta);
+      linhas.push({ est, nome: nm.titulo, linha: nm.linha,
+        ms: t.uso && t.uso.duration_ms ? t.uso.duration_ms : (t.fim ? t.fim - t.inicio : agora - t.inicio) });
     }
   }
   return linhas;
@@ -7671,14 +7794,13 @@ function agPintarCartaoConversa(P) {
     d.className = 'equipe-l ' + l.est;
     d.innerHTML = '<span class="equipe-sinal">' + (l.est === 'agora' ? '<span class="rd-anel"></span>'
         : l.est === 'pronto' ? ico('check') : l.est === 'erro' ? ico('warn') : '') + '</span>'
-      + '<span class="equipe-txt"><span class="equipe-nome"></span><span class="equipe-fase"><span class="equipe-faz"></span>'
-      + '<span class="equipe-em"></span></span></span><span class="equipe-tempo"></span>';
+      + '<span class="equipe-txt"><span class="equipe-nome"></span><span class="equipe-fase"></span></span>'
+      + '<span class="equipe-tempo"></span>';
     $('.equipe-nome', d).textContent = l.nome;
-    $('.equipe-faz', d).textContent = l.fazendo;
-    const em = $('.equipe-em', d);
-    if (l.em) em.textContent = l.em; else em.remove();
+    $('.equipe-fase', d).textContent = l.linha;
     $('.equipe-tempo', d).textContent = l.ms ? tempoCurto(l.ms) : '';
-    if (l.dica) d.title = l.dica.slice(0, 300);
+    // o mouse em cima mostra a mesma frase simples, inteira (a instrucao em ingles nao aparece)
+    d.title = l.linha;
     corpo.push(d);
   }
   if (linhas.length > AG_CARTAO_TETO) {

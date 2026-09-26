@@ -235,9 +235,10 @@
 /* ---------- time de agentes na conversa ----------
    Cartão com contorno de 1pt e raio 10. Cabeçalho de 30 (ícone de 14 + "Time de agentes" 600
    + "2 de 3" tabular, 12px em --label-2) + a linha de 1 embaixo = 31; linhas de 40 + 4 + 4 = 48
-   (content-box, como o design desenha): sinal + nome (500) + "o que faz · em
-   que" (11, --label-2, o "em que" em mono) + tempo (11, --label-3, tabular). O clique abre o
-   painel grande do time. */
+   (content-box, como o design desenha): sinal + o título de 2 palavras (500) + embaixo a frase
+   curta do que ele faz (11, --label-2, uma linha com reticências) + tempo (11, --label-3,
+   tabular). O "· em que" em mono (comando, caminho de arquivo) saiu em 26/09: ele não programa e
+   não entendia. O clique abre o painel grande do time. */
 .equipe{display:flex;flex-direction:column;border-radius:10px;box-shadow:inset 0 0 0 1px var(--separator);
   overflow:hidden;font:400 13px/16px var(--font-sans);color:var(--label-1);cursor:pointer;
   transition:background-color var(--dur-fast) ease-out}
@@ -261,9 +262,7 @@
 .equipe-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
 .equipe-nome{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .equipe-fase{font:400 11px/14px var(--font-sans);color:var(--label-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.equipe-l.erro .equipe-faz{color:var(--status-error)}
-.equipe-em{font-family:var(--font-mono)}
-.equipe-em::before{content:" · ";font-family:var(--font-sans)}
+.equipe-l.erro .equipe-fase{color:var(--status-error)}
 .equipe-tempo{flex:none;font-size:11px;color:var(--label-3);font-variant-numeric:tabular-nums}
 .equipe-tempo:empty{display:none}
 .equipe-mais{box-sizing:border-box;height:28px;display:flex;align-items:center;padding:0 10px;
@@ -324,8 +323,9 @@ body.foco .equipe{display:none}
 :where(#agPainel) .ag-card-top{align-items:center;gap:8px;margin-bottom:4px}
 :where(#agPainel) .ag-card-top .ag-bola{margin-top:0}
 :where(#agPainel) .ag-nome{font:500 13px/16px var(--font-sans);color:var(--label-1)}
-:where(#agPainel) .ag-fazendo{font:var(--f-sub);color:var(--label-2);margin-bottom:2px}
-:where(#agPainel) .ag-detalhe{font:400 11px/14px var(--font-mono);color:var(--label-2);margin-bottom:4px}
+/* o cartão diz só o título de 2 palavras e a frase curta do que ele faz, numa linha (26/09) */
+:where(#agPainel) .ag-fazendo{font:var(--f-sub);color:var(--label-2);margin-bottom:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 :where(#agPainel) .ag-pe{font:var(--f-sub);letter-spacing:0;color:var(--label-3);font-variant-numeric:tabular-nums}
 /* o sinal de cada agente: o mesmo do resto do app, nunca só uma bolinha colorida */
 :where(#agPainel) .ag-bola{box-sizing:border-box;width:12px;height:12px;border-radius:50%;background:transparent;
@@ -333,7 +333,8 @@ body.foco .equipe{display:none}
 :where(#agPainel) .ag-card.agora{background:var(--fill-3);box-shadow:inset 0 0 0 1px var(--separator-strong)}
 :where(#agPainel) .ag-card.agora .ag-bola{background:transparent;border:1.5px solid var(--fill-1);border-top-color:var(--label-1);
   border-right-color:var(--label-1);animation:ck-spin 1s linear infinite}
-:where(#agPainel) .ag-card.agora .ag-fazendo{color:var(--label-1);font-weight:400}
+/* trabalhando, quem avisa é o anel girando: a frase continua secundária, embaixo do título */
+:where(#agPainel) .ag-card.agora .ag-fazendo{color:var(--label-2);font-weight:400}
 :where(#agPainel) :is(.ag-card.pronto,.ag-card.erro) .ag-bola{border:0;border-radius:0;
   -webkit-mask:var(--ag-glifo) center/12px 12px no-repeat;mask:var(--ag-glifo) center/12px 12px no-repeat}
 :where(#agPainel) .ag-card.pronto{box-shadow:inset 0 0 0 1px var(--separator)}

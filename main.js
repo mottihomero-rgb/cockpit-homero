@@ -9,6 +9,7 @@ const codexProtocol = require('./codex-protocol');
 
 const plataforma = require('./plataforma');
 const nomesConversa = require('./nomes-conversa');   // nome das conversas: instrucao e validacao
+const nomesAgentes = require('./nomes-agentes');     // nome simples de cada agente do time
 const { EH_WIN, acharBin, spawnBin, abrirPty, temBin, matarProcesso } = plataforma;
 
 /* R1-006: 2a copia do processo (app instalado + uma dev rodando por cima, por exemplo)
@@ -2213,6 +2214,28 @@ handle('sessao:nomeCurto', async (_e, o) => {
   // MANTER devolve o nome atual; saida que nao parece nome (mais de uma linha, conversa, generico)
   // vira '': fica o nome que estava
   return nomesConversa.interpretarSaida(r.out, atual);
+});
+
+/* Nome simples dos agentes do time (26/09): 2 palavras e uma linha curta em portugues de gente
+   ("Revisando página" / "confere se os botões levam ao checkout") no lugar do nome tecnico do motor
+   ("code-reviewer-1", "Explore codebase for auth flow"). O app manda UM lote com os agentes que
+   acabaram de nascer; aqui vai uma chamada so ao Haiku, com instrucao e validacao do
+   nomes-agentes.js. Qualquer falha (sem Claude, prazo estourado, resposta que nao e JSON) devolve
+   {}: o cartao fica com o nome local e ninguem tenta de novo. 45 s de prazo: o Haiku sem raciocinio
+   responde em uns 5 s para 6 agentes (medido em 26/09). */
+handle('agentes:nomes', async (_e, o) => {
+  const d = (o && typeof o === 'object') ? o : {};
+  const lista = (Array.isArray(d.agentes) ? d.agentes : [])
+    .filter(a => a && typeof a === 'object' && a.id)
+    .slice(0, nomesAgentes.MAX_AGENTES)
+    .map(a => ({ id: String(a.id), desc: String(a.desc || ''), tipo: String(a.tipo || ''),
+      workflow: String(a.workflow || ''), prompt: String(a.prompt || '').slice(0, nomesAgentes.MAX_INSTRUCAO) }));
+  if (!lista.length || !fs.existsSync(CLAUDE_BIN)) return {};
+  const pedido = nomesAgentes.montarPedidoAgentes(lista);
+  if (!pedido) return {};
+  const r = await rodar(CLAUDE_BIN, nomesAgentes.argsDosAgentes(pedido), 45000);
+  if (r.err) return {};
+  return nomesAgentes.interpretarAgentes(r.out, lista);
 });
 
 /* De quem e o nome da conversa (ver donoDoNome no nomes-conversa.js): o app pergunta ao abrir uma

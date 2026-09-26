@@ -40,6 +40,7 @@
       "preload.js",
       "plataforma.js",
       "nomes-conversa.js",
+      "nomes-agentes.js",
       "servidor-web.js",
       "package.json",
       "renderer/**/*",

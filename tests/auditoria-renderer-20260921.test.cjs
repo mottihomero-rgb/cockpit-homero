@@ -35,13 +35,15 @@ function context(names, extras = {}) {
     nomeDaConversa: () => 'Conversa', montarContexto: () => 'CONTEXTO:',
     note: (P, t) => c.notices.push(t), avisoTemp: (P, t) => c.notices.push(t), avisoEnvio: () => element(),
     document: { createElement: element, querySelectorAll: () => [], body: { classList: classes() } },
+    // 25/09 (conversa costurada): sem ligacao nenhuma, a cadeia de uma conversa e ela mesma
+    MOTORES: ['claude', 'codex', 'acp', 'gemini', 'grok'], partesDaCadeia: s => [s], refDaParte: p => p,
   };
   for (const name of ['pintarAnexos', 'limparSugestoes', 'vozSoltar', 'pararBuscaDeArquivos', 'soltarNavArquivos',
     'guardarPrompt', 'prepararEscolhasEnvio', 'concluirEscolhasEnvio', 'setDot', 'pintarNome', 'nomearCurto',
     'pararTrabalho', 'limparPassos', 'limparContinuar', 'trabalhando', 'subirNaLista', 'comecarTurno',
     'marcarEspera', 'escondePerm', 'limparPlano', 'fillModels', 'paintEngine', 'pintarPasta',
     'mostrarPastaNoPainel', 'atualizarGit', 'pintarModo', 'savePanes', 'scroll', 'piscar',
-    'marcarAbertas']) c[name] = noop;
+    'marcarAbertas', 'esquecerCadeiaDoPainel', 'guardarParteAnterior', 'pintarConversas']) c[name] = noop;
   c.envioComAnexos = (P, text, attachments) => ({ text, displayText: text, attachments });
   c.userMsg = (P, text, attachments) => { const b = element(); b.dataset.hist = String(P.hist.length); b.parentNode = P.chat; b.remove = () => { b.parentNode = null; }; P.hist.push({ texto: text, attachments }); return b; };
   c.window.api.paneSend = async p => { c.sent.push(p); return true; };
@@ -270,6 +272,8 @@ function listContext() {
   const c = context(['loadHist']), box = element();
   c.histCache = {}; c.leituraHistorico = {}; c.caixaHist = () => box;
   c.paintHist = () => {}; c.buscarConversasVps = () => {}; c.juntarComVps = (e, list) => list;
+  // 25/09: a falha de UMA IA vira linha curta no topo da lista única (pintarErrosDaLista)
+  c.erroDaLista = {}; c.pintarErrosDaLista = () => {};
   return { c, box };
 }
 test('lista de histórico mais nova prevalece quando a leitura anterior atrasa', async () => {

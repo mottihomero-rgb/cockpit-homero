@@ -82,7 +82,10 @@ const MOTORES_VISIVEIS = ['claude', 'codex', 'gemini', 'grok'];
 // sem motor salvo (1º boot ou config resetado), o padrão é Claude, não Codex.
 const motorVisivel = (eng) => MOTORES_VISIVEIS.includes(eng) ? eng : 'claude';
 const CAIXA_MOTOR = { claude: 'Claude', codex: 'Codex', acp: 'Acp', gemini: 'Gemini', grok: 'Grok' };
-const caixaHist = (eng) => document.getElementById('hist' + (CAIXA_MOTOR[eng] || 'Claude'));
+/* 25/09: a coluna de conversas e UMA so, com todas as IAs juntas. Qualquer motor escreve na
+   mesma caixa — e a lista que ela mostra e montada por pintarConversas(), nunca por motor. */
+const VISTA_CONVERSAS = 'todas';
+const caixaHist = () => document.getElementById('histTodas');
 /* estado guardado por motor: nascendo com os três, um "++" numa chave que não existe deixa de
    virar NaN — que é o que faria a lista do ACP nunca pintar */
 const porMotor = (valor) => { const o = {}; for (const m of MOTORES) o[m] = valor; return o; };
@@ -464,6 +467,7 @@ function conversaDaPastaNova(P, pasta) {
   pararTrabalho(P); limparPassos(P); limparContinuar(P);
   P.sessaoId = null; P.sessaoFile = ''; P.resumeId = null;
   P.passarContexto = null; P.edicoes = [];
+  esquecerCadeiaDoPainel(P);   // 25/09: conversa nova de verdade, não costura com a da pasta velha
   zerarContexto(P);          // conversa nova: o medidor volta ao zero
   // leva 8.3: o fio mudou de conversa — a intenção de ramificar não pode ir junto, senão a
   // próxima mensagem forkaria a conversa ERRADA, em silêncio
@@ -823,6 +827,8 @@ function newPane(opts = {}) {
     model: opts.model || modeloNovo(motorDoPainel),
     started: false, busy: false, queued: null, filaMsgs: [], hist: [], passarContexto: null,
     titulo: opts.titulo || '', sessaoId: null, sessaoFile: '', anexos: [],
+    // 25/09: a conversa de antes da última troca de IA (esperando costura) e as partes mais velhas
+    parteAnterior: null, partesAnteriores: [],
     envio: cfg.envioPadrao || 'fila',
     // conversa nova nasce no esforço de PADRAO_NOVO; painel restaurado mantém o que estava salvo
     mode: opts.mode || cfg.defMode || 'auto', effort: opts.effort || esforcoNovo(motorDoPainel),
@@ -1165,6 +1171,9 @@ function savePanes(fechou) {
         // guarda a conversa para ela voltar cheia, e nao uma caixa vazia
         sessao: P.sessaoId || P.resumeId || '',
         arquivo: P.sessaoFile || '',
+        /* 25/09: trocou de IA e fechou o app antes de mandar a 1a mensagem: sem guardar, a
+           conversa nova nasceria solta, sem costura com a de antes */
+        parteAnterior: P.parteAnterior || undefined,
         /* ramo que ainda nao mandou a 1a mensagem (leva 8.3). Sem guardar, reabrir o app faria
            este chat virar CONTINUACAO da conversa de origem, escrevendo dentro dela. */
         fork: P.forkPendente || undefined,
@@ -1272,6 +1281,8 @@ async function restaurarAbasCorpo(salvas) {
       // chat que estava numa branch isolada volta nela (leva 10.5); o rotulo "⎇ nome" tem
       // de ser repintado aqui porque o newPane desenhou antes de saber do worktree
       if (c.worktree && !NA_VPS(c.cwd || a.cwd)) { P.worktree = c.worktree; mostrarPastaNoPainel(P); }
+      /* 25/09: trocou de IA e fechou antes de mandar: a costura pendente volta junto */
+      if (c.parteAnterior && c.parteAnterior.id) P.parteAnterior = c.parteAnterior;
       if (c.sessao) {
         P.carregandoHistorico = true;
         P.resumeId = c.sessao;                       // a proxima mensagem continua a mesma conversa
@@ -1279,7 +1290,20 @@ async function restaurarAbasCorpo(salvas) {
         // arquivo:"" por cima do caminho salvo. Na reabertura seguinte o chat voltava VAZIO,
         // mesmo com a conversa inteira intacta no disco.
         P.sessaoFile = c.arquivo || '';
-        paraCarregar.push({ P, arquivo: c.arquivo || '', id: c.sessao, cwd: c.cwd || a.cwd, revisao: P.revisaoConversa || 0 });
+        /* 25/09: conversa costurada (trocou de IA no meio) volta INTEIRA: as partes de antes
+           saem das ligacoes, e o painel continua na parte mais nova. Ramo pendente (c.fork)
+           nao: o numero guardado e o da ORIGEM, e o ramo nao herda a costura dela. */
+        const ref = { engine: c.engine, id: c.sessao, file: c.arquivo || '', cwd: c.cwd || a.cwd };
+        const partes = c.fork ? [ref] : partesDaCadeia(ref);
+        P.partesAnteriores = partes.slice(0, -1);
+        paraCarregar.push({ P, arquivo: c.arquivo || '', id: c.sessao, cwd: c.cwd || a.cwd, revisao: P.revisaoConversa || 0, partes });
+      } else if (P.parteAnterior) {
+        /* so a parte de antes da troca, ainda sem a conversa do motor novo: a tela volta com o
+           que ja foi conversado e a proxima mensagem leva o contexto, como antes de fechar */
+        P.carregandoHistorico = true;
+        const partes = partesDaCadeia(P.parteAnterior);
+        P.partesAnteriores = partes.slice(0, -1);
+        paraCarregar.push({ P, revisao: P.revisaoConversa || 0, partes, soAntes: true });
       }
       pintarNome(P);
     });
@@ -1318,10 +1342,27 @@ async function restaurarAbasCorpo(salvas) {
      Mac que estivesse depois de uma aba da VPS na lista esperar a VPS estourar o tempo (ate
      ~12s de ConnectTimeout SSH, ou o codexReq do Codex remoto) antes de sequer comecar a
      carregar, mesmo sem nenhuma relacao com a VPS. */
-  await Promise.all(paraCarregar.map(async ({ P, arquivo, id, cwd, revisao }) => {
+  await Promise.all(paraCarregar.map(async ({ P, arquivo, id, cwd, revisao, partes, soAntes }) => {
     if (!painelAindaAtual(P, revisao)) return;
     note(P, 'Trazendo a conversa de volta…');
     try {
+      if (partes && (partes.length > 1 || soAntes)) {
+        // 25/09: a cadeia inteira, da parte mais velha para a mais nova, com a faixa da troca
+        const lidas = await lerPartes(partes);
+        if (!painelAindaAtual(P, revisao)) return;
+        const aviso = $('.note', P.chat); if (aviso) aviso.remove();
+        const desenhou = desenharPartes(P, lidas);
+        if (soAntes && desenhou) {
+          // o motor novo ainda nao abriu a conversa dele: a faixa da troca e o contexto voltam
+          const ultima = partes[partes.length - 1];
+          if (ultima.engine !== P.engine) marcaTroca(P, nomeDoMotor(ultima.engine), nomeDoMotor(P.engine));
+          if (!P.passarContexto && P.hist.length) P.passarContexto = montarContexto(P);
+        }
+        $$('.tool-st.run', P.el).forEach(x => { x.className = 'tool-st ok'; x.innerHTML = ico('check'); });
+        if (desenhou) { clearEmpty(P); note(P, '— daqui pra baixo é a conversa de agora —'); }
+        scroll(P, true);
+        return;
+      }
       // manda tambem id e pasta: quando o caminho se perdeu (config antigo), o main
       // reconstroi sozinho a partir deles em vez de devolver conversa vazia
       // conversa do Claude que rodou na VPS: o .jsonl esta LA, nao no disco daqui
@@ -1422,6 +1463,10 @@ async function trocarMotor(P, novo) {
   // retomar uma conversa impossivel ("no rollout found" no Codex). A continuidade entre os
   // motores vem pelo contexto montado logo abaixo, nao pelo id do motor antigo.
   limparPlano(P); limparSugestoes(P);
+  /* 25/09: guarda QUAL conversa vinha antes (motor, número, arquivo) para costurar com a do
+     motor novo quando ele abrir a dele (evento 'sessao'). E o que faz a conversa continuar UMA
+     so na lista, com o logo das duas IAs, em vez de dois pedaços perdidos em listas diferentes. */
+  guardarParteAnterior(P);
   // trocar de motor comeca conversa nova daquele motor: nasce com o modelo e o esforço de PADRAO_NOVO
   P.engine = novo; P.started = false; P.model = modeloNovo(novo); P.effort = esforcoNovo(novo);
   // Modelos e comandos anunciados pelo agente antigo não pertencem ao próximo motor.
@@ -2218,6 +2263,9 @@ function botBlock(P, key, semNome) {
   clearEmpty(P);
   const d = document.createElement('div');
   d.className = 'msg bot' + (semNome ? ' emenda' : '');
+  /* 25/09: numa conversa costurada o mesmo painel mostra respostas de IAs diferentes: o logo
+     de cada resposta leva a cor da IA que respondeu, e nao a do motor atual do painel */
+  d.dataset.motor = P.engine;
   d.innerHTML = (semNome ? '' : '<div class="msg-role"><span class="av">' + svgMotor(P.engine) + '</span>'
     + nomeDoMotor(P.engine) + '</div>') + '<div class="msg-body"></div>';   // [EDITA 12.4] o ACP dizia "Claude"
   P.chat.appendChild(d);
@@ -3866,6 +3914,8 @@ function receberEventoPane(ev) {
     case 'sessao': {
       const mudou = P.sessaoId !== ev.id;
       P.sessaoId = ev.id; P.resumeId = ev.id; P.sessaoFile = ev.file || '';
+      // 25/09: primeira conversa do motor depois de uma troca de IA: costura com a de antes
+      if (P.parteAnterior) ligarParteAnterior(P);
       // grava o fio no disco NA HORA. Antes so ia junto do proximo salvamento por outro motivo:
       // fechar o app logo depois de a conversa nascer perdia o numero dela, e ao reabrir o chat
       // voltava sem fio — a mesma armadilha de continuar o trabalho de outra conversa.
@@ -3874,6 +3924,13 @@ function receberEventoPane(ev) {
     }
     // o Claude disse que essa conversa nao existe mais: agora sim o fio se solta
     case 'sessao-sumiu':
+      /* 25/09: a parte de agora sumiu, mas a conversa tinha partes antes dela (troca de IA): a
+         nova que vai nascer costura na ultima que ainda existe, e a lista continua mostrando uma
+         conversa so. */
+      if (!P.parteAnterior && Array.isArray(P.partesAnteriores) && P.partesAnteriores.length) {
+        P.parteAnterior = P.partesAnteriores[P.partesAnteriores.length - 1];
+        P.partesAnteriores = P.partesAnteriores.slice(0, -1);
+      }
       P.sessaoId = null; P.resumeId = null; P.fioSolto = Date.now();
       zerarContexto(P);         // a conversa velha sumiu: o medidor nao pode continuar com o numero dela
       P.forkPendente = false;   // leva 8.3: fio solto, a intencao de ramificar morre junto
@@ -3938,7 +3995,9 @@ function receberEventoPane(ev) {
       setTimeout(() => lerUsoAposResposta(P.engine), 1500);
       salvarNomeCurto(P);
       setTimeout(() => buscarNome(P), 1200);
-      if (lateralAberta(P.engine)) loadHist(P.engine, true);
+      /* 25/09: com a lateral aberta, relê tambem a costura das conversas antes da lista: uma
+         troca de IA gravada por outro chat ou pelo celular so entrava ao fechar e abrir a lateral */
+      if (lateralAberta()) lerLigacoes().then(() => loadHist(P.engine, true));
       agendarFila(P);
       break;
     case 'engine-down': {
@@ -4742,7 +4801,7 @@ function subirNaLista(P) {
   if (i < 0) return;
   lista[i].when = Date.now();
   lista.unshift(lista.splice(i, 1)[0]);
-  if (lateralAberta(P.engine)) paintHist(P.engine, lista);
+  if (lateralAberta()) pintarConversas();
 }
 
 function pintarNome(P) {
@@ -4773,7 +4832,8 @@ function renomearAqui(P) {
       P.titulo = novo; P.nomeManual = true; pintarNome(P); savePanes();
       const id = P.sessaoId || P.resumeId;
       if (id) { await window.api.renomear({ engine: P.engine, id, nome: novo });
-        if (lateralAberta(P.engine)) loadHist(P.engine, true); }
+        lembrarNomeDaParte({ engine: P.engine, id, file: P.sessaoFile }, novo);   // o título da cadeia acompanha na hora
+        if (lateralAberta()) loadHist(P.engine, true); }
     }
   };
   inp.addEventListener('keydown', (e) => {
@@ -4807,10 +4867,18 @@ function salvarNomeCurto(P) {
   if (!P.nomeCurto || P.nomeManual || !id || P.nomeCurtoSalvo === id + '|' + P.titulo) return;
   P.nomeCurtoSalvo = id + '|' + P.titulo;
   window.api.renomear({ engine: P.engine, id, nome: P.titulo }).catch(() => {});
+  /* 25/09: numa conversa costurada o titulo da lista sai do nome salvo das partes (NOMES_LIGADOS),
+     que so era lido ao abrir a lateral. Sem avisar aqui, o chat trocava para "Criação de Vídeo
+     com IA" e a lista continuava no nome velho da parte de antes da troca. */
+  lembrarNomeDaParte({ engine: P.engine, id, file: P.sessaoFile || '' }, P.titulo);
 }
 
 async function buscarNome(P) {
   if (P.engine !== 'claude' || !P.sessaoId || P.nomeManual || P.nomeCurto) return;
+  /* 25/09: chat que veio de uma troca de IA: o titulo que o Claude inventa para a parte NOVA
+     nasce do contexto colado ("Estou continuando uma conversa…"). O nome da conversa e o que
+     atravessou a troca, e ele vale para a cadeia inteira. */
+  if (P.parteAnterior || (Array.isArray(P.partesAnteriores) && P.partesAnteriores.length)) return;
   const t = await window.api.sessionTitulo({ engine: 'claude', file: P.sessaoFile, id: P.sessaoId });
   if (t && t !== P.titulo) { P.titulo = t; pintarNome(P); savePanes(); }
 }
@@ -4979,6 +5047,7 @@ async function menuModelos(P) {
         } else await desligarMotor(P);
         if (mudouOrigem) {
           if (P.hist.length) P.passarContexto = montarContexto(P, true, 'troca-de-cobranca');
+          guardarParteAnterior(P);   // 25/09: a conversa nova do plano/créditos continua a mesma na lista
           P.sessaoId = null; P.resumeId = null; P.sessaoFile = '';
           zerarContexto(P);         // conversa nova: o medidor volta ao zero
           P.forkPendente = false;   // leva 8.3: conversa nova, sem ramo pendente
@@ -4995,6 +5064,7 @@ async function menuModelos(P) {
       if (!comando || !comando.trim()) return;
       await desligarMotor(P);
       if (P.hist.length) P.passarContexto = montarContexto(P, true, 'troca-de-agente');
+      guardarParteAnterior(P);   // 25/09: o agente novo continua a mesma conversa na lista
       P.model = comando.trim(); P.sessaoId = null; P.resumeId = null; P.sessaoFile = '';
       zerarContexto(P);          // conversa nova: o medidor volta ao zero
       fillModels(P); savePanes();
@@ -6401,10 +6471,10 @@ function agDesenhar() {
 /* ============ conta e limite fixos na barra lateral ============ */
 const contaCache = { claude: null, codex: null, acp: null, gemini: null, grok: null };
 
-/* O "Entrar" do cartao da coluna chamava contaAcao(focusPane) — o motor do CHAT EM FOCO,
-   nao o da coluna. Com um chat do Codex em foco, clicar em "Entrar" no cartao do Claude
-   rodava "codex login". Agora o login e' sempre o do motor daquele cartao, e sem chat
-   desse motor a tela diz isso em vez de errar calada. */
+/* O "Entrar" do cartao da conta chamava contaAcao(focusPane) — o motor do CHAT EM FOCO, nao o
+   da IA do cartao. Com um chat do Codex em foco, clicar em "Entrar" no cartao do Claude rodava
+   "codex login". O login e' sempre o do motor daquele cartao, e sem chat desse motor a tela
+   diz isso em vez de errar calada. (Voltou em 25/09: a lista unica tinha perdido o Entrar.) */
 function entrarNaConta(engine) {
   let P = (focusPane && focusPane.engine === engine)
     ? focusPane
@@ -6417,77 +6487,86 @@ function entrarNaConta(engine) {
   if (focusPane) note(focusPane, recado, true);
 }
 
+/* ---- conta e uso do plano no topo da lista de conversas (25/09) ----
+   Cada coluna de motor tinha a conta dela no topo. Na lista unica fica UM bloco curto por IA:
+     - com login: logo + nome (ou e-mail) + plano, e embaixo Sessao e Semana quando houver
+       numero (%, barra fina, "zera …"). Consulta segurada ou que falhou: so a linha da conta,
+       e o porque vai no title. Clicar abre a janela da conta daquela IA.
+     - sem login: logo + botao "Entrar", que roda o login do motor CERTO (entrarNaConta).
+     - IA que nao esta instalada neste Mac: nao aparece.
+   Sem frase na tela: o detalhe mora no title.
+   O nome ficou pintarContaLateral porque o lerUso, o login e o trocar de conta ja chamam por
+   ele quando o numero de um motor muda: continua sendo o jeito de repintar UM motor. */
+const contaLidaEm = porMotor(0);
+/* forcar = reler a conta agora (evento de conta do Codex, login, troca de conta): sempre rele.
+   A trava de um minuto e so do ABRIR a vista (pintarUsoLateral), senao abrir e fechar a coluna
+   viraria uma consulta de limite atras da outra (a Anthropic responde 429). */
 async function pintarContaLateral(engine, forcar) {
-  const cx = $('.side-conta[data-conta="' + engine + '"]');
-  if (!cx) return;
+  const cx = $('#cvUso');
+  if (!cx || !MOTORES_VISIVEIS.includes(engine)) return;
   if (!contaCache[engine] || forcar) {
-    if (!contaCache[engine]) cx.innerHTML = '<div class="sc-vazio">vendo a conta…</div>';
-    contaCache[engine] = await window.api.contaLer(engine);
+    contaLidaEm[engine] = Date.now();
+    try { contaCache[engine] = await window.api.contaLer(engine); } catch { /* fica o que ja tinha */ }
   }
-  const c = contaCache[engine];
-  /* leva 12.5: o ACP não tem conta que o Cockpit leia — ela é do agente, resolvida no terminal
-     dele. Sem este ramo a coluna dizia "Sem conta do Claude neste Mac" num painel que não é
-     Claude, e ainda oferecia um botão "Entrar" que não entraria em lugar nenhum. */
-  if (engine === 'acp') {
-    cx.innerHTML = '<div class="sc-vazio"></div>';
-    $('.sc-vazio', cx).textContent = (c && c.motivo)
-      || 'A conta é a do próprio agente ACP, configurada no terminal dele.';
-    return;
+  pintarBlocoDeUso(cx, engine, contaCache[engine]);
+}
+function pintarUsoLateral(forcar) {
+  for (const m of MOTORES_VISIVEIS) pintarContaLateral(m, !!forcar && Date.now() - contaLidaEm[m] > 60000);
+}
+function pintarBlocoDeUso(cx, engine, c) {
+  let bloco = $('.cv-uso-motor[data-motor="' + engine + '"]', cx);
+  // conta ainda nao lida, ou IA que nao esta instalada neste Mac: nada no topo
+  if (!c || (MOTORES_OK && MOTORES_OK[engine] === false)) { if (bloco) bloco.remove(); return; }
+  if (!bloco) {
+    bloco = document.createElement('div');
+    bloco.className = 'cv-uso-motor';
+    bloco.dataset.motor = engine;
+    // a ordem dos blocos e a dos motores, chegue a resposta de quem chegar primeiro
+    const depois = MOTORES_VISIVEIS.slice(MOTORES_VISIVEIS.indexOf(engine) + 1)
+      .map(m => $('.cv-uso-motor[data-motor="' + m + '"]', cx)).find(Boolean);
+    cx.insertBefore(bloco, depois || null);
+    // sem login o clique e so o do botao "Entrar"; com login, o bloco inteiro abre a conta
+    bloco.addEventListener('click', () => { if (!bloco.classList.contains('sem-conta')) abrirContaDaLateral(engine); });
   }
   const motor = nomeDoMotor(engine);
-  if (!c || !c.entrou) {
-    cx.innerHTML = '<div class="sc-vazio">Sem conta do ' + motor + ' neste Mac. <button class="sc-link">Entrar</button></div>';
-    $('.sc-link', cx).onclick = () => entrarNaConta(engine);
+  const logo = '<span class="cv-uso-logo">' + svgMotor(engine) + '</span>';
+  if (!c.entrou) {
+    bloco.classList.add('sem-conta');
+    bloco.innerHTML = '<div class="cv-uso-cab">' + logo + '<button class="cv-uso-entrar">Entrar</button></div>';
+    bloco.title = 'Sem conta do ' + motor + ' neste Mac';
+    $('.cv-uso-entrar', bloco).onclick = (e) => { e.stopPropagation(); entrarNaConta(engine); };
     return;
   }
-  const semDado = !c.sessao && !c.semana;
-  const barra = (titulo, j, semLimite) => {
-    // plano sem essa janela (o Codex Pro hoje so tem a da semana): dizer isso, nao "—"
-    if (!j && semLimite) return '<div class="sc-us" title="Seu plano hoje só tem o limite da semana"><div class="sc-top"><span>' + titulo + '</span><b class="sc-sem">sem limite</b></div></div>';
-    if (!j) return '<div class="sc-us"><div class="sc-top"><span>' + titulo + '</span><b>—</b></div></div>';
-    const pct = Math.min(100, Math.max(0, j.pct || 0));
-    const cor = pct >= 90 ? 'perto' : pct >= 70 ? 'meio' : '';
-    // "zera em X" vai na MESMA linha do titulo: em linha propria era uma terceira altura
-    // so para tres palavrinhas, e a coluna toda ficava alta a toa
-    return '<div class="sc-us"><div class="sc-top"><span>' + titulo
-      + (j.reseta ? ' <i class="sc-zera">zera ' + quandoFuturo(j.reseta) + '</i>' : '')
-      + '</span><b>' + pct + '%</b></div>'
-      + '<div class="sc-bar"><span class="sc-fill ' + cor + '" style="width:' + pct + '%"></span></div></div>';
+  bloco.classList.remove('sem-conta');
+  const janela = (rotulo, j) => {
+    if (!j) return '';
+    const pct = Math.min(100, Math.max(0, Math.round(j.pct || 0)));
+    return '<div class="cv-uso-janela"><div class="cv-uso-top"><span class="cv-uso-rot">' + rotulo + '</span>'
+      + '<span class="cv-uso-pct">' + pct + '%</span>'
+      + (j.reseta ? '<span class="cv-uso-zera">zera ' + escaparAtributo(quandoFuturo(j.reseta)) + '</span>' : '')
+      + '</div><div class="cv-uso-barra"><span style="width:' + pct + '%"></span></div></div>';
   };
-  cx.innerHTML = '<div class="sc-cab"><span class="sc-av"></span>'
-    + '<span class="sc-txt"><b class="sc-n"></b><span class="sc-e"></span></span>'
-    + (c.plano ? '<span class="sc-plano"></span>' : '')
-    + '<button class="sc-re" title="Atualizar agora"></button></div>'
-    + '<div class="sc-rot">Limite de uso</div>'
-    + barra('Sessão de agora', c.sessao, c.semSessao)
-    + barra('Semana', c.semana)
-    // dizer O QUE houve: "limitado" e muita consulta em pouco tempo (passa sozinho),
-    // e bem diferente de nao conseguir ler
-    + (semDado
-        ? (c.limitado
-            ? '<div class="sc-pe sc-aviso">o ' + motor + ' segurou as consultas agora · tento de novo sozinho '
-              + (c.voltaEm ? quandoFuturo(c.voltaEm) : 'em alguns minutos') + '</div>'
-            : '<div class="sc-pe sc-aviso">não consegui ler agora · clique em ↻ para tentar de novo</div>')
-        // numero guardado porque a consulta falhou: mostra, mas diz de quando e
-        : c.velho ? '<div class="sc-pe">última leitura ' + haQuanto(c.velho) + ' · atualizo sozinho</div>' : '');
-  $('.sc-av', cx).innerHTML = svgMotor(engine);
-  $('.sc-n', cx).textContent = c.nome || c.email || '';
-  $('.sc-e', cx).textContent = c.email || '';
-  // quando a conta nao tem nome, o de cima ja e o e-mail: a segunda linha era o mesmo texto
-  $('.sc-e', cx).classList.toggle('repetido', !c.nome || c.nome === c.email);
-  if (c.plano) $('.sc-plano', cx).textContent = c.plano;
-  $('.sc-re', cx).innerHTML = ico('refresh-cw');
-  $('.sc-re', cx).onclick = (e) => { e.stopPropagation(); pintarContaLateral(engine, true); };
-  $('.sc-cab', cx).onclick = () => {
-    // abre a conta do LADO da coluna que esta aberto, e usa qualquer chat como moldura da
-    // janelinha (antes nao acontecia nada quando nenhum chat estava em foco)
-    // a janelinha nasce DENTRO de um chat: tem de ser um que esteja na tela, senao o clique
-    // parece nao fazer nada (ela abre escondida atras da aba que nao esta aberta)
-    const naAba = abaAtiva ? abaAtiva.ordem.map(id => panes.get(id)).filter(Boolean) : [];
-    const P = naAba.find(q => q.engine === engine) || (focusPane && naAba.includes(focusPane) ? focusPane : naAba[0])
-           || [...panes.values()].find(q => q.engine === engine) || focusPane || panes.values().next().value;
-    if (P) janelaConta(P, engine);
-  };
+  const janelas = janela('Sessão', c.sessao) + janela('Semana', c.semana);
+  bloco.innerHTML = '<div class="cv-uso-cab">' + logo + '<span class="cv-uso-nome"></span>'
+    + (c.plano ? '<span class="cv-uso-plano"></span>' : '') + '</div>'
+    + (janelas ? '<div class="cv-uso-janelas">' + janelas + '</div>' : '');
+  $('.cv-uso-nome', bloco).textContent = c.nome || c.email || motor;
+  if (c.plano) $('.cv-uso-plano', bloco).textContent = c.plano;
+  // o que antes era frase na coluna ("segurou as consultas", "não consegui ler") vai no title
+  const semNumero = !c.sessao && !c.semana;
+  const porque = semNumero && c.limitado
+    ? 'O ' + motor + ' segurou as consultas agora · tento de novo ' + (c.voltaEm ? quandoFuturo(c.voltaEm) : 'em alguns minutos')
+    : semNumero && ['claude', 'codex'].includes(engine) ? 'Não consegui ler o uso agora'
+    : c.velho ? 'Última leitura ' + haQuanto(c.velho) : '';
+  bloco.title = [motor, c.plano, c.email].filter(Boolean).join(' · ') + (porque ? '\n' + porque : '');
+}
+/* clicar no bloco abre a janela da conta daquela IA. A janelinha nasce DENTRO de um chat: tem
+   de ser um que esteja na tela, senao o clique parece nao fazer nada. */
+function abrirContaDaLateral(engine) {
+  const naAba = abaAtiva ? abaAtiva.ordem.map(id => panes.get(id)).filter(Boolean) : [];
+  const P = naAba.find(q => q.engine === engine) || (focusPane && naAba.includes(focusPane) ? focusPane : naAba[0])
+         || [...panes.values()].find(q => q.engine === engine) || focusPane || panes.values().next().value;
+  if (P) janelaConta(P, engine);
 }
 
 /* O 2o argumento diz de QUAL motor e a conta. Sem ele, clicar no cartao da conta do Claude
@@ -7462,7 +7541,7 @@ async function buscarConversasVps(engine, force) {
     if (histCacheVps[engine]) {
       histCacheVps[engine] = null;
       histCache[engine] = (histCache[engine] || []).filter(s => !s.remoto);
-      paintHist(engine, histCache[engine]);
+      pintarConversas();
     }
     return;
   }
@@ -7486,7 +7565,7 @@ async function buscarConversasVps(engine, force) {
   vpsUltimoErro = '';
   histCacheVps[engine] = r;
   histCache[engine] = juntarComVps(engine, (histCache[engine] || []).filter(s => !s.remoto));
-  paintHist(engine, histCache[engine]);
+  pintarConversas();
 }
 
 function grupoDoTempo(ms) {
@@ -7522,20 +7601,47 @@ function quando(ms) {
    nascia com 'hidden', entao o teste antigo dava SEMPRE verdadeiro e o app relia milhares de
    arquivos de conversa a cada resposta, mesmo com a coluna fechada. Era a engasgada de todo
    fim de resposta. */
-function lateralAberta(engine) {
+/* 25/09: o motor nao importa mais — a lista e uma so para todas as IAs. O argumento ficou para
+   quem chama nao precisar mudar: "a lista esta aberta?" vale igual para qualquer motor. */
+function lateralAberta() {
   // no telefone a lateral e uma gaveta por cima: quem diz se esta aberta e a classe do body,
   // porque o #sidebar nunca ganha 'hidden'. Sem isto o telefone relia a lista a cada resposta.
   if (window.SEM_ELECTRON) { if (!document.body.classList.contains('gaveta')) return false; }
   else if ($('#sidebar').classList.contains('hidden')) return false;
-  const v = $('.side-view[data-view="h' + engine + '"]');
+  const v = $('.side-view[data-view="conversas"]');
   return !!v && !v.classList.contains('hidden');
+}
+
+/* 25/09: a lista de UMA IA que nao veio (app-server do Codex fora do ar, arquivo ilegivel). Na
+   coluna por motor a caixa dizia "Não consegui ler"; na lista unica, trocar tudo pelo erro
+   apagaria as conversas das outras IAs, e calar fazia as do Codex sumirem sem aviso. Fica uma
+   linha curta no topo: logo + "indisponível" (o motivo no title), e o clique tenta de novo. */
+const erroDaLista = {};
+function pintarErrosDaLista() {
+  const cx = $('#cvErros');
+  if (!cx) return;
+  cx.replaceChildren();
+  for (const m of MOTORES) {
+    // IA que nem esta instalada neste Mac nao tem lista para dar erro
+    if (!erroDaLista[m] || (MOTORES_OK && MOTORES_OK[m] === false)) continue;
+    const b = document.createElement('button');
+    b.className = 'cv-erro';
+    b.dataset.motor = m;
+    b.title = 'Não consegui ler as conversas do ' + nomeDoMotor(m) + ': ' + erroDaLista[m] + '\nClique para tentar de novo.';
+    b.innerHTML = '<span class="cv-uso-logo">' + svgMotor(m) + '</span><span>indisponível</span>';
+    b.addEventListener('click', () => loadHist(m, true));
+    cx.appendChild(b);
+  }
 }
 
 async function loadHist(engine, force) {
   const pedido = leituraHistorico[engine] = (leituraHistorico[engine] || 0) + 1;
-  const box = caixaHist(engine);   // [EDITA leva 12.4] sem isto o ACP APAGAVA a lista do Codex
-  if (histCache[engine]) paintHist(engine, histCache[engine]);   // mostra o que ja tem
-  else box.innerHTML = '<div class="hist-load">Carregando…</div>';
+  const box = caixaHist();
+  /* 25/09: a caixa e de TODOS os motores. "Carregando…" e o erro de leitura so ocupam a caixa
+     quando nenhum motor tem lista ainda: o Gemini fora do ar nao pode apagar as do Claude. */
+  const algumaPronta = () => MOTORES.some(m => Array.isArray(histCache[m]));
+  if (algumaPronta()) pintarConversas();   // mostra o que ja tem
+  else if (box) box.innerHTML = '<div class="hist-load">Carregando…</div>';
   /* [EDITA leva 12.4] uma alternativa NOVA na frente das duas de sempre, que ficaram intactas:
      as conversas do ACP são as que o próprio Cockpit anota, num JSONL por sessão. */
   let r;
@@ -7546,21 +7652,27 @@ async function loadHist(engine, force) {
     if (r && r.error) throw new Error(r.error);
     if (r && !Array.isArray(r)) throw new Error('A lista de conversas está indisponível.');
   } catch (e) {
-    if (leituraHistorico[engine] === pedido) box.replaceChildren(Object.assign(document.createElement('div'),
+    if (leituraHistorico[engine] !== pedido) return;
+    if (box && !algumaPronta()) box.replaceChildren(Object.assign(document.createElement('div'),
       { className: 'hist-load', textContent: 'Não consegui ler: ' + (e.message || e) }));
+    // com a lista das outras IAs na tela, a falha desta vira uma linha curta no topo
+    erroDaLista[engine] = String((e && e.message) || e || 'sem resposta');
+    pintarErrosDaLista();
     return;
   }
   if (leituraHistorico[engine] !== pedido) return;
+  if (erroDaLista[engine]) { delete erroDaLista[engine]; pintarErrosDaLista(); }
   histCache[engine] = juntarComVps(engine, r || []);
-  paintHist(engine, histCache[engine]);
+  pintarConversas();
   /* de propósito SEM o `force`: o turn-end também chama loadHist(engine, true), então passar
      o force adiante desligaria a trava justamente onde ela é necessária */
   buscarConversasVps(engine);   // as da VPS entram depois, sem segurar esta pintura
 }
 
-const buscaAtual = { claude: '', codex: '', acp: '', gemini: '', grok: '' };
+// a chave 'todas' e a da lista unica (25/09); as dos motores ficaram para nada quebrar
+const buscaAtual = { claude: '', codex: '', acp: '', gemini: '', grok: '', todas: '' };
 // filtro de pasta da lista lateral: '' = Mac inteiro, 'ABA' = acompanha a aba, ou o caminho de um cliente
-const filtroPasta = { claude: 'ABA', codex: 'ABA', acp: 'ABA', gemini: 'ABA', grok: 'ABA' };
+const filtroPasta = { claude: 'ABA', codex: 'ABA', acp: 'ABA', gemini: 'ABA', grok: 'ABA', todas: 'ABA' };
 
 // cada pasta dentro daqui e um cliente (funcao porque o HOME so chega no boot)
 const PROJETOS = () => HOME + '/Desktop/Projetos-claude';
@@ -7628,6 +7740,272 @@ function todasAsConversas() {
   return tudo.sort((a, b) => (b.when || 0) - (a.when || 0));
 }
 
+/* ============ conversa costurada: uma conversa, varias IAs (25/09) ============
+   Trocar de IA no meio do chat faz o motor novo abrir OUTRA conversa no armazenamento dele.
+   O main guarda em ligacoes.json, para cada conversa que nasceu de uma troca, qual era a parte
+   anterior. Aqui a lista junta as partes: a parte que e "anterior" de outra nao aparece
+   sozinha, o item mostrado e a parte MAIS NOVA, com o nome da cadeia, a data da mais nova e o
+   logo de cada IA que trabalhou nela. Abrir o item traz o historico de todas as partes. */
+let LIGACOES = {};           // "motor:id da nova" -> { engine, id, file, cwd, anterior: {…} }
+let NOMES_LIGADOS = {};      // id -> nome salvo (nomes.json) das partes que estao em alguma cadeia
+const chaveParte = (p) => (p && p.engine) + ':' + (p && p.id);
+// so o que identifica a parte: o resto (titulo, data) muda e nao vai para o ligacoes.json
+const refDaParte = (p) => ({ engine: p.engine, id: p.id, file: p.file || '', cwd: p.cwd || '', remoto: !!p.remoto });
+
+async function lerLigacoes() {
+  if (!window.api || !window.api.ligacoesLer) return;
+  let r = null;
+  try { r = await window.api.ligacoesLer(); } catch { return; }   // sem resposta: fica o que ja tinha
+  if (!r || typeof r !== 'object' || r.error) return;
+  LIGACOES = (r.ligacoes && typeof r.ligacoes === 'object') ? r.ligacoes : {};
+  NOMES_LIGADOS = (r.nomes && typeof r.nomes === 'object') ? r.nomes : {};
+}
+
+// a ligacao em que esta parte e a NOVA (quem veio antes dela). So motor+id: o Codex pode ter
+// o mesmo id em mais de uma .jsonl, e todas continuam a mesma conversa de antes da troca.
+function ligacaoDe(p) {
+  const l = LIGACOES[chaveParte(p)];
+  return l && l.anterior && l.anterior.id ? l : null;
+}
+
+/* As partes de uma conversa, da mais velha para a mais nova, andando pelas ligacoes a partir
+   de uma parte qualquer. Para em ciclo (A→B→A, arquivo editado na mao) e em 50 passos. */
+function partesDaCadeia(ref) {
+  const partes = [ref];
+  const vistos = new Set([chaveParte(ref)]);
+  let atual = ref;
+  for (let n = 0; n < 50; n++) {
+    const l = ligacaoDe(atual);
+    if (!l) break;
+    const k = chaveParte(l.anterior);
+    if (vistos.has(k)) break;
+    vistos.add(k);
+    partes.unshift(l.anterior);
+    atual = l.anterior;
+  }
+  return partes;
+}
+
+/* Titulo da cadeia: o nome salvo de qualquer parte, da mais nova para a mais velha (o nome
+   que ele deu, ou o nome curto, vale para a conversa inteira); sem nome salvo, o titulo da
+   primeira parte — que e o pedido de verdade, e nao o "Estou continuando uma conversa…". */
+function tituloDaCadeia(partes) {
+  for (let i = partes.length - 1; i >= 0; i--) if (NOMES_LIGADOS[partes[i].id]) return NOMES_LIGADOS[partes[i].id];
+  const primeira = partes.find(p => !p.fantasma && p.title);
+  return (primeira && primeira.title) || partes[partes.length - 1].title || 'Conversa';
+}
+// as IAs da conversa na ordem em que entraram, sem repetir
+function motoresDaCadeia(partes) {
+  const out = [];
+  for (const p of partes) if (p && p.engine && !out.includes(p.engine)) out.push(p.engine);
+  return out;
+}
+function itemDaCadeia(partes) {
+  const cabeca = partes[partes.length - 1];
+  if (partes.length === 1) return cabeca;
+  return Object.assign({}, cabeca, {
+    title: tituloDaCadeia(partes),
+    when: Math.max(...partes.map(p => p.when || 0)),
+    partes, motores: motoresDaCadeia(partes),
+    remoto: partes.some(p => p.remoto),
+  });
+}
+
+/* A lista unica: as conversas de todas as IAs, com as cadeias ja juntadas. Cada parte que e
+   anterior de uma conversa que existe na lista sai de circulacao sozinha. Parte apagada no
+   meio da cadeia (arquivo sumiu por fora) vira "fantasma": a cadeia continua andando por ela
+   pela ligacao, e o historico dela simplesmente nao vem. */
+function montarCadeias(lista) {
+  const porId = new Map();
+  for (const s of lista) {
+    const k = chaveParte(s);
+    if (!porId.has(k)) porId.set(k, []);
+    porId.get(k).push(s);
+  }
+  // Codex repete o mesmo id em varias .jsonl (ver chaveFav): com mais de uma, vale a do arquivo
+  const acharItem = (ref) => {
+    const xs = porId.get(chaveParte(ref));
+    if (!xs) return null;
+    if (xs.length === 1) return xs[0];
+    return ref.file ? (xs.find(x => (x.file || '') === ref.file) || null) : xs[0];
+  };
+  const montar = (cabeca) => {
+    const partes = partesDaCadeia(cabeca).map((p, i, todas) => {
+      if (i === todas.length - 1) return cabeca;
+      return acharItem(p) || Object.assign({}, refDaParte(p), { fantasma: true });
+    });
+    return partes;
+  };
+  // quem e anterior de alguem que EXISTE (andando tambem pelos fantasmas): nao e cabeca
+  const anteriores = new Set();
+  for (const s of lista) {
+    if (!ligacaoDe(s)) continue;
+    for (const p of montar(s).slice(0, -1)) if (!p.fantasma && p !== s) anteriores.add(p);
+  }
+  const absorvidos = new Set();
+  const out = [];
+  const juntar = (s) => {
+    const partes = montar(s);
+    for (const p of partes) if (!p.fantasma) absorvidos.add(p);
+    out.push(itemDaCadeia(partes));
+  };
+  for (const s of lista) if (!anteriores.has(s)) juntar(s);
+  // sobrou alguem que nao e cabeca nem foi juntado: so acontece em ciclo (A→B→A). A mais nova
+  // vira a cabeca, e nenhuma conversa some da lista por causa de uma costura torta.
+  for (const s of lista) if (!absorvidos.has(s)) juntar(s);
+  return out.sort((a, b) => (b.when || 0) - (a.when || 0));
+}
+function listaUnica() { return montarCadeias(todasAsConversas()); }
+// de cada parte (e de cada conversa solta) para o item que a lista mostra: e o que leva o
+// achado da busca numa parte velha para a conversa inteira
+function mapaDasCadeias(lista) {
+  const m = new Map();
+  for (const c of (lista || [])) {
+    m.set(c, c);
+    if (Array.isArray(c.partes)) for (const p of c.partes) if (!p.fantasma) m.set(p, c);
+  }
+  return m;
+}
+
+/* Desenha a lista unica. Quem mudou alguma coisa (lista nova de um motor, estrela, grupo,
+   filtro, busca) chama esta, e nunca mais o paintHist de um motor so. */
+function pintarConversas() { return paintHist(VISTA_CONVERSAS, listaUnica()); }
+
+/* O ACP (Qwen, OpenCode…) nao tem botao na barra, mas as conversas dele sao do proprio Cockpit
+   e entram na lista unica tambem: antes o ⌘P com um chat ACP em foco abria a coluna dele, e sem
+   ler aqui elas sumiam da lista e da busca (e a parte ACP de uma cadeia virava fantasma). E
+   barato: e um JSONL por sessao que o Cockpit mesmo grava. */
+const MOTORES_DA_LISTA = [...MOTORES_VISIVEIS, 'acp'];
+let costuraAntigaPedida = false;
+/* Le as conversas de todas as IAs e a costura entre elas. As listas chegam cada uma no seu
+   tempo (o Codex demora mais): a lista vai se completando, cada chegada redesenha. */
+async function recarregarConversas(forcar) {
+  await lerLigacoes();
+  await Promise.all(MOTORES_DA_LISTA.map(m => loadHist(m, forcar).catch(() => {})));
+  /* Uma vez por abertura do app: as conversas partidas numa troca de IA ANTES da costura
+     existir sao ligadas pelo main (so trabalha na primeira vez de todas; depois responde na
+     hora). Achou alguma: a lista relê a costura e junta os pedacos. So no Mac (o preload). */
+  if (!costuraAntigaPedida && window.api && window.api.ligacoesAntigas) {
+    costuraAntigaPedida = true;
+    Promise.resolve(window.api.ligacoesAntigas()).then(async (r) => {
+      if (!r || !r.novas) return;
+      await lerLigacoes();
+      if (lateralAberta()) pintarConversas();
+    }).catch(() => {});
+  }
+}
+
+// os logos oficiais das IAs da conversa, 12px, cada um na cor da sua IA
+function logosDaConversa(s) {
+  const motores = Array.isArray(s.motores) && s.motores.length ? s.motores : [s.engine];
+  const cx = document.createElement('span');
+  cx.className = 'hi-motores';
+  cx.title = motores.map(nomeDoMotor).join(' → ');
+  for (const m of motores) {
+    const l = document.createElement('span');
+    l.className = 'hi-motor';
+    l.dataset.motor = m;
+    l.innerHTML = svgMotor(m);
+    cx.appendChild(l);
+  }
+  return cx;
+}
+
+// nome novo dado pela lista ou pelo lapis do chat: vale na hora para a linha e para a cadeia
+function lembrarNomeDaParte(p, nome) {
+  if (!p || !p.id || !nome) return;
+  if (Array.isArray(histCache[p.engine])) {
+    for (const x of histCache[p.engine]) if (x.id === p.id && (!p.file || !x.file || x.file === p.file)) x.title = nome;
+  }
+  if (Object.values(LIGACOES).some(l => (l.engine === p.engine && l.id === p.id) || (l.anterior.engine === p.engine && l.anterior.id === p.id))) {
+    NOMES_LIGADOS[p.id] = nome;
+  }
+  // o nome curto chega a cada 2a/4a/8a mensagem: com a lateral fechada nao ha o que redesenhar
+  if (lateralAberta()) pintarConversas();
+}
+// parte que foi para a Lixeira: a costura dela sai tambem da memoria desta tela
+function esquecerLigacoesLocais(p) {
+  for (const [k, l] of Object.entries(LIGACOES)) {
+    if ((l.engine === p.engine && l.id === p.id) || (l.anterior.engine === p.engine && l.anterior.id === p.id)) delete LIGACOES[k];
+  }
+  delete NOMES_LIGADOS[p.id];
+}
+
+/* ---- o painel e a cadeia ----
+   P.parteAnterior: a conversa de ANTES da ultima troca de IA, esperando o motor novo abrir a
+   dele para costurar. P.partesAnteriores: todas as partes mais velhas desta conversa. */
+function esquecerCadeiaDoPainel(P) { P.parteAnterior = null; P.partesAnteriores = []; }
+/* Chamado no instante da troca de IA, ANTES de o numero da conversa ser zerado. Chat sem
+   conversa (trocou duas vezes sem mandar nada) nao guarda nada: a parte pendente continua a
+   mesma, e nao nasce ligacao fantasma. */
+function guardarParteAnterior(P) {
+  /* Ramo que ainda nao mandou a 1a mensagem (forkPendente): o resumeId dele e o da conversa de
+     ORIGEM, porque o fork so acontece no start. Guardar aqui costurava o ramo na origem — que
+     continua viva no outro chat e sumia da lista como item proprio (e o Apagar do ramo levava
+     a origem junto para a Lixeira). */
+  if (P.forkPendente) return;
+  const id = P.sessaoId || P.resumeId;
+  if (!id) return;
+  /* Sem nada na tela o motor novo nao recebe contexto nenhum (o passarContexto sai do P.hist):
+     nao e continuacao, e costurar juntaria duas conversas que nao se conhecem. */
+  if (!Array.isArray(P.hist) || !P.hist.length) return;
+  P.parteAnterior = { engine: P.engine, id, file: P.sessaoFile || '', cwd: P.cwd || '' };
+}
+/* O motor novo anunciou a conversa dele (evento 'sessao'): costura nova → anterior no disco. */
+function ligarParteAnterior(P) {
+  const anterior = P.parteAnterior;
+  if (!anterior || !P.sessaoId) return;
+  P.parteAnterior = null;
+  const nova = { engine: P.engine, id: P.sessaoId, file: P.sessaoFile || '', cwd: P.cwd || '' };
+  // retomou a mesma conversa (nada mudou de verdade): nao ha o que costurar
+  if (anterior.engine === nova.engine && anterior.id === nova.id) return;
+  // a cadeia ja passa pela nova: ligar faria um circulo
+  if (partesDaCadeia(anterior).some(p => p.engine === nova.engine && p.id === nova.id)) return;
+  P.partesAnteriores = [...(P.partesAnteriores || []), anterior];
+  // vale na hora nesta tela; o main e quem guarda de verdade (e tambem recusa circulo)
+  LIGACOES[chaveParte(nova)] = Object.assign({}, nova, { anterior, quando: Date.now() });
+  Promise.resolve(window.api.ligacoesGravar ? window.api.ligacoesGravar({ nova, anterior }) : null)
+    .then(r => { if (r && r.error) delete LIGACOES[chaveParte(nova)]; })
+    .catch(() => {});
+  if (lateralAberta()) pintarConversas();
+}
+
+/* O historico de UMA parte. Conversa do Claude que rodou na VPS mora no disco de la. */
+async function lerHistoricoDaParte(p) {
+  const remoto = p.engine === 'claude' && (!!p.remoto || NA_VPS(p.cwd)) && window.api.sessionHistoryRemoto;
+  const msgs = remoto
+    ? await window.api.sessionHistoryRemoto({ id: p.id })
+    : await window.api.sessionHistory({ engine: p.engine, file: p.file, id: p.id, cwd: p.cwd });
+  if (!Array.isArray(msgs)) throw new Error(msgs && (msgs.error || msgs.erro) || 'Histórico indisponível.');
+  return msgs;
+}
+// todas as partes em paralelo (a VPS lenta nao segura as do Mac); uma que falha nao derruba
+// as outras — ela volta com o erro e as demais sao desenhadas
+function lerPartes(partes) {
+  return Promise.all(partes.map(p => lerHistoricoDaParte(p)
+    .then(msgs => ({ parte: p, msgs }), erro => ({ parte: p, msgs: [], erro }))));
+}
+/* Desenha as partes da mais velha para a mais nova, com a faixa da troca de IA entre elas.
+   Cada resposta sai com o logo e o nome da IA QUE respondeu, e entra no P.hist com esse nome:
+   se ele trocar de novo, a proxima IA recebe "### Codex:" e "### Claude:" certos.
+   A troca do P.engine durante o desenho e sincrona de proposito: nenhum evento do motor entra
+   no meio, e o finally devolve o motor do painel mesmo se uma mensagem estourar. */
+function desenharPartes(P, lidas) {
+  const motorDoPainel = P.engine;
+  let antes = '', desenhou = 0;
+  try {
+    for (const { parte, msgs } of lidas) {
+      if (!msgs || !msgs.length) continue;
+      if (antes && antes !== parte.engine) marcaTroca(P, nomeDoMotor(antes), nomeDoMotor(parte.engine));
+      P.engine = parte.engine;
+      for (const m of msgs) renderizarHistorico(P, m);
+      antes = parte.engine;
+      desenhou += msgs.length;
+    }
+  } finally { P.engine = motorDoPainel; }
+  return desenhou;
+}
+
 /* A busca olha os quatro motores, mas a lista de cada motor so e lida quando a coluna dele
    abre. Antes de procurar, le as que ainda faltam — uma vez so — e redesenha quando chegam. */
 let lendoTodoHistorico = false;
@@ -7636,13 +8014,13 @@ let lendoTodoHistorico = false;
 const historicoJaPedido = new Set();
 async function lerHistoricoDeTodosOsMotores(engine) {
   if (lendoTodoHistorico) return;
-  const faltam = MOTORES_VISIVEIS.filter(m => !histCache[m] && !historicoJaPedido.has(m));
+  const faltam = MOTORES_DA_LISTA.filter(m => !histCache[m] && !historicoJaPedido.has(m));
   if (!faltam.length) return;
   lendoTodoHistorico = true;
   for (const m of faltam) historicoJaPedido.add(m);
   try { await Promise.all(faltam.map(m => loadHist(m).catch(() => {}))); } catch {}
   lendoTodoHistorico = false;
-  if (histCache[engine]) paintHist(engine, histCache[engine]);   // agora com todas na mao
+  pintarConversas();   // agora com todas na mao
 }
 
 function pintarBotaoFiltro(engine) {
@@ -7659,7 +8037,7 @@ function pintarBotaoFiltro(engine) {
 async function pintarPastas(engine) {
   const cx = $('.side-pastas[data-pastas="' + engine + '"]');
   if (!cx) return;
-  const lista = histCache[engine] || [];
+  const lista = listaUnica();   // 25/09: a contagem por cliente e das conversas de todas as IAs
   const clientes = await lerClientes();
   const f = filtroPasta[engine];
   const daAba = abaAtiva ? clienteDe(abaAtiva.cwd) : '';
@@ -7674,7 +8052,7 @@ async function pintarPastas(engine) {
       filtroPasta[engine] = valor;
       cx.classList.add('hidden');
       pintarBotaoFiltro(engine);
-      if (histCache[engine]) paintHist(engine, histCache[engine]);
+      pintarConversas();
     };
     cx.appendChild(b);
   };
@@ -7688,24 +8066,26 @@ async function pintarPastas(engine) {
 
 // a coluna lateral acompanha a pasta da aba aberta
 function lateralSegueAPasta() {
-  // os QUATRO motores (antes so Claude e Codex): a coluna do Gemini ficava com o nome da
-  // pasta da aba anterior, dizendo uma coisa e listando outra
-  for (const eng of MOTORES) {
-    if (filtroPasta[eng] !== 'ABA') continue;
-    pintarBotaoFiltro(eng);
-    if (histCache[eng]) paintHist(eng, histCache[eng]);
-  }
+  // 25/09: uma lista so. Acompanhando a aba, o botao e a lista trocam junto com a pasta.
+  if (filtroPasta[VISTA_CONVERSAS] !== 'ABA') return;
+  pintarBotaoFiltro(VISTA_CONVERSAS);
+  pintarConversas();
 }
 
 // R3-037: inclui o arquivo — Codex repete o mesmo id em .jsonl diferentes (conversas distintas);
 // sem o arquivo, apagar uma tirava o favorito/grupo da irmã que continua viva.
 const chaveFav = (s) => s.engine + ':' + s.id + ':' + (s.file || '');
-const ehFavorita = (s) => Array.isArray(cfg.favoritos) && cfg.favoritos.includes(chaveFav(s));
+/* 25/09: a conversa costurada (troca de IA no meio) tem varias partes. A estrela e o grupo
+   ficam no ITEM da cadeia: valem se estiverem em qualquer parte (a estrela dada antes da troca
+   ficou gravada na parte velha) e, ao mexer, vao para a parte mais nova — que e a que a lista
+   mostra. Assim nenhuma parte velha volta a aparecer solta por causa de uma estrela antiga. */
+const chavesDaConversa = (s) => (Array.isArray(s.partes) && s.partes.length ? s.partes : [s]).map(chaveFav);
+const ehFavorita = (s) => Array.isArray(cfg.favoritos) && chavesDaConversa(s).some(k => cfg.favoritos.includes(k));
 function trocarFavorita(s) {
   if (!Array.isArray(cfg.favoritos)) cfg.favoritos = [];
-  const k = chaveFav(s);
-  const i = cfg.favoritos.indexOf(k);
-  if (i >= 0) cfg.favoritos.splice(i, 1); else cfg.favoritos.unshift(k);
+  const chaves = chavesDaConversa(s);
+  if (chaves.some(k => cfg.favoritos.includes(k))) cfg.favoritos = cfg.favoritos.filter(k => !chaves.includes(k));
+  else cfg.favoritos.unshift(chaveFav(s));
   window.api.setConfig(cfg);
 }
 
@@ -7726,7 +8106,11 @@ function marcarTermo(el, texto, termo) {
 function motorQueAbriu(id, arquivo) {
   if (!id) return null;
   for (const P of panes.values()) {
-    if (P.resumeId !== id && P.sessaoId !== id) continue;
+    /* 25/09: chat que acabou de trocar de IA e ainda nao mandou nada continua sendo o dono da
+       conversa de antes — a lista marca ela como aberta ate o motor novo abrir a dele */
+    const pendente = P.parteAnterior && P.parteAnterior.id === id && !(P.parteAnterior.file && arquivo && P.parteAnterior.file !== arquivo);
+    if (P.resumeId !== id && P.sessaoId !== id && !pendente) continue;
+    if (pendente) return P.engine;
     // O Codex repete o MESMO numero de conversa em varios arquivos (cada vez que ela e
     // retomada nasce outro). So pelo numero, abrir uma acendia a borda de 17 linhas iguais.
     if (P.sessaoFile && arquivo && P.sessaoFile !== arquivo) continue;
@@ -7836,13 +8220,36 @@ document.addEventListener('click', (e) => {
    Só o "Apagar" entra no menu — o "Exportar" do fork de origem joga em ~/Downloads, contra a
    regra da casa, e aqui a conversa já sai pelo vault (⌘S). */
 async function apagarConversa(s, d) {
-  if (!confirm('Mandar “' + s.title + '” para a Lixeira?\n\nDá para restaurar de lá se mudar de ideia.')) return;
-  let r = null;
-  try { r = await window.api.apagarSessao({ id: s.id, file: s.file, engine: s.engine }); }
-  catch (e) { r = { error: String(e && e.message || e) }; }
-  if (!r || r.error) { alert('Não consegui apagar: ' + ((r && r.error) || 'sem resposta')); return; }
+  /* 25/09: conversa costurada (trocou de IA no meio) vai inteira: cada parte mora no
+     armazenamento de uma IA, e apagar so a mais nova faria a parte velha reaparecer sozinha. */
+  const partes = Array.isArray(s.partes) && s.partes.length ? s.partes : [s];
+  if (!confirm('Mandar “' + s.title + '” para a Lixeira?'
+    + (partes.length > 1 ? '\n\nVão juntas as ' + partes.length + ' partes desta conversa.' : '')
+    + '\n\nDá para restaurar de lá se mudar de ideia.')) return;
+  const apagadas = [];
+  let falha = '';
+  for (const p of partes) {
+    let r = null;
+    try { r = await window.api.apagarSessao({ id: p.id, file: p.file, engine: p.engine }); }
+    catch (e) { r = { error: String(e && e.message || e) }; }
+    // parte que ja nao existe no disco (apagada por fora) nao e falha: so segue para a proxima
+    if (r && !r.error) apagadas.push(p);
+    else if (!p.fantasma && !falha) falha = (r && r.error) || 'sem resposta';
+  }
+  if (!apagadas.length) { alert('Não consegui apagar: ' + (falha || 'sem resposta')); return; }
+  if (falha) alert('Uma parte desta conversa não foi para a Lixeira: ' + falha);
   if (d) d.remove();
+  for (const p of apagadas) await esquecerParteApagada(p);
+  window.api.setConfig(cfg);
+  /* só tirar a linha da tela (d.remove()) deixa a contagem do cabeçalho do grupo velha — e ela
+     é dos dois motores. Redesenhar as duas listas antes do marcarAbertas() acerta os números. */
+  repintarGrupos();
+  marcarAbertas();
+}
 
+/* Tudo o que o app ainda lembra de UMA parte que acabou de ir para a Lixeira. Separado do
+   apagarConversa porque a conversa costurada passa aqui uma vez por parte. */
+async function esquecerParteApagada(s) {
   /* chat aberto que usava esta conversa: o motor dela morre e o painel volta a aceitar
      mensagem. Sem isto ele ficava preso tentando retomar um arquivo que não existe mais.
      É o mesmo bloco do conversaDaPastaNova (aqui não existe "destravarPainel"). */
@@ -7856,8 +8263,19 @@ async function apagarConversa(s, d) {
     pararTrabalho(Q); limparPassos(Q); limparContinuar(Q);
     Q.sessaoId = null; Q.sessaoFile = ''; Q.resumeId = null;
     Q.started = false; Q.forkPendente = false;
+    esquecerCadeiaDoPainel(Q);   // 25/09: a próxima mensagem começa uma conversa nova, sem costura
     setDot(Q, 'off');
     note(Q, 'Esta conversa foi apagada. A próxima mensagem começa uma nova.', true);
+  }
+  /* 25/09: chat que trocou de IA e ainda nao mandou nada guarda esta conversa como a parte de
+     antes (parteAnterior), com o numero de conversa ja zerado — o laco de cima nao o acha. Sem
+     soltar aqui, a proxima mensagem gravava a costura para uma conversa que esta na Lixeira
+     (parte fantasma na lista, e apagar depois tentava mandar ela de novo). Quem tem esta parte
+     na cadeia (partesAnteriores) larga ela tambem. */
+  const ehEsta = (p) => !!p && p.engine === s.engine && p.id === s.id && !(p.file && s.file && p.file !== s.file);
+  for (const Q of panes.values()) {
+    if (ehEsta(Q.parteAnterior)) Q.parteAnterior = null;
+    if (Array.isArray(Q.partesAnteriores) && Q.partesAnteriores.some(ehEsta)) Q.partesAnteriores = Q.partesAnteriores.filter(p => !ehEsta(p));
   }
   /* R10: o savePanes() remonta cfg.abas DO ZERO a partir dos chats vivos — limpar antes dele
      seria trabalho jogado fora. Depois dele sobram as abas gravadas que ainda não voltaram
@@ -7867,22 +8285,22 @@ async function apagarConversa(s, d) {
   for (const ab of (cfg.abas || [])) {
     // R2-008: só limpa se o arquivo bater também (fallback sem arquivo salvo = registro antigo)
     for (const c of (ab.chats || [])) if (c && c.sessao === s.id && (!c.arquivo || c.arquivo === s.file)) { c.sessao = ''; c.arquivo = ''; }
+    // e a costura pendente guardada da aba que ainda nao voltou (25/09)
+    for (const c of (ab.chats || [])) if (c && ehEsta(c.parteAnterior)) delete c.parteAnterior;
   }
   // R2-008: filtra por id E arquivo — senão a conversa irmã (arquivo diferente, mesmo id) sumia da lista
   if (Array.isArray(histCache[s.engine])) histCache[s.engine] = histCache[s.engine].filter(x => !(x.id === s.id && (x.file || '') === (s.file || '')));
   if (Array.isArray(cfg.favoritos)) cfg.favoritos = cfg.favoritos.filter(k => k !== chaveFav(s));
   if (cfg.grupoSessao) delete cfg.grupoSessao[chaveFav(s)];
-  window.api.setConfig(cfg);
-  /* só tirar a linha da tela (d.remove()) deixa a contagem do cabeçalho do grupo velha — e ela
-     é dos dois motores. Redesenhar as duas listas antes do marcarAbertas() acerta os números. */
-  repintarGrupos();
-  marcarAbertas();
+  // a costura com as outras partes sai junto (o main tira do ligacoes.json no apagar)
+  esquecerLigacoesLocais(s);
 }
 
 /* menu "⋯" da linha da conversa */
 function menuDaConversa(bt, s, d) {
   const pop = abrirPopGlobal(bt);
-  if (s.remoto) {
+  // 25/09: na conversa costurada, basta UMA parte morar na VPS para o Apagar daqui não alcançar
+  if (s.remoto || (Array.isArray(s.partes) && s.partes.some(p => p.remoto))) {
     // o .jsonl dela mora no disco da VPS: apagar daqui não alcança o arquivo de lá
     const av = popItem({ nome: 'Conversa do servidor: apagar só pela VPS', ic: 'server' }, () => {});
     av.style.opacity = '.7';
@@ -7897,16 +8315,22 @@ function menuDaConversa(bt, s, d) {
    R10: a chave TEM de ser cfg.gruposConversa — o savePanes() faz `delete cfg.grupos` a cada
    salvamento, então um grupo guardado em cfg.grupos sumiria sozinho no salvamento seguinte. */
 const GRUPO_CORES = ['#6ea8fe', '#d97757', '#5aa469', '#d7ba7d', '#e05252', '#b083f0', '#f0839f', '#4fd1c5'];
-const filtroGrupo = { claude: null, codex: null, acp: null, gemini: null, grok: null };   // não é salvo: volta a "Todos" a cada abertura
+const filtroGrupo = { claude: null, codex: null, acp: null, gemini: null, grok: null, todas: null };   // não é salvo: volta a "Todos" a cada abertura
 // a cor entra em style: se o config foi editado na mão, só passa o que é cor de verdade
 const corSegura = (c) => (/^#[0-9a-fA-F]{3,8}$/.test(String(c || '')) ? String(c) : GRUPO_CORES[0]);
 
 function listaGrupos() { return Array.isArray(cfg.gruposConversa) ? cfg.gruposConversa : []; }
 function grupoPorId(id) { return listaGrupos().find(g => g.id === id); }
-function grupoDaSessao(s) { return (cfg.grupoSessao && cfg.grupoSessao[chaveFav(s)]) || null; }
+// 25/09: o grupo da conversa costurada e o da parte mais nova que tiver um (ver chavesDaConversa)
+function grupoDaSessao(s) {
+  const g = cfg.grupoSessao || {};
+  for (const k of chavesDaConversa(s).reverse()) if (g[k]) return g[k];
+  return null;
+}
 function moverParaGrupo(s, grupoId) {
   if (!cfg.grupoSessao) cfg.grupoSessao = {};
-  if (grupoId) cfg.grupoSessao[chaveFav(s)] = grupoId; else delete cfg.grupoSessao[chaveFav(s)];
+  for (const k of chavesDaConversa(s)) delete cfg.grupoSessao[k];
+  if (grupoId) cfg.grupoSessao[chaveFav(s)] = grupoId;
   window.api.setConfig(cfg);
   /* os DOIS motores, não só o da conversa movida: o grupo é compartilhado, então a contagem no
      cabeçalho do outro motor ficaria velha até o próximo desenho da lista. */
@@ -7921,10 +8345,8 @@ function alternarGrupoRecolhido(id) {
 }
 // grupo é de TODOS os motores: mexeu em um, as listas se redesenham
 function repintarGrupos() {
-  for (const eng of MOTORES) {
-    pintarAbasGrupo(eng);
-    if (histCache[eng]) paintHist(eng, histCache[eng]);
-  }
+  pintarAbasGrupo(VISTA_CONVERSAS);
+  pintarConversas();
 }
 
 /* busca e grupo não convivem: quem escolhe um grupo com o campo de busca cheio teria o filtro
@@ -7950,7 +8372,7 @@ function pintarAbasGrupo(engine) {
   bTodos.textContent = 'Todos';
   bTodos.addEventListener('click', () => {
     filtroGrupo[engine] = null; pintarAbasGrupo(engine);
-    if (histCache[engine]) paintHist(engine, histCache[engine]);
+    pintarConversas();
   });
   box.appendChild(bTodos);
   for (const g of grupos) {
@@ -7965,7 +8387,7 @@ function pintarAbasGrupo(engine) {
     bt.addEventListener('click', () => {
       limparBuscaLateral(engine);   // senão o paintHist descartaria o filtro que ele acabou de escolher
       filtroGrupo[engine] = g.id; pintarAbasGrupo(engine);
-      if (histCache[engine]) paintHist(engine, histCache[engine]);
+      pintarConversas();
     });
     box.appendChild(bt);
   }
@@ -8035,8 +8457,7 @@ function apagarGrupo(g) {
   cfg.gruposConversa = listaGrupos().filter(x => x.id !== g.id);
   if (cfg.grupoSessao) for (const k of Object.keys(cfg.grupoSessao)) if (cfg.grupoSessao[k] === g.id) delete cfg.grupoSessao[k];
   if (Array.isArray(cfg.gruposRecolhidos)) cfg.gruposRecolhidos = cfg.gruposRecolhidos.filter(x => x !== g.id);
-  if (filtroGrupo.claude === g.id) filtroGrupo.claude = null;
-  if (filtroGrupo.codex === g.id) filtroGrupo.codex = null;
+  for (const k of Object.keys(filtroGrupo)) if (filtroGrupo[k] === g.id) filtroGrupo[k] = null;
   window.api.setConfig(cfg);
   fecharPopGlobal();
   repintarGrupos();
@@ -8102,6 +8523,10 @@ function linhaConversa(s, termo, trecho) {
     + '<button class="hi-edit" title="Renomear"></button>';
   marcarTermo($('.hi-t', d), s.title, trecho ? '' : termo);
   $('.hi-w', d).textContent = quando(s.when);
+  /* 25/09: os logos das IAs que trabalharam nesta conversa, na ordem em que entraram e sem
+     repetir. Conversa de uma IA so mostra um logo. A cor de cada IA fica SO no logo. */
+  const logos = logosDaConversa(s);
+  if (logos) d.insertBefore(logos, $('.hi-t', d));
   if (trecho) marcarTermo($('.hi-trecho', d), trecho, termo);
   $('.hi-edit', d).innerHTML = ico('pencil');
   const favorita = ehFavorita(s);
@@ -8113,10 +8538,7 @@ function linhaConversa(s, termo, trecho) {
   bf.addEventListener('click', async (e) => {
     e.stopPropagation();
     trocarFavorita(s);
-    /* repinta TODAS as colunas com lista carregada, nao so a do motor da conversa: na busca a
-       coluna do Claude mostra conversa do Codex, e so o Codex se redesenhava — a estrela ficava
-       sem mudar na tela que ele estava olhando. */
-    for (const m of MOTORES) if (histCache[m]) paintHist(m, histCache[m]);
+    pintarConversas();   // 25/09: uma lista so para todas as IAs
   });
   /* ---- botões novos da leva 8, pendurados por DOM (a linha do innerHTML acima não foi
      tocada): a pastinha manda a conversa para um grupo, o "⋯" abre o menu com o Apagar. ---- */
@@ -8157,7 +8579,10 @@ function linhaConversa(s, termo, trecho) {
       s.title = novo;
       alvo.textContent = novo;
       d.title = novo + '\n' + s.cwd;
-      histCache[s.engine] = null;
+      /* 25/09: antes o cache do motor era zerado para a coluna dele reler. Com a lista unica,
+         zerar sumiria com TODAS as conversas daquela IA ate a releitura: o nome novo entra
+         direto na linha guardada (e no titulo da cadeia, que e a parte mais nova). */
+      lembrarNomeDaParte(s, novo);
       for (const P of panes.values()) if (P.resumeId === s.id || P.sessaoId === s.id) { P.titulo = novo; P.nomeManual = true; pintarNome(P); }
     };
     inp.onclick = (ev) => ev.stopPropagation();
@@ -8193,7 +8618,7 @@ function linhaDaBusca(s, termo, trecho) {
    dava tempo de outro desenho comecar (mais uma letra digitada, troca de aba, fim de resposta):
    quando o antigo acordava, despejava os resultados VELHOS por cima do desenho novo e a lista
    aparecia duplicada e misturada. Agora o desenho velho percebe que ficou para tras e desiste. */
-const pintaVez = { claude: 0, codex: 0, acp: 0, gemini: 0, grok: 0 };
+const pintaVez = { claude: 0, codex: 0, acp: 0, gemini: 0, grok: 0, todas: 0 };
 
 // tira acento pra comparar (diferente de normalizarFala: essa não tira pontuação nem número)
 function semAcento(s) {
@@ -8273,11 +8698,24 @@ async function paintHist(engine, listaCrua) {
 
   // R2-011: sem tirar acento, "codigo" não achava "código" (e vice-versa)
   const termoSemAcento = semAcento(termo);
+  /* 25/09: a busca olha cada PARTE (o texto de cada IA mora num arquivo), mas o que aparece e
+     o item da conversa inteira: achado na parte velha leva a cadeia toda, e a mesma conversa
+     achada em duas partes aparece uma vez so. */
+  const daCadeia = mapaDasCadeias(listaCrua);
+  const jaMostrada = new Set();
+  const mostrar = (s) => {
+    const c = daCadeia.get(s) || s;
+    const k = chaveFav(c);
+    if (jaMostrada.has(k)) return null;
+    jaMostrada.add(k);
+    return c;
+  };
   const porNome = list.filter(s => semAcento(String(s.title || '').toLowerCase()).includes(termoSemAcento));
   const resto = list.filter(s => !porNome.includes(s));
-  if (porNome.length) {
+  const porNomeUnicas = porNome.map(mostrar).filter(Boolean);
+  if (porNomeUnicas.length) {
     box.appendChild(Object.assign(document.createElement('div'), { className: 'hist-cab', textContent: 'no nome' }));
-    for (const s of porNome) box.appendChild(linhaDaBusca(s, termo));
+    for (const s of porNomeUnicas) box.appendChild(linhaDaBusca(s, termo));
   }
   const aviso = document.createElement('div');
   aviso.className = 'hist-load';
@@ -8308,7 +8746,8 @@ async function paintHist(engine, listaCrua) {
   box.appendChild(Object.assign(document.createElement('div'), { className: 'hist-cab', textContent: 'dentro da conversa' }));
   for (const a of achados) {
     const s = resto.find(x => x.id === a.id);
-    if (s) box.appendChild(linhaDaBusca(s, termo, a.trecho));
+    const c = s && mostrar(s);
+    if (c) box.appendChild(linhaDaBusca(c, termo, a.trecho));
   }
   // nunca cortar em silencio: se a busca parou no meio, ele precisa saber
   if (parcial) {
@@ -8321,19 +8760,26 @@ async function paintHist(engine, listaCrua) {
 
 async function openSession(s, el) {
   const remoto = !!s.remoto || NA_VPS(s.cwd);
+  /* 25/09: a conversa pode ser uma CADEIA (trocou de IA no meio). O item da lista ja traz as
+     partes; quem chega com um numero solto (reabrir o fechado, o celular voltando para a
+     ultima conversa) acha a cadeia pelas ligacoes. O painel fica na parte MAIS NOVA. */
+  const partes = Array.isArray(s.partes) && s.partes.length ? s.partes : partesDaCadeia(s);
   // ja esta aberta em algum painel? so pisca e leva voce ate ela
   // R2-007: checa também o arquivo (igual motorQueAbriu) — Codex repete o mesmo id em várias
   // .jsonl; sem isso, abrir uma versão ANTIGA só focava a versão atual já aberta, sem trocar.
   const aberta = [...panes.values()].find(q => q.engine === s.engine && NA_VPS(q.cwd) === remoto
     && (q.resumeId === s.id || q.sessaoId === s.id)
     && !(q.sessaoFile && s.file && q.sessaoFile !== s.file));
-  if (aberta) {
+  // chat que acabou de trocar de IA (ainda sem mandar nada) continua sendo o dono desta conversa
+  const trocando = aberta || [...panes.values()].find(q => q.parteAnterior && q.parteAnterior.engine === s.engine
+    && q.parteAnterior.id === s.id && !(q.parteAnterior.file && s.file && q.parteAnterior.file !== s.file));
+  if (trocando) {
     document.querySelectorAll('.hist-item').forEach(x => x.classList.remove('on'));
     if (el) el.classList.add('on');
-    setFocus(aberta);
-    piscar(aberta);
-    $('.p-input', aberta.el).focus();
-    return aberta;
+    setFocus(trocando);
+    piscar(trocando);
+    $('.p-input', trocando.el).focus();
+    return trocando;
   }
   // cada conversa da lista abre no seu proprio painel, sem atropelar o que ja esta rolando
   // a conversa abre na aba do cliente dela, mesmo que tenha nascido numa subpasta
@@ -8359,6 +8805,8 @@ async function openSession(s, el) {
   P.effectiveSettings = null; P.settingsPending = false;
   P.sessaoFile = s.file || '';   // guardado para a conversa voltar cheia quando reabrir o app
   P.titulo = s.title || ''; P.nomeCurto = false; P.hist = []; limparPlano(P); limparSugestoes(P);
+  // as partes de antes da troca de IA: o proximo "trocar de IA" continua a MESMA cadeia
+  P.parteAnterior = null; P.partesAnteriores = partes.slice(0, -1).map(refDaParte);
   P.blocks.clear(); P.tools.clear(); P.chat.innerHTML = ''; P.rolagem = null;   // solta a mensagem-ancora da memoria
   fillModels(P); paintEngine(P); setDot(P, 'off');
   pintarPasta(P, nomePasta(P.cwd));
@@ -8371,6 +8819,18 @@ async function openSession(s, el) {
   /* Conversa que rodou na VPS mora no disco DELA: o arquivo daqui não existe, e sem este
      desvio clicar nela abria um chat vazio. O caminho local segue exatamente como era. */
   try {
+    if (partes.length > 1) {
+      /* cadeia: o historico de cada parte, da mais velha para a mais nova, no MESMO painel,
+         com a faixa "daqui em diante quem responde é o…" entre uma IA e outra. O P.hist
+         recebe tudo: se ele trocar de IA de novo, a proxima leva o contexto inteiro. */
+      const lidas = await lerPartes(partes);
+      if (!painelAindaAtual(P, revisao)) return;
+      if (!desenharPartes(P, lidas) && lidas.some(x => x.erro)) throw lidas.find(x => x.erro).erro;
+      $$('.tool-st.run', P.el).forEach(x => { x.className = 'tool-st ok'; x.innerHTML = ico('check'); });
+      scroll(P, true);
+      if (focusPane === P) $('.p-input', P.el).focus();
+      return P;
+    }
     const msgs = remoto
       ? await window.api.sessionHistoryRemoto({ id: s.id })
       : await window.api.sessionHistory({ engine: s.engine, file: s.file, id: s.id, cwd: s.cwd });
@@ -8401,6 +8861,7 @@ async function novaConversa(engine) {
   // o "religar" voltar para a conversa velha em vez desta nova
   P.engine = engine; P.resumeId = null; P.sessaoId = null; P.started = false; P.titulo = ''; P.nomeCurto = false; P.hist = []; limparPlano(P); limparSugestoes(P);
   P.forkPendente = false;   // leva 8.3: conversa nova nunca e ramo de outra
+  esquecerCadeiaDoPainel(P);   // 25/09: nem continuação costurada de outra
   // conversa nova sempre volta ao modelo e ao esforço de PADRAO_NOVO, mesmo que o chat
   // anterior estivesse em outro
   P.model = modeloNovo(engine); P.effort = esforcoNovo(engine); P.ultraAvisado = false;
@@ -8419,11 +8880,11 @@ $$('.side-busca').forEach(inp => {
     const eng = inp.dataset.busca;
     buscaAtual[eng] = inp.value;
     clearTimeout(timer);
-    timer = setTimeout(() => { if (histCache[eng]) paintHist(eng, histCache[eng]); }, 260);
+    timer = setTimeout(pintarConversas, 260);
   });
   inp.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.stopPropagation(); inp.value = ''; buscaAtual[inp.dataset.busca] = '';
-      if (histCache[inp.dataset.busca]) paintHist(inp.dataset.busca, histCache[inp.dataset.busca]); }
+      pintarConversas(); }
   });
 });
 
@@ -8440,10 +8901,14 @@ document.addEventListener('click', (e) => {
   $$('.side-pastas').forEach(x => x.classList.add('hidden'));
 });
 
+// 25/09: um ↻ só, que relê as conversas de todas as IAs (e a costura entre elas) e, como o ↻ do
+// cartão de conta que saiu, a conta de cada IA (no máximo uma vez por minuto, por causa do 429)
 document.querySelectorAll('[data-reload]').forEach(b =>
-  b.addEventListener('click', () => loadHist(b.dataset.reload, true)));
+  b.addEventListener('click', () => { recarregarConversas(true); pintarUsoLateral(true); }));
+/* "Novo chat nesta aba" da lista unica: nasce na IA do chat em foco (ou na ultima usada),
+   o mesmo motor que o "+ chat" da barra de abas escolheria */
 document.querySelectorAll('[data-new]').forEach(b =>
-  b.addEventListener('click', () => novaConversa(b.dataset.new)));
+  b.addEventListener('click', () => novaConversa((focusPane && focusPane.engine) || cfg.lastEngine)));
 /* leva 10.2: "Atualizar agora" da torre. O `true` fura o cache de 30s da lista de fora — é o
    único jeito de ver na hora um Claude que ele acabou de abrir no Terminal. */
 {
@@ -8898,11 +9363,8 @@ $('#chkRobos').addEventListener('change', async (e) => {
   cfg.verRobos = e.target.checked;
   await window.api.setConfig(cfg);
   histCache.claude = null; histCache.codex = null;
-  const aberta = $$('.side-view').find(v => !v.classList.contains('hidden'));
-  if (aberta && aberta.dataset.view === 'hclaude') loadHist('claude', true);
-  if (aberta && aberta.dataset.view === 'hcodex') loadHist('codex', true);
-  if (aberta && aberta.dataset.view === 'hacp') loadHist('acp', true);
-  if (aberta && ['hgemini', 'hgrok'].includes(aberta.dataset.view)) loadHist(aberta.dataset.view.slice(1), true);
+  // 25/09: a lista e uma so; se ela estiver na frente, relê as duas IAs que têm robôs
+  if (lateralAberta()) { loadHist('claude', true); loadHist('codex', true); }
 });
 
 /* A foto e mostrada num circulo de 20 a 30 pixels, mas era guardada no tamanho original: a
@@ -9523,6 +9985,7 @@ async function aplicarWorktree(P, nome) {
   pararTrabalho(P); limparPassos(P); limparContinuar(P);
   P.sessaoId = null; P.sessaoFile = ''; P.resumeId = null; P.forkPendente = false;
   P.passarContexto = null; P.edicoes = [];
+  esquecerCadeiaDoPainel(P);   // 25/09: conversa nova de verdade, sem costura com a de antes
   zerarContexto(P);          // conversa nova: o medidor volta ao zero
   P.titulo = ''; P.nomeManual = false; P.nomeCurto = false; P.hist = []; limparPlano(P); limparSugestoes(P);
   P.blocks.clear(); P.tools.clear();
@@ -9581,11 +10044,8 @@ async function checarVersoesDosMotores() {
 }
 
 function abrirVistaLateral(v) {
-  if (v === 'hclaude') { loadHist('claude'); pintarContaLateral('claude', true); }
-  if (v === 'hcodex') { loadHist('codex'); pintarContaLateral('codex', true); }
-  // leva 12.4: a coluna do terceiro motor. Linha NOVA; as duas de cima ficaram intactas.
-  if (v === 'hacp') { loadHist('acp'); pintarContaLateral('acp', true); }
-  if (v === 'hgemini' || v === 'hgrok') { loadHist(v.slice(1)); pintarContaLateral(v.slice(1), true); }
+  // 25/09: uma vista só com as conversas de todas as IAs, e o uso do plano de cada uma no topo
+  if (v === 'conversas') { recarregarConversas(); pintarUsoLateral(true); }
   // leva 10.2: a torre é sempre desenhada na hora — mostrar o estado de 4 segundos atrás
   // seria pior do que não mostrar nada
   if (v === 'torre') pintarTorre(true);
@@ -9599,26 +10059,28 @@ function abrirVistaLateral(v) {
    Nao passa pelo clique do icone de proposito: aquele caminho repinta a conta com
    forcar=true, e um "auth status" novo a cada aperto de ⌘P e lento e sem motivo. */
 function abrirBuscaDeConversa() {
-  const eng = focusPane ? focusPane.engine : motorVisivel(cfg.lastEngine);
-  const v = 'h' + eng;
+  // 25/09: a vista é a lista única (a de todas as IAs); a conta não é relida à força aqui
   $('#sidebar').classList.remove('hidden'); $('#dragbar').classList.remove('hidden');
-  $$('.side-view').forEach(x => x.classList.toggle('hidden', x.dataset.view !== v));
-  loadHist(eng); pintarContaLateral(eng);
-  lerHistoricoDeTodosOsMotores(eng);
+  $$('.side-view').forEach(x => x.classList.toggle('hidden', x.dataset.view !== 'conversas'));
+  recarregarConversas(); pintarUsoLateral();
   sincronizarIconesLaterais();
-  const campo = $('.side-busca[data-busca="' + eng + '"]');
+  const campo = $('.side-busca[data-busca="' + VISTA_CONVERSAS + '"]');
   if (campo) setTimeout(() => { campo.focus(); campo.select(); }, 60);
 }
 
 // enquanto a coluna estiver aberta, o limite se atualiza sozinho de 2 em 2 minutos
 setInterval(() => {
   if ($('#sidebar').classList.contains('hidden')) return;
-  const vista = $$('.side-view').find(v => !v.classList.contains('hidden'));
-  if (!vista) return;
-  const eng = vista.dataset.view === 'hcodex' ? 'codex' : (vista.dataset.view === 'hclaude' ? 'claude' : null);
-  if (!eng) return;
-  lerUso(eng, true);                       // relê a fonte, e o lerUso repinta a lateral
+  if (!lateralAberta()) return;
+  // 25/09: a vista única mostra o uso de todas: relê as duas que têm limite de sessão e semana
+  for (const eng of ['claude', 'codex']) if (contaCache[eng]) lerUso(eng, true);   // o lerUso repinta a lateral
 }, 120000);
+/* 25/09: ele trocou de IA no celular e voltou para o Mac com a lateral aberta: a costura gravada
+   la entra na lista na hora, sem precisar fechar e abrir a coluna (no celular quem faz isso e o
+   voltou() do mobile.js). */
+if (!window.SEM_ELECTRON) window.addEventListener('focus', () => {
+  if (lateralAberta()) lerLigacoes().then(() => pintarConversas());
+});
 function toggleSidebar() {
   $('#sidebar').classList.toggle('hidden'); $('#dragbar').classList.toggle('hidden');
   sincronizarIconesLaterais();
@@ -9627,10 +10089,7 @@ function toggleSidebar() {
   if (!$('#sidebar').classList.contains('hidden')) {
     const v = $$('.side-view').find(x => !x.classList.contains('hidden'));
     // sem forcar: abrir pelo atalho nao pode disparar um "claude auth status" novo toda vez
-    if (v && v.dataset.view === 'hclaude') { loadHist('claude'); pintarContaLateral('claude'); }
-    if (v && v.dataset.view === 'hcodex') { loadHist('codex'); pintarContaLateral('codex'); }
-    if (v && v.dataset.view === 'hacp') { loadHist('acp'); pintarContaLateral('acp'); }
-    if (v && ['hgemini', 'hgrok'].includes(v.dataset.view)) { loadHist(v.dataset.view.slice(1)); pintarContaLateral(v.dataset.view.slice(1)); }
+    if (v && v.dataset.view === 'conversas') { recarregarConversas(); pintarUsoLateral(); }
     // leva 10.2: abrindo a coluna pelo atalho, a torre também precisa nascer atualizada
     if (v && v.dataset.view === 'torre') pintarTorre(true);
   }
@@ -10063,8 +10522,9 @@ document.addEventListener('keydown', (e) => {
     document.querySelectorAll('.act').forEach(a => a.addEventListener('click', () => { vistaTelefone = a.dataset.view; }));
     const abrirLista = () => {
       // no celular ele abre a gaveta para trocar de conversa, entao ja mostro as conversas
-      const alvo = vistaTelefone || ('h' + ((focusPane && focusPane.engine) || 'claude'));
-      const b = document.querySelector('.act[data-view="' + alvo + '"]') || document.querySelector('.act[data-view="hclaude"]');
+      // 25/09: a vista de conversas é uma só para todas as IAs
+      const alvo = vistaTelefone || 'conversas';
+      const b = document.querySelector('.act[data-view="' + alvo + '"]') || document.querySelector('.act[data-view="conversas"]');
       if (!b) return;
       const v = b.dataset.view;
       document.querySelectorAll('.act').forEach(x => x.classList.toggle('active', x === b));
@@ -10110,6 +10570,9 @@ document.addEventListener('keydown', (e) => {
   // barra de icones aparece, a lateral comeca fechada
   $('#sidebar').classList.add('hidden'); $('#dragbar').classList.add('hidden');
   sincronizarIconesLaterais();
+  /* 25/09: a costura das conversas (troca de IA no meio) antes das abas voltarem: e ela que
+     diz quais partes cada chat traz de volta. Falhou? As abas voltam do jeito de antes. */
+  try { await lerLigacoes(); } catch {}
   // volta com as abas e os chats de antes; so se nao houver nada e que pergunta o que abrir
   let voltou = false;
   try { voltou = await restaurarAbas(); }

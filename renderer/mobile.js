@@ -182,17 +182,25 @@
         P.busy = false; setDot(P, 'idle');
         // segue pra releitura do historico abaixo mesmo com P.started true: o Mac confirmou que acabou
       }
-      const msgs = (engine === 'claude' && NA_VPS(P.cwd))
+      /* 25/09: conversa costurada (trocou de IA no meio): reler so a parte de agora apagaria
+         da tela tudo o que as outras IAs fizeram antes. Relê a cadeia inteira, do mesmo jeito
+         que o Mac abre (lerPartes/desenharPartes do app.js). */
+      const antes = Array.isArray(P.partesAnteriores) ? P.partesAnteriores : [];
+      const lidas = antes.length
+        ? await lerPartes([...antes, { engine, id, file: P.sessaoFile || '', cwd: P.cwd }])
+        : null;
+      const msgs = lidas ? lidas[lidas.length - 1].msgs : (engine === 'claude' && NA_VPS(P.cwd))
         ? await window.api.sessionHistoryRemoto({ id })
         : await window.api.sessionHistory({ engine, file: P.sessaoFile, id, cwd: P.cwd });
       if (P.busy || !panes.has(P.id) || sessao(P) !== id || P.engine !== engine || !Array.isArray(msgs) || !msgs.length) return;
-      const selo = JSON.stringify(msgs);
+      const selo = JSON.stringify(lidas ? lidas.map(x => x.msgs) : msgs);
       if (selos.get(P) === selo) return;
       const topo = P.chat.scrollTop;
       const noFim = P.chat.scrollHeight - topo - P.chat.clientHeight < 100;
       P.hist = []; P.blocks.clear(); P.tools.clear(); P.execEl = null; P.rolagem = null;
       P.chat.replaceChildren();
-      for (const m of msgs) renderizarHistorico(P, m);
+      if (lidas) desenharPartes(P, lidas);
+      else for (const m of msgs) renderizarHistorico(P, m);
       selos.set(P, selo);
       if (noFim) scroll(P, true); else P.chat.scrollTop = topo;
     } catch { /* a ponte já mostra a conexão caída; preservar o histórico atual */ }
@@ -202,9 +210,8 @@
   function voltou() {
     if (!pronto || document.hidden) return;
     atualizar();
-    for (const engine of ['claude', 'codex', 'acp', 'gemini', 'grok']) {
-      if (lateralAberta(engine)) loadHist(engine, true).catch(() => {});
-    }
+    // 25/09: a gaveta mostra UMA lista com as conversas de todas as IAs
+    if (lateralAberta()) Promise.resolve(recarregarConversas(true)).catch(() => {});
   }
   window.addEventListener('cockpit:pronto', async () => {
     pronto = true; reabrindo = true;

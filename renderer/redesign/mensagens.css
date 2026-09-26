@@ -21,6 +21,11 @@
 .pane-chat{scrollbar-gutter:stable;padding-top:10px;
   padding-left:max(28px,calc((100% - 700px) / 2));
   padding-right:max(18px,calc((100% - 700px) / 2 - 10px))}
+/* ritmo: 22 entre um bloco e outro, como o gap do design. É o gap de um flex em coluna (o
+   mesmo jeito do painel.css), e não margem em cada bloco: margem somaria com o gap quando os
+   dois arquivos se encontram. flex:none: bloco com overflow escondido não pode encolher. */
+.pane-chat{display:flex;flex-direction:column;gap:22px}
+.pane-chat > *{flex:none}
 @container (max-width:559px){
   .pane-chat{padding-left:16px;padding-right:6px}
 }
@@ -63,10 +68,14 @@
 .msg-acoes .bt-copiar.copiou{color:var(--status-ok)}
 /* na minha: na linha do "Você", a 8 dele */
 .msg.user .msg-acoes{margin-right:8px}
-/* no assistente (o copiar da resposta): pendurado logo abaixo do texto, POR CIMA do vão de 22
-   até o próximo bloco. No fluxo ele somava 22 de altura morta embaixo de cada resposta e o
-   ritmo da conversa desandava. O ícone fica alinhado com a margem do texto. */
-.msg.bot .msg-acoes{position:absolute;left:-5px;top:calc(100% - 4px);z-index:1}
+/* no assistente (o copiar da resposta inteira): na linha do rótulo, a 8 do nome — o espelho da minha.
+   (6 do gap do rótulo + 2). Os botões têm 22 numa linha de 16: sobram 3 em cima e embaixo, sem mexer na altura da linha.
+   Pendurado no pé da resposta ele encavalava no "Levou 3m 40s" do fim do turno. */
+.msg.bot .msg-role .msg-acoes{margin:-3px 0 -3px 2px}
+/* A fala sem rótulo (continuação da mesma resposta) não tem copiar próprio: o do rótulo copia
+   a resposta inteira. Só se a primeira fala não estiver na tela ela ganha um, no vão de 22 logo
+   ACIMA do texto (onde estaria o rótulo), alinhado à margem. Nunca embaixo. */
+.msg.bot > .msg-acoes{position:absolute;left:-5px;top:-22px;z-index:1}
 
 /* ---------- texto (as duas) ---------- */
 .msg-body{font:var(--f-leitura);color:var(--label-1);overflow-wrap:anywhere;min-width:0;text-wrap:pretty}
@@ -140,6 +149,29 @@
 .msg-body :is(th,td){padding:8px 12px;border:0;border-bottom:1px solid var(--separator);text-align:left;vertical-align:top}
 .msg-body th{font-weight:600;font-size:12px;color:var(--label-2);background:none}
 .msg-body tbody tr:last-child td{border-bottom:0}
+/* palavra inteira na célula: o overflow-wrap:anywhere da fala deixava o cálculo da tabela
+   espremer a coluna abaixo da palavra e "Valor mensal" saía "Valor mensa|l" no painel estreito.
+   Aqui a coluna nunca fica mais fina que a maior palavra. Só link e código (onde mora o token
+   comprido sem espaço, tipo URL com UTM) continuam podendo quebrar em qualquer ponto. */
+.msg-body :is(th,td){overflow-wrap:break-word}
+.msg-body :is(th,td) :is(a,code){overflow-wrap:anywhere}
+/* colunas na proporção do design (grid 1.2fr 1fr 1fr): a primeira pesa 1,2 e as outras 1.
+   Em tabela automática, largura em % no cabeçalho faz o mesmo que o fr: a tabela cresce até
+   cada coluna caber na sua fatia e reparte o que sobra na mesma proporção. O número de
+   colunas vem do :has (2 a 8; acima disso fica a largura pelo conteúdo). */
+.msg-body table:has(> thead > tr > :nth-child(2):last-child){--cols:2}
+.msg-body table:has(> thead > tr > :nth-child(3):last-child){--cols:3}
+.msg-body table:has(> thead > tr > :nth-child(4):last-child){--cols:4}
+.msg-body table:has(> thead > tr > :nth-child(5):last-child){--cols:5}
+.msg-body table:has(> thead > tr > :nth-child(6):last-child){--cols:6}
+.msg-body table:has(> thead > tr > :nth-child(7):last-child){--cols:7}
+.msg-body table:has(> thead > tr > :nth-child(8):last-child){--cols:8}
+.msg-body thead th{width:calc(100% / (var(--cols) + .2))}
+.msg-body thead th:first-child{width:calc(120% / (var(--cols) + .2))}
+/* código dentro da célula: mono 12 na linha da tabela, sem a pílula do código da fala
+   (a pílula somava 1 em cima e embaixo e cada linha passava de 33 para 34). line-height 1: a
+   caixa do mono cabe dentro da linha de 16 da tabela e não a estica. */
+.msg-body :is(th,td) code{padding:0;border-radius:0;background:none;font-size:12px;line-height:1;color:inherit}
 
 /* miniatura da entrega: 220×132, raio 10, contorno de 1pt POR CIMA da imagem, e o nome do
    arquivo embaixo (mono 11, --label-2). A altura toda (132 + 6 + 16) já nasce reservada: a
@@ -176,7 +208,15 @@
 /* resposta chegando: o cursor de 7×15 em --label-2 no fim do último parágrafo. "Chegando" =
    o textDelta marcou a fala (.chegando, o textFinal tira) E ela é o bloco logo antes do
    "trabalhando" (.trab), que só existe com o motor ocupado: turno parado não fica com cursor. */
-.msg.bot:has(+ .trab) .msg-body.chegando > p:last-child::after{content:"";display:inline-block;width:7px;height:15px;
+/* O cursor vai no fim do ÚLTIMO texto, seja ele parágrafo, título, citação ou o último item da
+   lista (a fala que chega terminando em "- Responder o Pedro sobre o" ficava sem cursor). No
+   item que tem sublista ou parágrafos, o cursor desce para o último deles. */
+.msg.bot:has(+ .trab) .msg-body.chegando > :is(p,h1,h2,h3,h4,h5,h6):last-child::after,
+.msg.bot:has(+ .trab) .msg-body.chegando > blockquote:last-child > p:last-child::after,
+.msg.bot:has(+ .trab) .msg-body.chegando > :is(ul,ol):last-child > li:last-child:not(:has(> :is(ul,ol,p)))::after,
+.msg.bot:has(+ .trab) .msg-body.chegando > :is(ul,ol):last-child > li:last-child > p:last-child::after,
+.msg.bot:has(+ .trab) .msg-body.chegando > :is(ul,ol):last-child > li:last-child > :is(ul,ol):last-child > li:last-child:not(:has(> :is(ul,ol,p)))::after{
+  content:"";display:inline-block;width:7px;height:15px;
   margin-left:2px;border-radius:1px;background:var(--label-2);vertical-align:-2px}
 
 /* ---------- mensagem que ainda não saiu (na fila) / que voltou (não enviada) ----------
@@ -260,9 +300,12 @@
 .note.err::before{content:"";flex:none;width:16px;height:16px;margin-top:1px;background:var(--status-error);
   -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M8 2.5l6 10.5H2z'/%3E%3Cpath d='M8 6.5v3'/%3E%3Ccircle cx='8' cy='11.2' r='.75' fill='black' stroke='none'/%3E%3C/svg%3E") center/16px no-repeat;
   mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M8 2.5l6 10.5H2z'/%3E%3Cpath d='M8 6.5v3'/%3E%3Ccircle cx='8' cy='11.2' r='.75' fill='black' stroke='none'/%3E%3C/svg%3E") center/16px no-repeat}
-/* "daqui em diante quem responde é o Codex" e o recado de envio: linha discreta, na coluna */
-.troca{padding:0;font:400 11px/14px var(--font-sans);color:var(--label-3)}
-.troca::before,.troca::after{background:var(--separator)}
+/* A marca de troca/ramo (.troca) é do painel.css (texto curto, frase no title). Daqui só a
+   garantia de que ela nunca estoura a coluna: o style.css velho travava o texto em nowrap e
+   flex:none, e um título de ramo comprido empurrava a conversa para rolar de lado. */
+.troca{padding:0}
+.troca span{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* recado de envio (some sozinho): linha discreta, na coluna */
 .envio-nota{padding:0;font:400 11px/14px var(--font-sans);color:var(--label-3)}
 
 /* ---------- cartões do Codex (plano, estado, imagem gerada) ----------
@@ -297,9 +340,12 @@
 .cx-pergunta{display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:12px;
   background:var(--glass-regular);-webkit-backdrop-filter:var(--blur-glass);backdrop-filter:var(--blur-glass);
   box-shadow:var(--shadow-float),inset 0 0 0 1px var(--status-wait-line)}
-.cx-pergunta h3{display:flex;align-items:center;gap:8px;font:600 13px/16px var(--font-sans);color:var(--label-1)}
-.cx-pergunta h3::before{content:"!";flex:none;width:13px;height:13px;border-radius:50%;background:var(--status-wait);
+.cx-pergunta h3{display:flex;align-items:flex-start;gap:8px;font:600 13px/16px var(--font-sans);color:var(--label-1)}
+.cx-pergunta h3::before{content:"!";flex:none;width:13px;height:13px;margin-top:1.5px;border-radius:50%;background:var(--status-wait);
   color:#1A1000;font:800 9.5px/13px var(--font-sans);text-align:center}
+/* pergunta única: ela mesma é o título (h3); o <legend> fica só para o leitor de tela */
+.cxq-form legend.cxq-oculto{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;
+  clip-path:inset(50%);white-space:nowrap}
 .cx-pergunta p{margin:0}
 .cx-pergunta.encerrada{background:var(--fill-4);-webkit-backdrop-filter:none;backdrop-filter:none;
   box-shadow:inset 0 0 0 1px var(--separator)}
@@ -321,7 +367,8 @@
 .cxq-campo label{font:400 12px/15px var(--font-sans);color:var(--label-2)}
 .cxq-input{min-height:26px;padding:5px 8px;border:0;border-radius:6px;background:var(--fill-2);
   color:var(--label-1);font:400 13px/16px var(--font-sans)}
-textarea.cxq-input{min-height:52px}
+/* "Outra resposta": uma linha de 26 como as opções (era um campo de 52); cresce com o texto */
+textarea.cxq-input{min-height:26px;max-height:120px;resize:none;field-sizing:content}
 .cxq-form pre{padding:8px 10px;border-radius:8px;background:var(--code-bg);
   box-shadow:inset 0 0 0 1px var(--separator);font:var(--f-mono)}
 .cxq-acoes{justify-content:flex-end;gap:6px}
@@ -338,12 +385,12 @@ textarea.cxq-input{min-height:52px}
 .cxq-status{font:400 11px/14px var(--font-sans);color:var(--label-2)}
 
 /* ---------- ritmo entre os blocos da conversa ----------
-   22 entre um bloco e outro (mensagem, passos, trabalhando, cartões), como o gap do design.
-   Fica no FIM do arquivo e com especificidade baixa de propósito: as regras de cada bloco
-   acima zeram a margem sem apagar este vão, e as áreas carregadas depois (passos.css) podem
-   trocar o vão dos blocos delas com um seletor simples. O fim do turno fica a 16 (22 − 6). */
-.pane-chat > * + *{margin-top:22px}
-.pane-chat > .turno-fim{margin-top:16px}
+   O vão de 22 é o gap do .pane-chat (lá em cima). As margens velhas de cada bloco saem, senão
+   somariam com ele; fica no FIM do arquivo e com especificidade baixa de propósito: as áreas
+   carregadas depois (passos.css) ainda ajustam o vão dos blocos delas com um seletor simples.
+   O fim do turno fica a 16 do bloco de cima (22 − 6, o margin-top:-6px do design). */
+.pane-chat > *{margin-top:0;margin-bottom:0}
+.pane-chat > .turno-fim{margin-top:-6px}
 
 /* ---------- iPhone ----------
    O celular.css deixava a letra da conversa em 14,5 e a bolha em 92%: este arquivo vem depois
@@ -362,6 +409,6 @@ textarea.cxq-input{min-height:52px}
 }
 @media (max-width: 600px) {
   .cx-acao{min-height:40px;height:auto;padding:7px 12px}
-  .cxq-input{font-size:16px;min-height:40px}
+  .cxq-input,textarea.cxq-input{font-size:16px;min-height:40px}
   .cxq-opcao{padding:10px 8px}
 }

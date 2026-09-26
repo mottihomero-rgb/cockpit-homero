@@ -3,8 +3,11 @@
    O que segura: as ações da minha mensagem na linha do "Você" (e não no pé da bolha), o ícone
    certo do "voltar no tempo", a barra do bloco de código com a linguagem, a miniatura da entrega
    fora do parágrafo, o "Levou …" do fim do turno e a regra do README "nada de CAIXA ALTA com
-   letra espaçada". Mesmo jeito dos outros testes: extrai a função real do app.js e roda numa
-   VM com stubs, sem abrir o Electron. */
+   letra espaçada". Revisão de 26/09: um rótulo por resposta, o copiar na linha do rótulo (nunca
+   no pé, onde encavalava no "Levou"), tabela sem palavra partida, pergunta com a própria
+   pergunta de título e "Pular", cursor no fim da lista e recados curtos com a dica no title.
+   Mesmo jeito dos outros testes: extrai a função real do app.js e roda numa VM com stubs, sem
+   abrir o Electron. */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -37,10 +40,12 @@ test('bloco de código: a linguagem do marked vai para o data-lang do <pre> (a b
   const c = { $: (sel, el) => el.q(sel), console };
   vm.createContext(c);
   vm.runInContext(func('botoesDeCopia'), c);
+  vm.runInContext(func('linguagemProvavel'), c);
+  vm.runInContext(func('temRotuloAcima'), c);
   c.botaoCopiar = () => ({ classList: { add() {} } });
   c.barraDeAcoes = () => ({ appendChild() {} });
   const mkPre = (classe) => {
-    const code = { className: classe };
+    const code = { className: classe, textContent: 'ls -la' };
     return { classList: { add() {} }, dataset: {}, appendChild() {}, querySelector: (s) => (s === 'code' ? code : null), q: () => null };
   };
   const js = mkPre('language-js'), cru = mkPre(''), cpp = mkPre('hljs language-c++');
@@ -48,7 +53,7 @@ test('bloco de código: a linguagem do marked vai para o data-lang do <pre> (a b
   const b = { raw: '', el: { closest: () => msg, querySelectorAll: () => [js, cru, cpp] } };
   c.botoesDeCopia(b);
   assert.equal(js.dataset.lang, 'js');
-  assert.equal(cru.dataset.lang, '', 'sem linguagem a barra fica só com o copiar');
+  assert.equal(cru.dataset.lang, 'bash', 'sem linguagem na cerca, vale o palpite (a barra nunca fica vazia)');
   assert.equal(cpp.dataset.lang, 'c++');
   assert.match(css, /pre::before\{content:attr\(data-lang\)/, 'o CSS da barra lê o data-lang');
 });
@@ -97,4 +102,88 @@ test('mensagens.css: nada de CAIXA ALTA com letra espaçada, e o rótulo "VOCÊ"
   assert.match(role[1], /letter-spacing:0/);
   // cor do assistente SÓ no logo: nada aqui tinge com --motor ou --logo-*
   assert.doesNotMatch(css, /var\(--(motor|logo-(claude|codex|gemini|grok))\)/);
+});
+
+test('bloco sem linguagem: o palpite dá bash, json, html ou "texto" (nunca barra vazia)', () => {
+  const c = {};
+  vm.createContext(c);
+  vm.runInContext(func('linguagemProvavel'), c);
+  assert.equal(c.linguagemProvavel('npm run relatorio -- --mes 09'), 'bash');
+  assert.equal(c.linguagemProvavel('$ git status\nOn branch main'), 'bash');
+  assert.equal(c.linguagemProvavel('{"formato": "csv"}'), 'json');
+  assert.equal(c.linguagemProvavel('<a class="btn">Comprar</a>'), 'html');
+  assert.equal(c.linguagemProvavel('pasta/\n  arquivo.txt'), 'texto');
+  assert.equal(c.linguagemProvavel(''), 'texto');
+});
+
+/* elementos de mentira com o mínimo que as funções usam: classList, dataset e irmãos */
+function fala(classes, motor) {
+  const set = new Set(classes.split(' '));
+  return { classList: { contains: (x) => set.has(x) }, dataset: { motor }, previousElementSibling: null, nextElementSibling: null };
+}
+function emFila(...els) {
+  els.forEach((e, i) => { e.previousElementSibling = els[i - 1] || null; e.nextElementSibling = els[i + 1] || null; });
+  return els;
+}
+
+test('um rótulo por resposta: a 1ª fala depois da minha mensagem tem, as seguintes da mesma IA não', () => {
+  const c = {};
+  vm.createContext(c);
+  vm.runInContext(func('falaContinua'), c);
+  const P = (falas) => ({ engine: 'claude', chat: { querySelectorAll: () => falas } });
+  assert.equal(c.falaContinua(P([])), false, 'conversa vazia: rótulo');
+  assert.equal(c.falaContinua(P([fala('msg user')])), false, 'depois da minha mensagem (mesmo com passo no meio): rótulo');
+  assert.equal(c.falaContinua(P([fala('msg user'), fala('msg bot', 'claude')])), true, 'continuação da mesma resposta: sem rótulo');
+  assert.equal(c.falaContinua(P([fala('msg bot', 'codex')])), false, 'outra IA respondendo: rótulo de novo');
+  assert.equal(c.falaContinua({ engine: 'claude', chat: {} }), false, 'sem DOM de verdade não quebra');
+  // o botBlock usa a regra (e não mais o "veio depois de comando", que tirava o rótulo depois do passo)
+  assert.match(func('botBlock'), /const semNome = falaContinua\(P\);/);
+  assert.doesNotMatch(source, /botBlock\(P, 'resp', depoisDeComando\)/);
+});
+
+test('copiar da resposta: mora na linha do rótulo e leva a resposta inteira (falas sem rótulo juntas)', () => {
+  // a barra entra no .msg-role quando ele existe; senão, ANTES do texto (nunca no pé da resposta)
+  const barra = func('barraDeAcoes');
+  assert.match(barra, /if \(rotulo\) rotulo\.appendChild\(barra\); else msg\.insertBefore\(barra, msg\.firstChild\);/);
+  assert.doesNotMatch(barra, /msg\.appendChild\(barra\)/);
+  const c = {};
+  vm.createContext(c);
+  vm.runInContext(func('textoDaResposta'), c);
+  vm.runInContext(func('temRotuloAcima'), c);
+  const [eu, r1, passo, r2, r3, eu2, r4] = emFila(fala('msg user'), fala('msg bot'), fala('exec'), fala('msg bot emenda'),
+    fala('msg bot emenda'), fala('msg user'), fala('msg bot'));
+  r1._texto = () => 'Primeira parte.'; r2._texto = () => 'Segunda.'; r3._texto = () => 'Terceira.'; r4._texto = () => 'Outra resposta.';
+  assert.equal(c.textoDaResposta(r1), 'Primeira parte.\n\nSegunda.\n\nTerceira.', 'para na minha próxima mensagem');
+  assert.equal(c.temRotuloAcima(r3), true, 'a continuação acha a fala do rótulo acima (passo no meio não conta)');
+  assert.equal(c.temRotuloAcima(r4), false);
+  assert.ok(eu && passo && eu2);
+  // CSS: na linha do rótulo; o absoluto só vale para a barra solta (filha direta), e acima do texto
+  assert.match(css, /\.msg\.bot \.msg-role \.msg-acoes\{/);
+  assert.match(css, /\.msg\.bot > \.msg-acoes\{position:absolute;left:-5px;top:-22px/);
+  assert.doesNotMatch(css, /top:calc\(100% - 4px\)/, 'nada pendurado no pé da resposta (encavalava no "Levou")');
+});
+
+test('tabela: palavra inteira na célula, colunas 1,2 / 1 / 1 e código sem pílula', () => {
+  assert.match(css, /\.msg-body :is\(th,td\)\{overflow-wrap:break-word\}/, 'a coluna nunca fica mais fina que a maior palavra');
+  assert.match(css, /\.msg-body thead th:first-child\{width:calc\(120% \/ \(var\(--cols\) \+ \.2\)\)\}/);
+  assert.match(css, /\.msg-body :is\(th,td\) code\{padding:0;border-radius:0;background:none;font-size:12px/);
+});
+
+test('pergunta do assistente: a pergunta única é o título, o botão é "Pular" e o campo livre tem 1 linha', () => {
+  const corpo = func('perguntaCodex');
+  assert.match(corpo, /soUma \? \(perguntas\[0\]\.question \|\| perguntas\[0\]\.header\)/);
+  assert.match(corpo, /if \(soUma\) legend\.className = 'cxq-oculto';/, 'o legend fica para o leitor de tela');
+  assert.match(corpo, /'Cancelar' : 'Pular'/);
+  assert.match(corpo, /outro\.rows = 1/);
+  assert.match(css, /textarea\.cxq-input\{min-height:26px;[^}]*field-sizing:content\}/);
+});
+
+test('cursor da fala chegando: também no último item de lista, não só em parágrafo', () => {
+  assert.match(css, /\.msg-body\.chegando > :is\(ul,ol\):last-child > li:last-child:not\(:has\(> :is\(ul,ol,p\)\)\)::after/);
+});
+
+test('recados de envio: poucas palavras na tela, a explicação no title', () => {
+  assert.match(func('avisoEnvio'), /if \(dica\) d\.title = dica;/);
+  assert.match(source, /avisoEnvio\(P, 'Esforço máximo', 'Liberei os workflows/);
+  assert.doesNotMatch(source, /avisoEnvio\(P, 'Esforço máximo: liberei/);
 });

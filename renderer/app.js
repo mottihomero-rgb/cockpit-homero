@@ -2282,8 +2282,19 @@ function pintarAvatar(el) {
 }
 function repintarAvatares() { $$('.msg.user .av').forEach(pintarAvatar); $('#fotoPrev') && pintarAvatar($('#fotoPrev')); }
 
-function botBlock(P, key, semNome) {
+/* Um rótulo (logo + nome) por RESPOSTA, como no design: a primeira fala depois da minha
+   mensagem leva o rótulo, mesmo que venha depois de um passo ("Abriu 1 imagem"); as falas
+   seguintes da mesma resposta (depois de mais passos, ou coladas na de cima, como na conversa
+   reaberta) não repetem. Antes o rótulo saía em toda fala da conversa reaberta e sumia na
+   primeira fala que vinha depois de um passo. Troca de IA no meio ganha rótulo de novo. */
+function falaContinua(P) {
+  const falas = P.chat && P.chat.querySelectorAll ? P.chat.querySelectorAll(':scope > .msg') : [];
+  const ult = falas[falas.length - 1];
+  return !!(ult && ult.classList.contains('bot') && ult.dataset.motor === P.engine);
+}
+function botBlock(P, key) {
   clearEmpty(P);
+  const semNome = falaContinua(P);
   const d = document.createElement('div');
   d.className = 'msg bot' + (semNome ? ' emenda' : '');
   /* 25/09: numa conversa costurada o mesmo painel mostra respostas de IAs diferentes: o logo
@@ -2361,7 +2372,7 @@ function textDelta(P, key, text) {
   if (!b || P.blocks.get('respKey') !== key || depoisDeComando) {
     // texto que vem depois de comandos entra num bloco novo, abaixo do cartao
     if (b && !depoisDeComando) { b.raw = ''; b.el.innerHTML = ''; b.corte = 0; b.fixos = 0; }
-    else { b = botBlock(P, 'resp', depoisDeComando); }
+    else { b = botBlock(P, 'resp'); }
     P.blocks.set('respKey', key);
     P.blocks.set('resp', b);
     P.execEl = null;                                  // proximo comando abre cartao novo
@@ -2768,7 +2779,7 @@ async function ditadoWhisper(P) {
   }
   const bt = $('.p-mic', P.el);
   if (bt) bt.classList.add('gravando');
-  avisoEnvio(P, 'Gravando. Clique no microfone de novo (ou ⌘⇧D) quando terminar de falar.');
+  avisoEnvio(P, 'Gravando', 'Clique no microfone de novo (ou ⌘⇧D) quando terminar de falar.');
 }
 function pararDitado() {
   if (DITADO.rec && DITADO.rec.state !== 'inactive') DITADO.rec.stop();
@@ -2978,21 +2989,62 @@ function botaoCopiar(titulo, pegarTexto) {
   b.addEventListener('click', (e) => { e.stopPropagation(); copiarTexto(pegarTexto(), b); });
   return b;
 }
-/* a barrinha de ações mora no PÉ da mensagem, dentro do bloco de texto — não flutuando por cima */
+/* a barrinha de ações mora na linha do rótulo (redesenho 26/09): na minha mensagem, à esquerda
+   do "Você"; na resposta, logo depois do nome da IA. No pé da resposta ela encavalava no
+   "Levou 3m 40s" do fim do turno. Fala sem rótulo quase nunca tem barra (o copiar da primeira
+   fala leva a resposta toda); se tiver, ela entra antes do texto e o CSS a põe no vão de 22
+   logo acima dele, nunca embaixo. */
 function barraDeAcoes(msg) {
   let barra = $('.msg-acoes', msg);
   if (!barra) {
     barra = document.createElement('div');
     barra.className = 'msg-acoes';
-    msg.appendChild(barra);
+    const rotulo = $('.msg-role', msg);
+    if (rotulo) rotulo.appendChild(barra); else msg.insertBefore(barra, msg.firstChild);
   }
   return barra;
 }
 
+/* Bloco de código que veio sem a linguagem na cerca (```): a barra de 28 ficava vazia, só com o
+   copiar. O nome é só um rótulo, então basta um palpite barato pelo começo do texto; na dúvida,
+   "texto" (saída de comando, árvore de pastas, rascunho). */
+function linguagemProvavel(txt) {
+  const t = String(txt || '').trim();
+  const l1 = t.split('\n', 1)[0];
+  if (/^(\$ |sudo |npm |npx |node |git |cd |ls |curl |python3? |pip3? |brew |rclone |cat |mkdir |rm |cp |mv |open |echo |export |yarn |pnpm |docker |ssh |scp |chmod |grep |find |sed |awk |tar |unzip |wget |source |bash |zsh |sh |launchctl |defaults |osascript |kill |ps |lsof )/.test(l1)) return 'bash';
+  if (/^[[{]/.test(t)) { try { JSON.parse(t); return 'json'; } catch {} }
+  if (/^<[!a-zA-Z]/.test(t) && />\s*$/.test(t)) return 'html';
+  return 'texto';
+}
+/* A resposta pode vir em várias falas (texto, passos, mais texto): o rótulo e o copiar ficam só
+   na primeira, e o copiar dela leva a RESPOSTA INTEIRA (ela e as falas sem rótulo que vêm depois,
+   até a próxima mensagem minha ou a próxima resposta). Lido na hora do clique: pega também o
+   que chegou depois. */
+function textoDaResposta(msg) {
+  const partes = [msg._texto ? msg._texto() : ''];
+  for (let e = msg.nextElementSibling; e; e = e.nextElementSibling) {
+    if (!e.classList.contains('msg')) continue;              // passos, trabalhando, avisos
+    if (!e.classList.contains('emenda')) break;              // mensagem minha ou outra resposta
+    if (e._texto) partes.push(e._texto());
+  }
+  return partes.filter(t => t && t.trim()).join('\n\n');
+}
+// a fala sem rótulo tem a primeira fala da resposta (a do rótulo) acima dela, na tela?
+function temRotuloAcima(msg) {
+  for (let e = msg.previousElementSibling; e; e = e.previousElementSibling) {
+    if (!e.classList.contains('msg')) continue;
+    if (!e.classList.contains('bot')) return false;
+    if (!e.classList.contains('emenda')) return true;
+  }
+  return false;
+}
 function botoesDeCopia(b) {
   const msg = b.el.closest('.msg');
-  if (msg && !$('.bt-copiar.da-msg', msg)) {
-    const bt = botaoCopiar('Copiar a resposta', () => b.raw || b.el.innerText);
+  if (msg) msg._texto = () => b.raw || b.el.innerText;
+  // fala sem rótulo não ganha copiar próprio: o da primeira fala já copia a resposta toda
+  const continuacao = msg && msg.classList && msg.classList.contains('emenda') && temRotuloAcima(msg);
+  if (msg && !continuacao && !$('.bt-copiar.da-msg', msg)) {
+    const bt = botaoCopiar('Copiar a resposta', () => textoDaResposta(msg));
     bt.classList.add('da-msg');
     barraDeAcoes(msg).appendChild(bt);
   }
@@ -3001,10 +3053,10 @@ function botoesDeCopia(b) {
     if ($('.bt-copiar', pre)) continue;
     pre.classList.add('com-copia');
     /* a barra de 28 do bloco de código mostra a linguagem (o CSS lê o data-lang). O marked
-       põe a linguagem na classe do <code> ("language-js"); sem ela a barra fica só com o copiar */
+       põe a linguagem na classe do <code> ("language-js"); sem ela, vale o palpite do linguagemProvavel */
     const cod = pre.querySelector('code');
     const lang = cod && /(?:^|\s)language-([\w+#.-]+)/.exec(cod.className);
-    pre.dataset.lang = lang ? lang[1] : '';
+    pre.dataset.lang = lang ? lang[1] : linguagemProvavel((cod || pre).textContent);
     pre.appendChild(botaoCopiar('Copiar o código', () => (pre.querySelector('code') || pre).innerText));
   }
 }
@@ -3135,7 +3187,7 @@ function textFinal(P, key, text) {
   const blocoNovo = !b || P.blocks.get('respKey') !== key || depoisDeComando;
   if (blocoNovo) {
     if (b && !depoisDeComando) { b.raw = ''; b.el.innerHTML = ''; b.corte = 0; b.fixos = 0; }
-    else { b = botBlock(P, 'resp', depoisDeComando); }
+    else { b = botBlock(P, 'resp'); }
     P.blocks.set('respKey', key); P.blocks.set('resp', b);
     P.execEl = null;
   }
@@ -3742,14 +3794,15 @@ async function send(P) {
       try { r = await window.api.paneSteer({ paneId: P.id, engine: P.engine,
         text: ENTRA_MSG + pacote.text, attachments: anx }); } catch { r = { ok: false }; }
       if (!painelAindaAtual(P, revisao)) return;
-      if (nota) nota.textContent = r && r.ok
-        ? 'Entregue no meio do trabalho. Ele escolhe se atende agora ou ao terminar.'
-        : 'Não deu para entrar agora, então ficou na fila.';
+      if (nota) {
+        nota.textContent = r && r.ok ? 'Entregue no meio do trabalho' : 'Ficou na fila';
+        nota.title = r && r.ok ? 'Ele escolhe se atende agora ou ao terminar.' : 'Não deu para entrar agora. Começa assim que ele terminar.';
+      }
       if (!(r && r.ok)) { juntarNaFila(P, pacote); marcarNaFila(P, bolha, text); if (!P.busy) agendarFila(P); }
     } else {
       juntarNaFila(P, pacote);
       marcarNaFila(P, bolha, text);
-      avisoEnvio(P, 'Na fila. Começa assim que ele terminar.');
+      avisoEnvio(P, 'Na fila', 'Começa assim que ele terminar.');
       if (!P.busy) agendarFila(P);
     }
     return;
@@ -3855,7 +3908,7 @@ async function send(P) {
   // Máximo no Claude = ultracode: uma vez por processo, a liberação vai grudada na mensagem
   if (P.engine === 'claude' && esforcoDe(P) === 'max' && !P.ultraAvisado) {
     envio = ULTRACODE_MSG + envio; P.ultraAvisado = true;
-    avisoEnvio(P, 'Esforço máximo: liberei os workflows (vários agentes em paralelo) e o modelo por tarefa (Haiku triagem · Sonnet execução · Opus planejamento).');
+    avisoEnvio(P, 'Esforço máximo', 'Liberei os workflows (vários agentes em paralelo) e o modelo por tarefa (Haiku triagem · Sonnet execução · Opus planejamento).');
   }
   try {
     if (escolhasDoEnvio) escolhasDoEnvio.phase = 'sending';
@@ -4364,13 +4417,21 @@ function perguntaCodex(P, ev, historico = false) {
   if (P.questions.has(key) && P.questions.get(key).el.isConnected) return;
   const schema = ev.schema || ev.requestedSchema;
   const tipo = ev.questionKind || ev.requestKind || ev.mode || 'input';
-  const titulo = tipo === 'permissions' ? 'Pedido de permissão' : schema || tipo === 'elicitation' ? 'Pergunta do conector' : 'Preciso da sua resposta';
+  const perguntas = ev.questions || [];
+  /* redesenho 26/09: pergunta ÚNICA vira o próprio título do cartão (em 600, ao lado do glifo
+     de espera), como no design; o "Preciso da sua resposta" de cima era uma linha a mais. O
+     <legend> continua no fieldset (leitor de tela), só escondido. */
+  const soUma = tipo !== 'permissions' && !schema && tipo !== 'elicitation' && perguntas.length === 1
+    && !!(perguntas[0].question || perguntas[0].header);
+  const titulo = tipo === 'permissions' ? 'Pedido de permissão' : schema || tipo === 'elicitation' ? 'Pergunta do conector'
+    : soUma ? (perguntas[0].question || perguntas[0].header) : 'Preciso da sua resposta';
   const el = cartaoCodex(P, 'cx-pergunta', titulo); el.dataset.questionKey = key;
   if (ev.message || ev.title) { const p = document.createElement('p'); p.textContent = ev.message || ev.title; el.appendChild(p); }
   const form = document.createElement('form'); form.className = 'cxq-form';
-  const campos = [], perguntas = ev.questions || [];
+  const campos = [];
   for (const [index, q] of perguntas.entries()) {
     const fs = document.createElement('fieldset'); const legend = document.createElement('legend'); legend.textContent = q.question || q.header || 'Sua resposta'; fs.appendChild(legend);
+    if (soUma) legend.className = 'cxq-oculto';
     const group = P.id + '-q-' + index + '-' + Math.random().toString(36).slice(2);
     for (const [n, option] of (q.options || []).entries()) {
       const label = document.createElement('label'); label.className = 'cxq-opcao';
@@ -4381,7 +4442,8 @@ function perguntaCodex(P, ev, historico = false) {
     }
     const outro = document.createElement(q.isSecret ? 'input' : 'textarea');
     if (q.isSecret) outro.type = 'password';
-    outro.className = 'cxq-input'; outro.placeholder = q.options && q.options.length ? 'Ou escreva outra resposta' : 'Escreva sua resposta'; outro.setAttribute('aria-label', outro.placeholder);
+    outro.className = 'cxq-input'; outro.placeholder = q.options && q.options.length ? 'Outra resposta' : 'Sua resposta'; outro.setAttribute('aria-label', outro.placeholder);
+    if (!q.isSecret) outro.rows = 1;   // uma linha de 26, como as opções; cresce enquanto escreve (CSS)
     outro.addEventListener('input', () => { if (outro.value.trim()) $$('input:checked', fs).forEach(x => { x.checked = false; }); });
     fs.addEventListener('change', (e) => { if (e.target.matches('input[type=radio],input[type=checkbox]')) outro.value = ''; });
     fs.appendChild(outro); form.appendChild(fs);
@@ -4401,7 +4463,9 @@ function perguntaCodex(P, ev, historico = false) {
   const status = document.createElement('p'); status.className = 'cxq-status'; status.setAttribute('role', 'status');
   const acoes = document.createElement('div'); acoes.className = 'cxq-acoes';
   const enviar = document.createElement('button'); enviar.type = 'submit'; enviar.className = 'cx-acao principal'; enviar.textContent = tipo === 'permissions' ? 'Permitir' : url ? 'Já concluí' : 'Responder';
-  const cancelar = document.createElement('button'); cancelar.type = 'button'; cancelar.className = 'cx-acao'; cancelar.textContent = 'Cancelar';
+  // pergunta comum: "Pular" (o nome do design); permissão e conector continuam com "Cancelar"
+  const cancelar = document.createElement('button'); cancelar.type = 'button'; cancelar.className = 'cx-acao';
+  cancelar.textContent = tipo === 'permissions' || schema || tipo === 'elicitation' || url ? 'Cancelar' : 'Pular';
   acoes.append(enviar, cancelar); form.append(status, acoes); el.appendChild(form);
   const estado = { el, done: false, isBlocking: ev.isBlocking !== false,
     persisteEntreTurnos: tipo === 'async' || tipo === 'elicitation' || ev.isBlocking === false };
@@ -4420,7 +4484,7 @@ function perguntaCodex(P, ev, historico = false) {
       const r = await window.api.paneRespond({ paneId: P.id, key: ev.key ?? ev.id, action, answers, content });
       if (estado.done) return;
       if (r === false || r && (r.ok === false || r.error)) throw new Error(r && r.error || 'A resposta não chegou. Tente de novo.');
-      encerrarPerguntaCodex(P, key, action === 'accept' ? 'Resposta enviada.' : 'Pedido cancelado.');
+      encerrarPerguntaCodex(P, key, action === 'accept' ? 'Resposta enviada.' : cancelar.textContent === 'Pular' ? 'Pergunta pulada.' : 'Pedido cancelado.');
     } catch (e) { if (estado.done) return; enviar.disabled = cancelar.disabled = false; status.textContent = e.message || 'Não foi possível responder.'; }
   };
   form.onsubmit = e => { e.preventDefault(); responder('accept'); };
@@ -4830,11 +4894,14 @@ async function trocarEsforco(P, id) {
   return true;
 }
 
-function avisoEnvio(P, txt) {
+/* recado curto na conversa (some em 9s). "Nenhuma frase explicativa na tela": o recado diz o
+   que aconteceu em poucas palavras e o porquê/como vai na dica, no title */
+function avisoEnvio(P, txt, dica) {
   clearEmpty(P);
   const d = document.createElement('div');
   d.className = 'envio-nota';
   d.textContent = txt;
+  if (dica) d.title = dica;
   P.chat.appendChild(d);
   if (P.execEl) P.chat.appendChild(P.execEl);
   if (P.trabEl) P.chat.appendChild(P.trabEl);

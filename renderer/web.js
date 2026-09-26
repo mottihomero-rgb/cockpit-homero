@@ -321,6 +321,8 @@
     paneStart: (o) => chamar('pane:start', o),
     paneSend: (o) => chamar('pane:send', o),
     paneRespond: (o) => chamar('pane:respond', o),
+    panePerguntas: (o) => chamar('pane:perguntas', o),
+    panePlano: (o) => chamar('pane:plano', o),
     paneSettings: (o) => chamar('pane:settings', o),
     paneSteer: (o) => chamar('pane:steer', o),
     paneCompactar: (o) => chamar('pane:compactar', o),

@@ -17,6 +17,9 @@ contextBridge.exposeInMainWorld('api', {
   paneStart: (o) => ipcRenderer.invoke('pane:start', o),
   paneSend: (o) => ipcRenderer.invoke('pane:send', o),
   paneRespond: (o) => ipcRenderer.invoke('pane:respond', o),
+  // 26/09: janelinha de perguntas do Claude e o plano pronto do modo Plano
+  panePerguntas: (o) => ipcRenderer.invoke('pane:perguntas', o),
+  panePlano: (o) => ipcRenderer.invoke('pane:plano', o),
   paneSettings: (o) => ipcRenderer.invoke('pane:settings', o),
   paneInterrupt: (o) => ipcRenderer.invoke('pane:interrupt', o),
   paneSteer: (o) => ipcRenderer.invoke('pane:steer', o),

@@ -312,4 +312,4 @@
   border-radius:5px;background:transparent;color:var(--label-3);cursor:default}
 .mi:hover .mi-x,.mi .mi-x:focus-visible{display:grid}
 .mi .mi-x .ic{width:10px;height:10px}
-.mi .mi-x:hover{background:rgba(255,255,255,.18);color:inherit}
+.mi .mi-x:hover{background:var(--fill-1);color:inherit}

@@ -430,3 +430,31 @@ textarea.cxq-input{min-height:26px;max-height:120px;resize:none;field-sizing:con
   .cxq-input,textarea.cxq-input{font-size:16px;min-height:40px}
   .cxq-opcao{padding:10px 8px}
 }
+
+/* ---------- o que ele respondeu nas perguntas (26/09): linhas curtas "Cor  Verde" ---------- */
+.pq-resumo{align-self:flex-end;max-width:min(520px,85%);margin:4px 0 10px auto;padding:8px 12px;border-radius:12px;
+  background:var(--fill-3);display:flex;flex-direction:column;gap:3px;font:400 12px/16px var(--font-sans)}
+.pq-rl{display:flex;gap:10px;min-width:0}
+.pq-rh{flex:none;color:var(--label-2)}
+.pq-rv{min-width:0;color:var(--label-1);font-weight:500;overflow-wrap:anywhere}
+
+/* ---------- o plano pronto do modo Plano (26/09) ----------
+   Cartão na conversa: "Plano" com o ícone, o texto em markdown e Ajustar · Executar (azul).
+   Respondido, os botões viram uma linha curta de estado. */
+.plano-pronto{margin:6px 0 12px;padding:12px 14px;border-radius:12px;background:var(--fill-4);
+  box-shadow:inset 0 0 0 1px var(--separator);display:flex;flex-direction:column;gap:8px}
+.pl-cab{display:flex;align-items:center;gap:8px}
+.pl-ic{display:grid;place-items:center;color:var(--label-2)}
+.pl-ic .ic{width:14px;height:14px}
+.pl-tit{font:600 14px/18px var(--font-sans);color:var(--label-1)}
+.pl-corpo{font:var(--f-body);color:var(--label-1)}
+.pl-corpo > :first-child{margin-top:0}
+.pl-corpo > :last-child{margin-bottom:0}
+.pl-acoes{display:flex;align-items:center;gap:8px;padding-top:4px}
+.pl-ajustar,.pl-executar{height:28px;padding:0 16px;border:0;border-radius:14px;background:var(--fill-2);color:var(--label-1);
+  font:500 13px/16px var(--font-sans);cursor:default}
+.pl-ajustar:hover{background:var(--fill-1)}
+.pl-executar{background:var(--accent);color:var(--on-accent);font-weight:600}
+.pl-executar:hover{background:color-mix(in srgb,var(--accent) 88%,white)}
+.pl-estado{font:400 12px/16px var(--font-sans);color:var(--label-2)}
+.plano-pronto.respondido{box-shadow:inset 0 0 0 1px var(--separator);opacity:.92}

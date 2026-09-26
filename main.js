@@ -1042,11 +1042,16 @@ function claudeStart(paneId, opts) {
   ];
   if (opts.sugestoes !== false && !ehRemoto(opts.cwd)) args.push('--prompt-suggestions');
   const modo = opts.approval || 'bypass';
+  /* 26/09: o canal de pergunta (stdio) vai em TODO modo. No "sem pedir permissão" nenhuma
+     ferramenta passa por ele (testado: Bash e Write seguem direto), só o que PRECISA de você —
+     as perguntas do AskUserQuestion (a janelinha, como no VS Code) e o plano pronto do Plano. */
+  args.push('--permission-prompt-tool', 'stdio');
   if (modo === 'bypass') {
     args.push('--dangerously-skip-permissions');
   } else {
-    // canal para ele perguntar antes de agir
-    args.push('--permission-prompt-tool', 'stdio');
+    /* deixa o "sem pedir permissão" DISPONÍVEL (sem ligar): aprovar o plano volta para o modo
+       de antes, e se ele era esse, o Claude precisa poder trocar para ele na mesma conversa */
+    args.push('--allow-dangerously-skip-permissions');
     const sf = claudeSettingsSemBypass();
     if (sf) { args.push('--setting-sources', 'project,local'); args.push('--settings', sf); }
   }
@@ -1238,6 +1243,22 @@ function claudeMessage(paneId, m) {
   if (m.type === 'control_response') return;
   if (m.type === 'control_request' && m.request && m.request.subtype === 'can_use_tool') {
     const key = 'cl_' + paneId + '_' + m.request_id;
+    /* 26/09 — como no VS Code: pergunta da IA vira a janelinha de opções, e o plano pronto do
+       modo Plano vira o cartão "Executar". Os dois não são pedido de permissão: a resposta
+       volta por pane:perguntas / pane:plano (as respostas vão em updatedInput.answers). */
+    if (m.request.tool_name === 'AskUserQuestion' && m.request.input && Array.isArray(m.request.input.questions)) {
+      const dados = { key, questions: m.request.input.questions };
+      pendingApprovals.set(key, { kind: 'claude-perguntas', paneId, reqId: m.request_id, input: m.request.input, evento: { tipo: 'perguntas', dados } });
+      emit(paneId, 'perguntas', dados);
+      return;
+    }
+    if (m.request.tool_name === 'ExitPlanMode') {
+      const inp = m.request.input || {};
+      const dados = { key, plano: String(inp.plan || ''), arquivo: String(inp.planFilePath || '') };
+      pendingApprovals.set(key, { kind: 'claude-plano', paneId, reqId: m.request_id, input: inp, evento: { tipo: 'plano-pronto', dados } });
+      emit(paneId, 'plano-pronto', dados);
+      return;
+    }
     /* tool + mudanca: o cartão de autorização do redesenho mostra o antes/depois do que ele vai
        permitir (README, "Pedido de autorização"). O ACP já mandava; o Claude saía sem diff. É o
        MESMO dado que o passo de edição usa (dadosDaEdicao), só que antes de ele permitir. */
@@ -5872,6 +5893,49 @@ function estadoPane(paneId) {
   return { busy, aprovacao };
 }
 handle('pane:estado', (_e, { paneId }) => estadoPane(paneId));
+
+/* 26/09: resposta da janelinha de perguntas do Claude (AskUserQuestion). answers = { "texto da
+   pergunta": "opção escolhida" } (várias escolhas vão juntas, separadas por vírgula, como o
+   terminal dele faz). pular = ele fechou sem responder: o Claude segue sem as respostas. */
+handle('pane:perguntas', (_e, { key, paneId, answers, pular } = {}) => {
+  const a = pendingApprovals.get(key);
+  if (!a || a.kind !== 'claude-perguntas' || (paneId !== undefined && a.paneId !== paneId)) return { error: 'Esta pergunta já foi encerrada.' };
+  let resposta;
+  if (pular) resposta = { behavior: 'deny', message: 'O usuário fechou as perguntas sem responder. Siga com a melhor escolha e diga qual foi, ou pergunte de outro jeito.' };
+  else {
+    const limpas = {};
+    for (const q of a.input.questions || []) {
+      const v = answers && answers[q.question];
+      if (typeof v === 'string' && v.trim()) limpas[q.question] = v.trim().slice(0, 4000);
+    }
+    if (!Object.keys(limpas).length) return { error: 'Escolha pelo menos uma resposta.' };
+    resposta = { behavior: 'allow', updatedInput: { ...a.input, answers: limpas } };
+  }
+  const ok = escreverClaude(a.paneId, { type: 'control_response', response: { request_id: a.reqId, subtype: 'success', response: resposta } });
+  if (!ok) return { error: 'O motor caiu. A resposta continua aqui para tentar de novo.' };
+  pendingApprovals.delete(key);
+  return { ok: true };
+});
+/* 26/09: o plano pronto do modo Plano. aprovar = "Executar": volta para o modo de antes (o
+   Claude troca sozinho, na mesma conversa, pelo updatedPermissions). Sem aprovar, o que ele
+   escreveu vai como ajuste e o Claude continua planejando. */
+handle('pane:plano', (_e, { key, paneId, aprovar, modo, texto } = {}) => {
+  const a = pendingApprovals.get(key);
+  if (!a || a.kind !== 'claude-plano' || (paneId !== undefined && a.paneId !== paneId)) return { error: 'Este plano já foi respondido.' };
+  let resposta;
+  if (aprovar) {
+    resposta = { behavior: 'allow', updatedInput: a.input };
+    const alvo = CLAUDE_MODE[modo] || 'bypassPermissions';
+    if (alvo !== 'plan') resposta.updatedPermissions = [{ type: 'setMode', mode: alvo, destination: 'session' }];
+  } else {
+    const t = String(texto || '').trim().slice(0, 4000);
+    resposta = { behavior: 'deny', message: t ? 'O usuário quer ajustar o plano antes de executar: ' + t : 'O usuário ainda não aprovou. Continue planejando e apresente o plano de novo.' };
+  }
+  const ok = escreverClaude(a.paneId, { type: 'control_response', response: { request_id: a.reqId, subtype: 'success', response: resposta } });
+  if (!ok) return { error: 'O motor caiu. Tente de novo.' };
+  pendingApprovals.delete(key);
+  return { ok: true };
+});
 
 handle('pane:respond', async (_e, data) => {
   const a = pendingApprovals.get(data.key);

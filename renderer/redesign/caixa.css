@@ -409,3 +409,52 @@
   .cmp-bar > .p-compactar{right:40px}
   .cmp-bar:has(> .p-stop:not(.hidden)) > .p-compactar{right:80px}
 }
+
+/* ---------- perguntas da IA, como no VS Code (26/09) ----------
+   Janelinha em cima da caixa de escrever, no mesmo vidro do pedido de autorização: fichas das
+   perguntas no topo (a de agora em fill-1, a respondida com ✓), a pergunta em 600, as opções
+   numeradas (número em fill-2, a escolhida com fundo de selecionado e ✓), "Outra resposta" com
+   o lápis e, embaixo, Voltar · Próxima / Enviar respostas (azul só no último). */
+.pane-perguntas{margin:0 8px 8px;padding:10px 12px 12px;border-radius:12px;display:flex;flex-direction:column;gap:8px;
+  background:var(--glass-regular);-webkit-backdrop-filter:var(--blur-glass);backdrop-filter:var(--blur-glass);
+  box-shadow:var(--shadow-float),inset 0 0 0 1px var(--status-wait-line);font:var(--f-body);color:var(--label-1);
+  animation:pp-chega var(--dur-base) var(--ease-out);outline:none;max-height:min(60vh,520px);overflow:auto}
+.pane-perguntas:focus-visible{box-shadow:var(--shadow-float),inset 0 0 0 1px var(--status-wait-line),var(--anel-foco)}
+.pq-topo{display:flex;align-items:center;gap:6px;min-height:24px}
+.pq-fichas{display:flex;flex-wrap:wrap;gap:4px;min-width:0}
+.pq-gap{flex:1}
+.pq-ficha{height:24px;display:inline-flex;align-items:center;gap:5px;padding:0 9px 0 6px;border:0;border-radius:6px;
+  background:transparent;color:var(--label-2);font:500 12px/15px var(--font-sans);cursor:default}
+.pq-ficha:hover{background:var(--fill-3);color:var(--label-1)}
+.pq-ficha.on{background:var(--fill-1);color:var(--label-1)}
+.pq-ficha .ic{width:12px;height:12px;color:var(--status-ok)}
+.pq-fn{width:16px;height:16px;display:grid;place-items:center;border-radius:50%;background:var(--fill-2);
+  font:600 10px/1 var(--font-sans);color:var(--label-2)}
+.pq-x{width:24px;height:24px;display:grid;place-items:center;border:0;border-radius:6px;background:transparent;color:var(--label-3)}
+.pq-x:hover{background:var(--fill-3);color:var(--label-1)}
+.pq-x .ic{width:12px;height:12px}
+.pq-q{font:600 14px/19px var(--font-sans);color:var(--label-1);padding:2px 2px 0}
+.pq-ops{display:flex;flex-direction:column;gap:2px}
+.pq-op,.pq-outra{width:100%;min-height:36px;display:flex;align-items:center;gap:10px;padding:6px 8px;border:0;border-radius:8px;
+  background:transparent;color:var(--label-1);text-align:left;cursor:default;transition:background-color var(--dur-fast) ease-out}
+.pq-op:hover,.pq-outra:hover{background:var(--fill-3)}
+.pq-op.on,.pq-outra.on{background:var(--fill-2)}
+.pq-n{flex:none;width:20px;height:20px;display:grid;place-items:center;border-radius:6px;background:var(--fill-2);
+  font:600 11px/1 var(--font-sans);color:var(--label-2);font-variant-numeric:tabular-nums}
+.pq-n .ic{width:11px;height:11px}
+.pq-op.on .pq-n{background:var(--accent);color:var(--on-accent)}
+.pq-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.pq-l{font:500 13px/17px var(--font-sans)}
+.pq-d{font:400 12px/16px var(--font-sans);color:var(--label-2)}
+.pq-ck{flex:none;width:14px;display:grid;place-items:center;color:var(--accent-text)}
+.pq-ck .ic{width:13px;height:13px}
+.pq-in{flex:1;min-width:0;height:22px;margin:0;padding:0;border:0;background:transparent;color:var(--label-1);
+  font:400 13px/17px var(--font-sans);outline:none}
+.pq-in::placeholder{color:var(--label-3)}
+.pq-rodape{display:flex;align-items:center;gap:8px;padding-top:2px}
+.pq-voltar,.pq-seguir{height:28px;padding:0 14px;border:0;border-radius:14px;background:var(--fill-2);color:var(--label-1);
+  font:500 13px/16px var(--font-sans);cursor:default}
+.pq-voltar:hover,.pq-seguir:hover:not(:disabled){background:var(--fill-1)}
+.pq-seguir.destaque{background:var(--accent);color:var(--on-accent);font-weight:600}
+.pq-seguir.destaque:hover:not(:disabled){background:color-mix(in srgb,var(--accent) 88%,white)}
+.pq-seguir:disabled{opacity:.4}

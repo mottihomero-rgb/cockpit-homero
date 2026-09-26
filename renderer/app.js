@@ -3645,6 +3645,8 @@ function cartaoDeTarefas(tarefas) {
 }
 
 function toolStart(P, id, name, arg, extra) {
+  // as perguntas e o plano ganham tela própria (janelinha e cartão): não viram passo de ferramenta
+  if (name === 'AskUserQuestion' || name === 'ExitPlanMode') return;
   const d = passo(P, fraseDoPasso(name, arg), id);
   if (!d) return;
   P.tools.set(id, { el: d, out: $('.exec-out', d), buf: '' });
@@ -4095,6 +4097,13 @@ async function send(P) {
      mandado. Agora o anexo (ou o desenho do quadro) ja basta; so o campo totalmente vazio,
      sem nada anexado, e que nao envia. */
   if (!text && !(P.anexos || []).length && !P.quadroColado) return;
+  /* 26/09: com o plano pronto esperando, o que ele escreve responde o plano ("ok" executa,
+     o resto vira ajuste) — como no VS Code. Não vira mensagem nova nem vai para a fila. */
+  if (P.planoPendente && text && !(P.anexos || []).length && !P.quadroColado) {
+    inp.value = ''; inp.style.height = 'auto';
+    planoPelaCaixa(P, text);
+    return;
+  }
   /* A mensagem VAI sair: soltar o microfone. Fica DEPOIS da saída acima de propósito — Enter
      no campo vazio no meio do ditado é falha de captação, e ali o ditado tem de continuar.
      `guardarTexto`: o texto já foi lido para `text` e o campo é limpo logo abaixo. */
@@ -4385,6 +4394,9 @@ function receberEventoPane(ev) {
     case 'compactou': estadoCodex(P, 'compactacao', 'Conversa resumida', 'O resumo liberou espaço para continuar.', true); break;
     case 'compacting': estadoCodex(P, 'compactacao', 'Resumindo a conversa', ev.message || 'Guardando o contexto para continuar.'); break;
     case 'question': perguntaCodex(P, ev); break;
+    // 26/09: perguntas do Claude (janelinha, como no VS Code) e o plano pronto do modo Plano
+    case 'perguntas': abrirPerguntas(P, ev); break;
+    case 'plano-pronto': mostrarPlano(P, ev); break;
     case 'question-resolved': encerrarPerguntaCodex(P, ev.key); break;
     case 'plan': planoCodex(P, ev); break;
     case 'generated-image': imagemGeradaCodex(P, ev); break;
@@ -4472,6 +4484,9 @@ window.api.onPaneEvent(receberEventoPane);
    para um processo que ja morreu — e responder "sim" ali derrubava o chat que estava no lugar. */
 function escondePerm(P, encerrarTodas = true) {
   if (P) { P.aprovacaoAtual = null; P.aprovacoesPendentes = []; }
+  // as perguntas e o plano do Claude também morrem com o turno (o motor não espera mais por eles)
+  if (P && P.perguntasAtual) fecharPerguntas(P);
+  if (P && P.planoPendente) fecharPlano(P);
   const bar = P && P.el && $('.pane-perm', P.el);
   if (bar) bar.classList.add('hidden');
   if (P && P.questions) for (const q of P.questions.values()) {
@@ -4972,6 +4987,241 @@ function perguntaCodex(P, ev, historico = false) {
   if (historico) encerrarPerguntaCodex(P, key, 'Pergunta do histórico.');
   scroll(P);
 }
+/* ================= perguntas da IA e plano pronto, como no VS Code (26/09) =================
+   Pedido dele: "copie exatamente como o VsCode faz". Quando o Claude quer perguntar várias
+   coisas (a ferramenta AskUserQuestion), abre uma janelinha em cima da caixa de escrever: uma
+   pergunta por vez, as opções numeradas (1, 2, 3… ou clique), "Outra resposta" para escrever,
+   e as fichas no topo para ir e voltar. No fim, "Enviar respostas". No modo Plano, o plano
+   pronto aparece por escrito na conversa, e para liberar basta "Executar" — ou escrever "ok",
+   "pode", "liberado" na caixa. Qualquer outra coisa escrita ali vira ajuste do plano. */
+const PALAVRAS_DE_LIBERAR = /^(ok|okay|pode|podes|pode ir|pode executar|pode seguir|liberado|libera|liberou|executa|executar|execute|manda|manda ver|vai|segue|sim|aprovado|aprovo|bora|confirmo|confirmado|beleza|fechado|show|perfeito|isso)[\s!.,]*$/i;
+
+function respostaDaPergunta(r) {
+  if (!r) return '';
+  if (r.outra && r.outra.trim()) return r.outra.trim();
+  return [...r.sel].join(', ');
+}
+
+function abrirPerguntas(P, ev) {
+  fecharPerguntas(P);
+  const qs = (ev.questions || []).filter(q => q && q.question);
+  if (!qs.length) return;
+  const cmp = $('.pane-cmp', P.el);
+  const el = document.createElement('div');
+  el.className = 'pane-perguntas';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-label', 'Perguntas da IA');
+  el.tabIndex = -1;
+  cmp.parentNode.insertBefore(el, cmp);
+  const estado = { key: ev.key, qs, i: 0, el, enviando: false,
+    respostas: qs.map(() => ({ sel: new Set(), outra: '' })) };
+  P.perguntasAtual = estado;
+
+  const pronta = (i) => !!respostaDaPergunta(estado.respostas[i]);
+  const todas = () => estado.respostas.every((_, i) => pronta(i));
+  const pintar = () => {
+    const q = qs[estado.i], r = estado.respostas[estado.i];
+    const ultima = estado.i === qs.length - 1;
+    el.innerHTML = '<div class="pq-topo"><div class="pq-fichas"></div><span class="pq-gap"></span>'
+      + '<button class="pq-x" type="button" title="Fechar sem responder (esc)" aria-label="Fechar sem responder">' + ico('x') + '</button></div>'
+      + '<div class="pq-q"></div><div class="pq-ops"></div>'
+      + '<div class="pq-rodape"><button class="pq-voltar" type="button">Voltar</button><span class="pq-gap"></span>'
+      + '<button class="pq-seguir" type="button"></button></div>';
+    const fichas = $('.pq-fichas', el);
+    if (qs.length > 1) qs.forEach((qq, n) => {
+      const f = document.createElement('button');
+      f.type = 'button';
+      f.className = 'pq-ficha' + (n === estado.i ? ' on' : '') + (pronta(n) ? ' feita' : '');
+      f.innerHTML = (pronta(n) ? ico('check') : '<span class="pq-fn">' + (n + 1) + '</span>') + '<span></span>';
+      $('span:last-child', f).textContent = qq.header || ('Pergunta ' + (n + 1));
+      f.onclick = () => { estado.i = n; pintar(); };
+      fichas.appendChild(f);
+    });
+    $('.pq-q', el).textContent = q.question;
+    const ops = $('.pq-ops', el);
+    (q.options || []).forEach((op, n) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      const on = r.sel.has(op.label) && !r.outra.trim();
+      b.className = 'pq-op' + (on ? ' on' : '') + (q.multiSelect ? ' multi' : '');
+      b.innerHTML = '<span class="pq-n">' + (n + 1) + '</span><span class="pq-txt"><span class="pq-l"></span></span>'
+        + '<span class="pq-ck">' + (on ? ico('check') : '') + '</span>';
+      $('.pq-l', b).textContent = op.label;
+      if (op.description) { const d = document.createElement('span'); d.className = 'pq-d'; d.textContent = op.description; $('.pq-txt', b).appendChild(d); }
+      b.onclick = () => escolher(n);
+      ops.appendChild(b);
+    });
+    const outra = document.createElement('label');
+    outra.className = 'pq-outra' + (r.outra.trim() ? ' on' : '');
+    outra.innerHTML = '<span class="pq-n">' + ico('pencil') + '</span><input type="text" class="pq-in" placeholder="Outra resposta" aria-label="Outra resposta">';
+    const inp = $('.pq-in', outra);
+    inp.value = r.outra;
+    inp.addEventListener('input', () => {
+      r.outra = inp.value;
+      outra.classList.toggle('on', !!inp.value.trim());
+      $$('.pq-op', el).forEach(x => { x.classList.remove('on'); $('.pq-ck', x).innerHTML = ''; });
+      if (!inp.value.trim()) $$('.pq-op', el).forEach((x, n) => { if (r.sel.has((q.options[n] || {}).label)) { x.classList.add('on'); $('.pq-ck', x).innerHTML = ico('check'); } });
+      pintarBotoes();
+    });
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); e.stopPropagation(); seguir(); }
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); inp.blur(); el.focus(); }
+    });
+    ops.appendChild(outra);
+    $('.pq-voltar', el).onclick = () => { if (estado.i > 0) { estado.i--; pintar(); } };
+    $('.pq-seguir', el).onclick = seguir;
+    $('.pq-x', el).onclick = () => responder(true);
+    pintarBotoes();
+    function pintarBotoes() {
+      $('.pq-voltar', el).classList.toggle('hidden', estado.i === 0);
+      const bt = $('.pq-seguir', el);
+      bt.textContent = ultima ? 'Enviar respostas' : 'Próxima';
+      bt.classList.toggle('destaque', ultima);
+      bt.disabled = estado.enviando || !pronta(estado.i) || (ultima && !todas());
+    }
+  };
+  function escolher(n) {
+    const q = qs[estado.i], r = estado.respostas[estado.i];
+    const op = (q.options || [])[n]; if (!op) return;
+    r.outra = '';
+    if (q.multiSelect) { if (r.sel.has(op.label)) r.sel.delete(op.label); else r.sel.add(op.label); pintar(); return; }
+    r.sel = new Set([op.label]);
+    pintar();
+    // escolha única: passa sozinho para a próxima pergunta, como no VS Code
+    if (estado.i < qs.length - 1) setTimeout(() => { if (P.perguntasAtual === estado) { estado.i++; pintar(); el.focus(); } }, 160);
+  }
+  function seguir() {
+    if (!pronta(estado.i)) return;
+    if (estado.i < qs.length - 1) { estado.i++; pintar(); el.focus(); return; }
+    if (todas()) responder(false);
+  }
+  async function responder(pular) {
+    if (estado.enviando) return;
+    estado.enviando = true; pintar();
+    const answers = {};
+    if (!pular) qs.forEach((q, n) => { answers[q.question] = respostaDaPergunta(estado.respostas[n]); });
+    let r;
+    try { r = await window.api.panePerguntas(pular ? { key: estado.key, paneId: P.id, pular: true } : { key: estado.key, paneId: P.id, answers }); }
+    catch (e) { r = { error: String(e && e.message || e) }; }
+    if (P.perguntasAtual !== estado) return;
+    if (!r || r.error) { estado.enviando = false; pintar(); avisoTemp(P, (r && r.error) || 'A resposta não chegou. Tente de novo.', true); return; }
+    fecharPerguntas(P);
+    if (!pular) resumoDasRespostas(P, qs, answers);
+    const campo = $('.p-input', P.el); if (campo && P === focusPane) campo.focus();
+  }
+  el.addEventListener('keydown', (e) => {
+    if (e.target && e.target.classList && e.target.classList.contains('pq-in')) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const q = qs[estado.i];
+    if (/^[1-9]$/.test(e.key) && (q.options || [])[Number(e.key) - 1]) { e.preventDefault(); escolher(Number(e.key) - 1); return; }
+    if (e.key === 'Enter') { e.preventDefault(); seguir(); return; }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); responder(true); return; }
+    if (e.key === 'ArrowRight' && estado.i < qs.length - 1) { e.preventDefault(); estado.i++; pintar(); el.focus(); }
+    if (e.key === 'ArrowLeft' && estado.i > 0) { e.preventDefault(); estado.i--; pintar(); el.focus(); }
+  });
+  pintar();
+  marcarEspera(P);
+  if (P === focusPane) setTimeout(() => { if (P.perguntasAtual === estado) el.focus(); }, 30);
+}
+
+function fecharPerguntas(P) {
+  if (!P || !P.perguntasAtual) return;
+  const el = P.perguntasAtual.el;
+  P.perguntasAtual = null;
+  if (el && el.isConnected) el.remove();
+  marcarEspera(P);
+}
+
+// o que ele respondeu fica na conversa, curtinho: "Cor · Verde"
+function resumoDasRespostas(P, qs, answers) {
+  clearEmpty(P);
+  const d = document.createElement('div');
+  d.className = 'pq-resumo';
+  for (const q of qs) {
+    const l = document.createElement('div'); l.className = 'pq-rl';
+    const a = document.createElement('span'); a.className = 'pq-rh'; a.textContent = q.header || q.question;
+    const b = document.createElement('span'); b.className = 'pq-rv'; b.textContent = answers[q.question] || '';
+    l.append(a, b); d.appendChild(l);
+  }
+  P.chat.appendChild(d);
+  scroll(P, true);
+}
+
+/* O plano pronto (ExitPlanMode): o texto do plano na conversa, em markdown, com "Executar" e
+   "Ajustar". Liberar também vale escrevendo na caixa (ver planoPelaCaixa, no send). */
+function mostrarPlano(P, ev) {
+  fecharPlano(P);
+  clearEmpty(P);
+  const d = document.createElement('div');
+  d.className = 'plano-pronto';
+  d.innerHTML = '<div class="pl-cab"><span class="pl-ic">' + ico('clipboard-list') + '</span><span class="pl-tit">Plano</span></div>'
+    + '<div class="pl-corpo md"></div>'
+    + '<div class="pl-acoes"><button class="pl-ajustar" type="button">Ajustar</button><span class="pq-gap"></span>'
+    + '<button class="pl-executar" type="button">Executar</button></div>';
+  const corpo = $('.pl-corpo', d);
+  try { corpo.innerHTML = marked.parse(ev.plano || ''); } catch { corpo.textContent = ev.plano || ''; }
+  try { linkarArquivos(P, corpo); marcarLinksWeb(corpo); } catch {}
+  P.chat.appendChild(d);
+  const estado = { key: ev.key, el: d, enviando: false };
+  P.planoPendente = estado;
+  $('.pl-executar', d).onclick = () => responderPlano(P, true);
+  $('.pl-ajustar', d).onclick = () => {
+    const campo = $('.p-input', P.el);
+    if (campo) { campo.placeholder = 'O que mudar no plano?'; campo.focus(); }
+  };
+  const campo = $('.p-input', P.el);
+  if (campo) campo.placeholder = '"ok" executa · ou escreva o que mudar';
+  scroll(P, true);
+  marcarEspera(P);
+}
+
+function fecharPlano(P, rotulo) {
+  const est = P && P.planoPendente;
+  if (!est) return;
+  P.planoPendente = null;
+  const d = est.el;
+  if (d && d.isConnected) {
+    d.classList.add('respondido');
+    const acoes = $('.pl-acoes', d);
+    if (acoes) acoes.innerHTML = rotulo ? '<span class="pl-estado"></span>' : '';
+    if (rotulo) $('.pl-estado', d).textContent = rotulo;
+  }
+  const campo = P.el && $('.p-input', P.el);
+  if (campo) campo.placeholder = 'Mensagem para ' + nomeDoMotor(P.engine);
+  marcarEspera(P);
+}
+
+async function responderPlano(P, aprovar, texto) {
+  const est = P.planoPendente;
+  if (!est || est.enviando) return false;
+  est.enviando = true;
+  /* aprovado, volta para o modo de antes do Plano (o que ele usava; no dia a dia é o "sem pedir
+     permissão"). O Claude troca sozinho na mesma conversa; aqui o cadeado só acompanha. */
+  const modos = MODOS[P.engine] || [];
+  const antes = [P.modoAntesDoPlano, cfg.defMode, 'bypass'].find(m => m && m !== 'plan' && modos.some(x => x.id === m)) || 'bypass';
+  let r;
+  try { r = await window.api.panePlano({ key: est.key, paneId: P.id, aprovar: !!aprovar, modo: antes, texto: texto || '' }); }
+  catch (e) { r = { error: String(e && e.message || e) }; }
+  if (P.planoPendente !== est) return false;
+  if (!r || r.error) { est.enviando = false; avisoTemp(P, (r && r.error) || 'A resposta não chegou. Tente de novo.', true); return false; }
+  if (aprovar) {
+    P.mode = antes; P.modoAntesDoPlano = null;
+    pintarModo(P); savePanes();
+    fecharPlano(P, 'Liberado para executar');
+  } else fecharPlano(P, 'Ajustando o plano');
+  return true;
+}
+
+/* Com o plano esperando: o que ele escreve na caixa responde o plano. "ok", "pode", "liberado"
+   = executar; qualquer outra coisa = ajuste (vai para o Claude, que refaz o plano). */
+function planoPelaCaixa(P, text) {
+  if (!P.planoPendente || !text) return false;
+  const liberar = PALAVRAS_DE_LIBERAR.test(text.trim());
+  userMsg(P, text);
+  responderPlano(P, liberar, liberar ? '' : text);
+  return true;
+}
+
 function renderizarHistorico(P, m) {
   const role = m.role || m.kind || m.type;
   if (role === 'user') userMsg(P, m.text || '', m.attachments || m.anexos);
@@ -11025,6 +11275,8 @@ const nomeMotor = (e) => ({ claude: 'Claude', codex: 'Codex', acp: 'ACP', gemini
    legenda em `P.trabOque`. Nada de raspar o DOM: o `pintaTrab` daqui já escreve
    "1min 3s · pensando", e ler dali repetiria o tempo duas vezes na mesma linha. */
 function estadoDoPainel(P) {
+  if (P.perguntasAtual) return { txt: 'esperando sua resposta', cls: 'espera' };
+  if (P.planoPendente) return { txt: 'esperando você liberar o plano', cls: 'espera' };
   const perm = P.el && $('.pane-perm', P.el);
   if (perm && !perm.classList.contains('hidden')) return { txt: 'esperando você autorizar', cls: 'espera' };
   if (P.questions) for (const q of P.questions.values()) {

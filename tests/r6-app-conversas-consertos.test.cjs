@@ -51,11 +51,11 @@ function contextoNome() {
   const ctx = { console, Map, Set, Math, Object, Promise, Date, LIGACOES: {}, NOMES_LIGADOS: {},
     histCache: { claude: [{ ...A }], codex: [{ ...C }] },
     window: { api: { renomear: async (o) => { renomeados.push(o); return true; } } },
-    painelAindaAtual: () => true, loadHist() {}, lateralAberta: () => true, pintarConversas: () => { pinturas++; } };
+    pintarNome() {}, savePanes() {}, painelAindaAtual: () => true, loadHist() {}, lateralAberta: () => true, pintarConversas: () => { pinturas++; } };
   vm.createContext(ctx);
   vm.runInContext([pegarConst('chaveParte'), pegarConst('refDaParte')].join('\n'), ctx);
   vm.runInContext(['ligacaoDe', 'partesDaCadeia', 'tituloDaCadeia', 'motoresDaCadeia', 'itemDaCadeia', 'montarCadeias',
-    'lembrarNomeDaParte', 'salvarNomeCurto'].map(n => pegar(n)).join('\n\n'), ctx);
+    'lembrarNomeDaParte', 'mensagensDele', 'conversaDoNomeAtual', 'salvarNomeCurto'].map(n => pegar(n)).join('\n\n'), ctx);
   return { ctx, renomeados, pinturas: () => pinturas };
 }
 

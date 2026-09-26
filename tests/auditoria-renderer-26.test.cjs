@@ -250,8 +250,9 @@ test('B04: título automático só confirma gravação após sucesso e repete de
   const c = vm.createContext({
     window: { api: { renomear: async () => ++n === 1 ? { error: 'sem espaço' } : true } },
     painelAindaAtual: () => true, lateralAberta: () => false, lembrarNomeDaParte: (p, nome) => lembrados.push(nome),
+    pintarNome: noop, savePanes: noop,
   });
-  vm.runInContext(func('salvarNomeCurto'), c);
+  vm.runInContext(func('mensagensDele') + '\n' + func('conversaDoNomeAtual') + '\n' + func('salvarNomeCurto'), c);
   await c.salvarNomeCurto(P);
   assert.equal(P.nomeCurtoSalvo, undefined); assert.equal(lembrados.length, 0);
   await c.salvarNomeCurto(P);

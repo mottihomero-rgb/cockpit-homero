@@ -25,13 +25,22 @@ function func(nome, src = app) {
 }
 function deferred() { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; }
 const esperar = () => new Promise(r => setImmediate(r));
+async function geracaoAutorizada(h) {
+  await esperar();
+  const auth = h.spawned.at(-1);
+  assert.deepEqual(auth.args, ['auth', 'status']);
+  auth.proc.stdout.emit('data', Buffer.from(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', apiProvider: 'firstParty' })));
+  auth.proc.emit('close', 0);
+  await esperar();
+  return h.spawned.at(-1);
+}
+
 
 /* As funções de verdade do renderer, numa caixa com a api do nome trocada por um dublê. */
 function renderer() {
   const chamadas = [];
   const c = {
     console, String, Array, Number, Set, Math, Promise,
-    NOME_TODA_RESPOSTA_ATE: undefined,
     pintarNome() {}, savePanes() { c.salvou++; }, salvou: 0,
     lateral: false, recargas: [],
     lateralAberta() { return c.lateral; }, loadHist(engine, force) { c.recargas.push({ engine, force }); },
@@ -45,13 +54,8 @@ function renderer() {
     gravados: [],
   };
   vm.createContext(c);
-  const constante = (nome) => {
-    const i = app.indexOf('\nconst ' + nome + ' =');
-    assert.ok(i >= 0, nome + ' existe');
-    return app.slice(i + 1, app.indexOf(';\n', i) + 1).replace('const ', 'var ');
-  };
-  vm.runInContext(constante('NOME_TODA_RESPOSTA_ATE') + '\n' + constante('PALAVRA_DE_LIGACAO') + '\n' + ['mensagensDele',
-    'proximoMarcoNome', 'materialDoNome', 'nomearCurto', 'trocarNome', 'palavrasDoNome', 'mesmoAssunto',
+  vm.runInContext(['mensagensDele', 'conversaDoNomeAtual',
+    'proximoMarcoNome', 'materialDoNome', 'nomearCurto', 'trocarNome',
     'nomearNoFimDoTurno', 'assumirNome', 'lembrarDonoDoNome', 'salvarNomeCurto', 'buscarNome'].map(n => func(n)).join('\n'), c);
   return { c, chamadas };
 }
@@ -75,13 +79,12 @@ function turno(r, P, texto, resposta) {
    ele pediu se chamava "Teste de Conexão Sistema"; ele daria "Ajustes Cockpit". */
 test('a instrução pede "<o que está sendo feito> <cliente ou projeto>", curto e prático', () => {
   const p = nomes.PEDIDO_NOME;
-  assert.match(p, /Formato: <o que está sendo feito> <cliente ou projeto>/);
-  assert.match(p, /2 a 4 palavras, no máximo 32 letras/);
-  assert.match(p, /Ajustes Cockpit/, 'o exemplo dele');
-  assert.match(p, /Pedro \(Pedro Quadrado\), Rapha \(Rapha Brandão\)/, 'os nomes curtos dos clientes');
-  assert.match(p, /trabalho PRINCIPAL da conversa inteira, não da primeira mensagem/);
-  assert.match(p, /"só testando"/);
-  assert.match(p, /Duas conversas diferentes do mesmo cliente têm que ganhar nomes diferentes/);
+  assert.match(p, /trabalho real e seu objeto, cliente ou produto/);
+  assert.match(p, /2 a 4 palavras/);
+  assert.match(p, /32 caracteres/);
+  assert.match(p, /A primeira mensagem pode não conter a demanda/);
+  assert.match(p, /Ignore saudações/);
+  assert.doesNotMatch(p, /Faxina do Mac|Pedro Quadrado|Ajustes Cockpit/);
   assert.match(p, /MANTER/);
   assert.equal(/PEDIDO_NOME/.test(main), false, 'a instrucao velha continua no main.js');
   assert.match(main, /require\('\.\/nomes-conversa'\)/);
@@ -106,7 +109,7 @@ test('a pasta do chat vai como pista do cliente, só quando diz algo', () => {
   assert.match(nomes.montarPedido({ mensagens: ['faz a página'], pasta: '/Users/h/Projetos/Pedro' }), /Pasta do chat: Pedro\n/);
   assert.doesNotMatch(nomes.montarPedido({ mensagens: ['faz a página'], pasta: '/Users/h' }), /Pasta do chat/);
   assert.match(func('materialDoNome'), /pasta: P\.cwd/);
-  assert.match(main, /pasta: typeof d\.pasta === 'string' \? d\.pasta : ''/);
+  assert.match(main, /pasta: typeof d\.pasta === 'string'/);
 });
 
 test('linha de comando: haiku pelo login, sem sessão gravada, sem ferramenta, MCP, CLAUDE.md nem raciocínio', () => {
@@ -118,7 +121,7 @@ test('linha de comando: haiku pelo login, sem sessão gravada, sem ferramenta, M
   assert.ok(a.includes('--strict-mcp-config'));
   assert.equal(depois('--tools'), '');
   assert.equal(depois('--setting-sources'), '', 'com "project" o CLAUDE.md da casa entrava junto');
-  assert.deepEqual(JSON.parse(depois('--settings')), { alwaysThinkingEnabled: false },
+  assert.deepEqual(JSON.parse(depois('--settings')), { alwaysThinkingEnabled: false, forceLoginMethod: 'claudeai' },
     'com raciocinio o Haiku levava de 38 a 86 s e estourava o prazo de 60 s');
   assert.equal(depois('--system-prompt'), nomes.PEDIDO_NOME);
   assert.equal(a[a.length - 1], 'PEDIDO');
@@ -189,7 +192,7 @@ test('validação: recusa conversa, várias linhas, nome longo e o vago; aceita 
 });
 
 /* ================= o ritmo ================= */
-test('ritmo: IA na hora da 1ª mensagem, no FIM de toda resposta até a 15ª e depois a cada 5', async () => {
+test('ritmo: IA na primeira mensagem e no fim de cada resposta com novo pedido, também depois da 15ª', async () => {
   const r = renderer();
   const P = painel();
   primeiraMensagem(r, P, 'Esse vídeo de IA é trend. Como eles fizeram?');
@@ -202,7 +205,7 @@ test('ritmo: IA na hora da 1ª mensagem, no FIM de toda resposta até a 15ª e d
     turno(r, P, t === 1 ? undefined : 'pedido ' + t, 'resposta ' + t);
     if (r.chamadas.length > antes) { turnosQueChamaram.push(t); r.chamadas.at(-1).d.resolve('Nome ' + t); await esperar(); }
   }
-  assert.deepEqual(turnosQueChamaram, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20],
+  assert.deepEqual(turnosQueChamaram, Array.from({ length: 24 }, (_, i) => i + 1),
     'a conversa que começa com pergunta lateral troca de nome assim que a demanda de verdade aparece');
   const fim1 = r.chamadas[1].material;
   assert.deepEqual(fim1.respostas, ['resposta 1'], 'no fim do 1o turno a IA ja ve a resposta do assistente');
@@ -299,13 +302,13 @@ test('corrida: resposta atrasada da conversa anterior não cai na conversa nova 
 
 /* Revisao de 25/09 (achado 7): o teste antigo prendia a frase provisoria para sempre quando a IA
    falhava. Agora o titulo do proprio Claude e a reserva; sem ele, fica o provisorio. */
-test('falha da IA: entra o título do próprio Claude como reserva (e a IA ainda ganha depois)', async () => {
+test('falha da IA: mantém provisório sem inventar assunto com o título nativo do Claude', async () => {
   const r = renderer();
   const P = painel();
   r.c.window.api.sessionTitulo = async () => 'Vídeo de IA viral no Instagram';
   primeiraMensagem(r, P, 'Esse vídeo de IA é uma trend em alta no instagram. Como eles fizeram?');
   r.chamadas[0].d.resolve(''); await esperar(); await esperar();
-  assert.equal(P.titulo, 'Vídeo de IA viral no Instagram', 'a barra ficava com a frase provisoria e a lista com o aiTitle');
+  assert.equal(P.titulo, 'Esse vídeo de IA é uma trend em'.slice(0, 30));
   assert.equal(P.nomeCurto, false);
   assert.equal(r.c.gravados.length, 0, 'o titulo do Claude nao vai para o nomes.json como nome da IA');
   turno(r, P, undefined, 'É um vídeo feito com IA');                       // fim do 1o turno
@@ -375,11 +378,11 @@ test('main: o handler limpa o que o Claude Code injeta, manda a linha de comando
     respostas: ['Pronto: página no ar.'], pasta: 'Adsure', atual: 'Página do Congresso',
   });
   await esperar();
-  const rec = h.spawned.at(-1);
+  const rec = await geracaoAutorizada(h);
   assert.ok(rec, 'chamou o claude');
   assert.equal(rec.bin, h.HOME + '/.local/bin/claude');
-  const pedido = rec.args.at(-1);
-  assert.deepEqual(rec.args.slice(0, -1), nomes.argsDoNome('').slice(0, -1));
+  const pedido = rec.writes.join('');
+  assert.deepEqual(rec.args, nomes.argsDoNome('').slice(0, -1));
   assert.doesNotMatch(pedido, /lembrete interno|system-reminder|Adsure/);
   assert.match(pedido, /faz a página do congresso/);
   assert.match(pedido, /Pronto: página no ar/);
@@ -392,9 +395,9 @@ test('main: o handler limpa o que o Claude Code injeta, manda a linha de comando
 test('main: resposta que não é nome vira vazio (fica o nome que estava)', async () => {
   const h = loadMain();
   h.put(h.HOME + '/.local/bin/claude', '#!/bin/sh');
-  const pronto = h.call('sessao:nomeCurto', { mensagens: ['oi'] });
+  const pronto = h.call('sessao:nomeCurto', { mensagens: ['Faça a página de captura do Pedro'] });
   await esperar();
-  const rec = h.spawned.at(-1);
+  const rec = await geracaoAutorizada(h);
   rec.proc.stdout.emit('data', Buffer.from('Claro! Posso ajudar com isso.\nO que você precisa?'));
   rec.proc.emit('close', 0);
   assert.equal(await pronto, '');
@@ -459,7 +462,7 @@ test('conversa com nome ANTIGO aberta da lista: a IA troca no fim do próximo tu
   r.chamadas[0].d.resolve('Criação de Vídeo com IA'); await esperar();
   assert.equal(P.titulo, 'Criação de Vídeo com IA');
   assert.deepEqual(JSON.parse(JSON.stringify(r.c.gravados.at(-1))),
-    { engine: 'claude', id: 's1', nome: 'Criação de Vídeo com IA', origem: 'auto' });
+    { engine: 'claude', id: 's1', nome: 'Criação de Vídeo com IA', origem: 'auto', anterior: '' });
 });
 
 test('conversa com nome NOVO da IA aberta da lista: a IA continua acompanhando de onde a conversa está', async () => {
@@ -559,7 +562,7 @@ test('material pelo caminho real (app → main → pedido): a numeração é a d
   h.put(h.HOME + '/.local/bin/claude', '#!/bin/sh');
   const pronto = h.call('sessao:nomeCurto', JSON.parse(JSON.stringify(material)));
   await esperar();
-  const pedido = h.spawned.at(-1).args.at(-1);
+  const pedido = (await geracaoAutorizada(h)).writes.join('');
   assert.match(pedido, /\n1\. pedido 1\n\(… 22 mensagens do meio puladas …\)\n24\. pedido 24\n/);
   assert.match(pedido, /\n30\. pedido 30\n/);
   assert.doesNotMatch(pedido, /\b2 mensagens do meio|\n4\. pedido 24/);
@@ -579,53 +582,31 @@ test('validação: o ponto do meio do nome fica (Claude.md, motti.ia.br, Node.js
 });
 
 // achado 9: o nome pulava a cada marco e o pedido lateral do fim tomava o nome
-test('estabilidade: o mesmo assunto com outras palavras não troca o nome', async () => {
-  const r = renderer();
-  const P = painel();
-  primeiraMensagem(r, P, 'Esse vídeo de IA é trend. Como eles fizeram?');
-  r.chamadas[0].d.resolve('Vídeo de IA do Instagram'); await esperar();
-  turno(r, P, undefined, 'É um COLORS falso feito com IA');     // 1o fim de turno: 1a vez que a IA ve a resposta
-  r.chamadas.at(-1).d.resolve('Trend de Vídeo Fake COLORS'); await esperar();
-  assert.equal(P.titulo, 'Trend de Vídeo Fake COLORS', 'o 1o fim de turno pode trocar direto');
-  const variacoes = ['Vídeo IA Estilo COLORS', 'Vídeo Fake do COLORS com IA', 'Trend do COLORS Fake', 'Vídeo Estilo COLORS com IA', 'COLORS Fake com IA'];
-  let k = 0;
-  for (let t = 2; t <= 24; t++) {
-    const antes = r.chamadas.length;
-    turno(r, P, 'pedido ' + t);
-    if (r.chamadas.length > antes) { r.chamadas.at(-1).d.resolve(variacoes[k++ % variacoes.length]); await esperar(); }
+test('estabilidade: MANTER devolvido pelo backend conserva nome e não regrava a cada turno', async () => {
+  const r = renderer(), P = painel();
+  primeiraMensagem(r, P, 'Faça a página do Pedro');
+  r.chamadas[0].d.resolve('Página Pedro'); await esperar();
+  for (let i = 1; i <= 24; i++) {
+    turno(r, P, i === 1 ? undefined : 'Ajuste a página ' + i);
+    r.chamadas.at(-1).d.resolve('Página Pedro'); await esperar();
   }
-  assert.ok(k >= 4, 'a IA foi chamada nos marcos');
-  assert.equal(P.titulo, 'Trend de Vídeo Fake COLORS', 'o nome pulava a cada marco');
-  assert.equal(r.c.gravados.filter(g => g.nome !== 'Trend de Vídeo Fake COLORS' && g.nome !== 'Vídeo de IA do Instagram').length, 0,
-    'cada troca regravava o nomes.json');
+  assert.equal(P.titulo, 'Página Pedro');
+  assert.equal(r.c.gravados.length, 1);
 });
 
-test('estabilidade: pedido lateral de uma vez não toma o nome; trabalho novo confirmado no marco seguinte toma', async () => {
-  const r = renderer();
-  const P = painel();
-  primeiraMensagem(r, P, 'organiza o mapa dos robôs do Mac');
-  r.chamadas[0].d.resolve('Mapa dos Robôs do Mac'); await esperar();
-  // 26/09: revisão em toda resposta até a 15a; os laterais caem entre respostas do assunto principal
-  const respostas = { 1: 'Mapa dos Robôs do Mac', 2: 'Transferência de Vídeos para SSD', 3: 'Mapa dos Robôs do Mac',
-    4: 'Mapa dos Robôs do Mac', 5: 'Mapa dos Robôs do Mac', 6: 'Mapa dos Robôs do Mac', 7: 'Ativação de Esforço Máximo no Cockpit',
-    8: 'Mapa dos Robôs do Mac', 9: 'Mapa dos Robôs do Mac', 10: 'Mapa dos Robôs do Mac', 11: 'Mapa dos Robôs do Mac',
-    12: 'Transferência de Vídeos para SSD', 13: 'Transferência dos Vídeos pro SSD', 14: 'Transferência dos Vídeos pro SSD',
-    15: 'Transferência dos Vídeos pro SSD', 20: 'Transferência dos Vídeos pro SSD' };
-  const nomeDepois = {};
-  for (let t = 1; t <= 20; t++) {
-    const antes = r.chamadas.length;
-    turno(r, P, t === 1 ? undefined : 'pedido ' + t, 'resposta ' + t);
-    if (r.chamadas.length > antes) { r.chamadas.at(-1).d.resolve(respostas[t]); await esperar(); nomeDepois[t] = P.titulo; }
-  }
-  assert.equal(nomeDepois[2], 'Mapa dos Robôs do Mac', 'o pedido lateral do fim tomava o nome');
-  assert.equal(nomeDepois[7], 'Mapa dos Robôs do Mac');
-  assert.equal(nomeDepois[12], 'Mapa dos Robôs do Mac', 'um lateral sozinho nao confirma nada');
-  assert.equal(nomeDepois[13], 'Transferência dos Vídeos pro SSD', 'o mesmo assunto novo em 2 revisões seguidas: o trabalho mudou');
+test('estabilidade: atividade nova do mesmo cliente troca sem confirmação nem bloqueio lexical', async () => {
+  const r = renderer(), P = painel();
+  primeiraMensagem(r, P, 'Faça a página do Pedro');
+  r.chamadas[0].d.resolve('Página Pedro'); await esperar();
+  turno(r, P, 'Agora faça os criativos do Pedro');
+  r.chamadas.at(-1).d.resolve('Criativos Pedro'); await esperar();
+  assert.equal(P.titulo, 'Criativos Pedro');
+  assert.equal(r.c.gravados.at(-1).anterior, 'Página Pedro');
 });
 
 test('estabilidade: a IA pode responder MANTER, e o main devolve o nome atual', async () => {
   const p = nomes.montarPedido({ mensagens: ['x y'], atual: 'Mapa dos Robôs' });
-  assert.match(p, /Título atual: Mapa dos Robôs\. Se o trabalho principal continua o mesmo, responda só MANTER/);
+  assert.match(p, /Título atual: Mapa dos Robôs\. Se descreve corretamente o trabalho mostrado, responda só MANTER/);
   assert.match(nomes.PEDIDO_NOME, /responda só MANTER/);
   assert.equal(nomes.interpretarSaida('MANTER', 'Mapa dos Robôs'), 'Mapa dos Robôs');
   assert.equal(nomes.interpretarSaida('**Manter**', 'Mapa dos Robôs'), 'Mapa dos Robôs');
@@ -634,7 +615,7 @@ test('estabilidade: a IA pode responder MANTER, e o main devolve o nome atual', 
   h.put(h.HOME + '/.local/bin/claude', '#!/bin/sh');
   const pronto = h.call('sessao:nomeCurto', { mensagens: ['organiza os robôs'], atual: 'Mapa dos Robôs' });
   await esperar();
-  const rec = h.spawned.at(-1);
+  const rec = await geracaoAutorizada(h);
   rec.proc.stdout.emit('data', Buffer.from('MANTER\n'));
   rec.proc.emit('close', 0);
   assert.equal(await pronto, 'Mapa dos Robôs');

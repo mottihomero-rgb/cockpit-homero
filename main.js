@@ -2252,46 +2252,113 @@ handle('ligacoes:antigas', () => costurandoAntigas || (costurandoAntigas = costu
    separar o nome que ele deu do nome velho da IA ("Criacao Dupla"): na duvida nao mexia em nenhum,
    e toda conversa que ja existia ficava para sempre com o nome antigo. Sem origem = 'manual' (quem
    chamava antes de existir a marca eram so os lapis dele). */
-handle('sessao:renomear', async (_e, { engine, id, nome, origem }) => {
+handle('sessao:renomear', async (_e, { engine, id, nome, origem, anterior } = {}) => {
+  if (typeof id !== 'string' || !id || id.length > 256 || ['__proto__', 'constructor', 'prototype', '_origem'].includes(id)
+    || typeof nome !== 'string' || nome.length > 240) return { ok: false, error: 'Nome ou conversa inválidos.' };
   const todos = lerNomes();
   const marcas = (todos._origem && typeof todos._origem === 'object') ? todos._origem : {};
+  const salvo = typeof todos[id] === 'string' ? todos[id] : '';
+  if (origem === 'auto' && (nomesConversa.donoDoNome(todos, id, salvo) === 'manual'
+    || anterior !== undefined && (typeof anterior !== 'string' || anterior !== salvo))) {
+    return { ok: false, conflito: true, error: 'O nome já foi atualizado. Mantive o nome salvo.',
+      nome: salvo, origem: nomesConversa.donoDoNome(todos, id, salvo) === 'manual' ? 'manual' : marcas[id] || '' };
+  }
+  if (origem === 'auto' && !nome.trim()) return { ok: false, error: 'O nome automático está vazio.' };
   if (nome && nome.trim()) { todos[id] = nome.trim(); marcas[id] = origem === 'auto' ? 'auto' : 'manual'; }
   else { delete todos[id]; delete marcas[id]; }
   todos._origem = marcas;
-  if (!salvarNomes(todos)) return { error: 'Não consegui salvar o nome da conversa.' };
+  if (!salvarNomes(todos)) return { ok: false, error: 'Não consegui salvar o nome da conversa.' };
+  if (origem !== 'auto') cancelarNomesConversa(engine, id);
   if (engine === 'codex' && id) {
-    try { await codexStart(); await codexReq('local', 'thread/name/set', { threadId: id, name: nome || null }); } catch {}
+    try {
+      await codexStart();
+      // A conexão pode demorar; não envie ao Codex um nome que já perdeu no disco.
+      const recentes = lerNomes(), confirmado = typeof recentes[id] === 'string' ? recentes[id] : '';
+      const dono = nomesConversa.donoDoNome(recentes, id, confirmado);
+      if (confirmado !== nome.trim() || origem === 'auto' && dono === 'manual') {
+        return { ok: false, conflito: true, error: 'O nome já foi atualizado. Mantive o nome salvo.',
+          nome: confirmado, origem: dono === 'manual' ? 'manual' : recentes._origem?.[id] || '' };
+      }
+      await codexReq('local', 'thread/name/set', { threadId: id, name: nome.trim() || null });
+    } catch {}
   }
   return true;
 });
 
-/* Nome da conversa: a DEMANDA REAL, como uma pessoa daria titulo ao trabalho ("Checkout Errado
-   da Oficina"), e nao mais "<tipo> <projeto>" — esse formato encheu a lista dele de "Alteracoes
-   Adsure" e "Criacao Dupla", nomes que nao acham conversa nenhuma. Instrucao, material, linha de
-   comando e validacao ficam no nomes-conversa.js: o script que renomeia as conversas antigas usa
-   exatamente os mesmos. Aqui so entra a limpeza que ja existe para o historico (tiraBlocos e
-   semContexto), para lembrete de sistema e contexto colado nao virarem "pedido" dele.
-   Haiku pelo login do proprio Claude (sem custo por uso), sem gravar sessao, sem ferramenta. */
+/* Uma geração por conteúdo/conversa, compartilhada entre Mac e celular. A revisão da
+   tela continua sendo verificada pelo renderer; o backend protege a gravação manual/CAS. */
+const nomesAtivos = new Map();
+const MAX_NOMES_ATIVOS = 4;
+function cancelarNomeAtivo(controle) {
+  controle.cancelado = true;
+  return controle.cancelar ? controle.cancelar() : Promise.resolve();
+}
+function cancelarNomesConversa(engine, id) {
+  const esperas = [];
+  for (const controle of nomesAtivos.values()) if (controle.engine === engine && controle.id === id) esperas.push(cancelarNomeAtivo(controle));
+  return Promise.all(esperas);
+}
+function cancelarNomesPainel(paneId) {
+  const esperas = [];
+  for (const controle of nomesAtivos.values()) if (controle.paneId != null && String(controle.paneId) === String(paneId)) esperas.push(cancelarNomeAtivo(controle));
+  return Promise.all(esperas);
+}
+
+/* O nome usa a cota do login Claude, nunca uma chave de API herdada. Mantém a resposta
+   string por compatibilidade: indisponível/cancelado/limite deixa o nome anterior na tela. */
 handle('sessao:nomeCurto', async (_e, o) => {
   const d = (o && typeof o === 'object') ? o : {};
-  const limpa = (t) => { const x = tiraBlocos(String(t || '')); return x && !ehTecnico(x) ? (semContexto(x) || x) : ''; };
-  let brutas = Array.isArray(d.mensagens) && d.mensagens.length ? d.mensagens : [d.texto];
-  // teto de seguranca sem perder a 1a (o pedido que abriu a conversa)
+  if (saindoDoApp) return '';
+  if (d.mensagens != null && (!Array.isArray(d.mensagens) || d.mensagens.length > 128)
+    || d.respostas != null && (!Array.isArray(d.respostas) || d.respostas.length > 128)) return '';
+  let brutas = Array.isArray(d.mensagens) && d.mensagens.length ? d.mensagens : [d.texto || ''];
+  const respostasBrutas = d.respostas || [];
+  if ([...brutas, ...respostasBrutas].some(t => typeof t !== 'string')) return '';
+  if ([...brutas, ...respostasBrutas].reduce((n, t) => n + t.length, 0) > 512000) return '';
+  const limpa = (t) => { const x = tiraBlocos(t); return x && !ehTecnico(x) ? (semContexto(x) || x) : ''; };
   if (brutas.length > 12) brutas = [brutas[0], ...brutas.slice(-11)];
-  // a mensagem limpa que ficou vazia (so lembrete do sistema) continua na lista: a numeracao que a
-  // IA ve e a da conversa, e o montarPedido tira as vazias depois de numerar
   const mensagens = brutas.map(limpa);
-  const respostas = (Array.isArray(d.respostas) ? d.respostas : []).slice(-2).map(t => tiraBlocos(String(t || '')));
-  const atual = typeof d.atual === 'string' ? d.atual : '';
-  // total: quantas mensagens ele mandou na conversa inteira (o app ja manda so a 1a + as recentes)
+  const respostas = respostasBrutas.slice(-2).map(t => tiraBlocos(t));
+  const atual = typeof d.atual === 'string' ? d.atual.slice(0, 240) : '';
   const pedido = nomesConversa.montarPedido({ mensagens, respostas, atual, total: Number(d.total) || 0,
-    pasta: typeof d.pasta === 'string' ? d.pasta : '' });
+    pasta: typeof d.pasta === 'string' ? d.pasta.slice(0, 4096) : '' });
   if (!pedido || !fs.existsSync(CLAUDE_BIN)) return '';
-  const r = await rodar(CLAUDE_BIN, nomesConversa.argsDoNome(pedido), 60000);
-  if (r.err) return '';
-  // MANTER devolve o nome atual; saida que nao parece nome (mais de uma linha, conversa, generico)
-  // vira '': fica o nome que estava
-  return nomesConversa.interpretarSaida(r.out, atual);
+  const engine = typeof d.engine === 'string' ? d.engine.slice(0, 32) : '';
+  const id = typeof d.id === 'string' ? d.id.slice(0, 256) : '';
+  if (id && nomesConversa.donoDoNome(lerNomes(), id) === 'manual') return '';
+  const identidade = id ? engine + ':' + id : d.paneId != null ? 'painel:' + String(d.paneId) : '';
+  const chave = crypto.createHash('sha256').update(JSON.stringify([identidade, pedido])).digest('hex');
+  const repetido = nomesAtivos.get(chave);
+  if (repetido && !repetido.cancelado) return repetido.promessa;
+  const anteriores = [];
+  if (identidade) for (const c of nomesAtivos.values()) if (c.identidade === identidade) anteriores.push(cancelarNomeAtivo(c));
+  if ([...nomesAtivos.values()].filter(c => !c.cancelado).length >= MAX_NOMES_ATIVOS) return '';
+  const controle = { cancelado: false, identidade, engine, id, paneId: d.paneId };
+  nomesAtivos.set(chave, controle);
+  controle.promessa = (async () => {
+    try {
+      await Promise.all(anteriores);
+      if (controle.cancelado || saindoDoApp) return '';
+      const env = maisDetalhes.ambienteDoDetalhe(buildEnv());
+      const auth = await rodar(CLAUDE_BIN, ['auth', 'status'], 25000, { env, cwd: HOME, controle });
+      if (controle.cancelado) return '';
+      let conta; try { conta = JSON.parse(auth.out); } catch {}
+      if (auth.err || !maisDetalhes.contaDeAssinatura(conta)) return '';
+      const args = nomesConversa.argsDoNome(pedido).slice();
+      // O prompt privado vai em stdin, fora da lista pública de argumentos do processo.
+      if (args[args.length - 1] === pedido) args.pop();
+      const settings = args.indexOf('--settings');
+      const config = settings >= 0 ? JSON.parse(args[settings + 1] || '{}') : {};
+      config.forceLoginMethod = 'claudeai';
+      if (settings >= 0) args[settings + 1] = JSON.stringify(config);
+      else args.push('--settings', JSON.stringify(config));
+      const r = await rodar(CLAUDE_BIN, args, 60000, { env, cwd: HOME, entrada: pedido, controle });
+      if (controle.cancelado || r.err || id && nomesConversa.donoDoNome(lerNomes(), id) === 'manual') return '';
+      return nomesConversa.interpretarSaida(r.out, atual);
+    } catch { return ''; }
+    finally { if (nomesAtivos.get(chave) === controle) nomesAtivos.delete(chave); }
+  })();
+  return controle.promessa;
 });
 
 /* Nome simples dos agentes do time (26/09): 2 palavras e uma linha curta em portugues de gente
@@ -5049,6 +5116,7 @@ async function shutdown() {
   paneStarts.clear();
   const espera = [somConclusao.fechar()];   // R2-034: promessas do SIGKILL de garantia de cada processo filho
   for (const d of detalhesAtivos.values()) { d.cancelado = true; if (d.cancelar) espera.push(d.cancelar()); }
+  for (const controle of nomesAtivos.values()) espera.push(cancelarNomeAtivo(controle));
   espera.push(cli.fechar());   // R3-009: antes rodava solto (fire-and-forget), sem esperar Gemini morrer
   espera.push(acp.fechar());   // R3-009: idem para ACP/Grok
   fecharMestresSsh();   // o mestre do ControlPersist nao fica pendurado depois do app
@@ -6089,6 +6157,7 @@ handle('pane:interrupt', async (_e, { paneId, engine }) => {
 });
 
 handle('pane:stop', async (_e, { paneId, engine }) => {
+  cancelarNomesPainel(paneId);
   somConclusao.cancelar(paneId);
   paneStarts.delete(paneId);
   const delta = filaDelta.get(paneId);

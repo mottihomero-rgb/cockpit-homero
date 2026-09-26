@@ -1335,6 +1335,7 @@ async function restaurarAbasCorpo(salvas) {
       if (c.nomeManual) P.nomeManual = true;
       else if (c.nomeAuto && typeof c.nomeAuto === 'object' && c.titulo) {
         P.nomeDono = P.hist; P.nomeMarco = Number(c.nomeAuto.marco) || 0; P.nomeCurto = !!c.nomeAuto.curto;
+        if (P.nomeCurto && c.sessao) P.nomePersistido = { engine: P.engine, id: c.sessao, nome: c.titulo };
       }
       // A largura antiga migrou para a coluna; a altura usa proporção.
       // ramo que fechou o app antes da 1a mensagem: continua sendo ramo (leva 8.3)
@@ -2450,7 +2451,7 @@ function ramificarDaqui(P, d, aba) {
   pintarPasta(Q, nomePasta(Q.cwd));
   Q.hist = pedaco.slice();
   Q.passarContexto = pedaco.map(h => '### ' + h.quem + ':\n' + (h.texto || '').trim()).join('\n\n');
-  Q.titulo = 'Ramo de: ' + (P.titulo || 'conversa'); Q.nomeManual = true;
+  Q.titulo = 'Ramo de: ' + (P.titulo || 'conversa'); Q.nomeManual = false; Q.nomeCurto = false; Q.nomeDono = Q.hist; Q.nomeMarco = 0;
   pintarNome(Q);
   avisoTemp(Q, 'Este chat continua de onde aquela mensagem estava. O chat de origem segue intacto.');
   $('.p-input', Q.el).focus();
@@ -2495,7 +2496,7 @@ function forkClaude(P, id, aba) {
   Q.cwd = P.cwd;
   pintarPasta(Q, nomePasta(Q.cwd));
   Q.resumeId = id; Q.forkPendente = true;
-  Q.titulo = 'Ramo de: ' + (P.titulo || 'conversa'); Q.nomeManual = true;
+  Q.titulo = 'Ramo de: ' + (P.titulo || 'conversa'); Q.nomeManual = false; Q.nomeCurto = false; Q.nomeDono = Q.hist; Q.nomeMarco = 0;
   pintarNome(Q);
   faixaDeRamo(Q, P);
   savePanes();
@@ -2509,7 +2510,7 @@ function abrirRamo(P, idNovo, aba) {
   Q.cwd = P.cwd;
   pintarPasta(Q, nomePasta(Q.cwd));
   Q.resumeId = idNovo;
-  Q.titulo = 'Ramo de: ' + (P.titulo || 'conversa'); Q.nomeManual = true;
+  Q.titulo = 'Ramo de: ' + (P.titulo || 'conversa'); Q.nomeManual = false; Q.nomeCurto = false; Q.nomeDono = Q.hist; Q.nomeMarco = 0;
   pintarNome(Q);
   faixaDeRamo(Q, P);
   savePanes();
@@ -4511,7 +4512,6 @@ function receberEventoPane(ev) {
       setTimeout(() => lerUsoAposResposta(P.engine), 1500);
       salvarNomeCurto(P);
       nomearNoFimDoTurno(P);
-      setTimeout(() => buscarNome(P), 1200);
       /* 25/09: com a lateral aberta, relê tambem a costura das conversas antes da lista: uma
          troca de IA gravada por outro chat ou pelo celular so entrava ao fechar e abrir a lateral */
       if (lateralAberta()) lerLigacoes().then(() => loadHist(P.engine, true));
@@ -5631,7 +5631,7 @@ async function perguntarNoChatLateral(P, trecho) {
   const titulo = P.titulo || 'conversa';
   const Q = await ramificarInteiro(P);
   if (!Q || panes.get(Q.id) !== Q) return;
-  Q.titulo = 'Lateral: ' + titulo; Q.nomeManual = true;
+  Q.titulo = 'Lateral: ' + titulo; Q.nomeManual = false; Q.nomeCurto = false; Q.nomeDono = Q.hist; Q.nomeMarco = 0;
   pintarNome(Q); savePanes();
   const inp = $('.p-input', Q.el);
   if (!inp) return;
@@ -5824,7 +5824,12 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && memoriaA
 
 function renderizarHistorico(P, m) {
   const role = m.role || m.kind || m.type;
-  if (role === 'user') userMsg(P, m.text || '', m.attachments || m.anexos);
+  if (role === 'user') {
+    userMsg(P, m.text || '', m.attachments || m.anexos);
+    // Instruções de sistema/skill podem existir em históricos antigos: mantêm o visual,
+    // mas nunca são contadas como pedido do usuário para escolher o nome.
+    if ((m.isMeta || m.is_meta) && P.hist.length) P.hist[P.hist.length - 1].isMeta = true;
+  }
   else if (['bot', 'assistant'].includes(role)) {
     // os mesmos passos da fala ao vivo (textFinal): sem o linkarArquivos, a entrega que
     // aparecia na hora sumia de novo ao reabrir a conversa
@@ -6302,178 +6307,144 @@ function renomearAqui(P) {
 }
 
 function mensagensDele(P) {
-  return (P.hist || []).filter(h => h.quem === 'Você' && h.texto).map(h => String(h.texto));
+  return (P.hist || []).filter(h => h && h.quem === 'Você' && !h.isMeta && !h.is_meta && h.texto).map(h => String(h.texto));
 }
-/* ---- nome da conversa ----
-   O nome provisorio (comeco da frase) aparece na hora e a IA ja troca por um titulo da DEMANDA
-   so com a 1a mensagem. Depois ela rele a conversa no FIM dos turnos 1, 2, 4, 7 e 12 (e dali em
-   diante a cada 10). No fim, e nao no envio como antes, para ver tambem a resposta do assistente:
-   "como eles fizeram?" so vira "Trend do COLORS Fake" depois que ele abriu o link. Com a conversa
-   mudando de rumo, o nome acompanha o trabalho principal; a IA recebe o nome atual e o repete se
-   ele ainda vale, para o nome nao ficar pulando a cada rodada.
-   A instrucao e a validacao moram no nomes-conversa.js (lado do main). */
-/* 26/09 (pedido dele): muita conversa começa com uma pergunta lateral ("como funciona um
-   computador?") e só depois vira a demanda de verdade ("organizar o Claude no PC"). O nome
-   acompanhava só nos marcos 1, 2, 4, 7 e 12 — entre o 7 e o 12 ficava preso no assunto lateral.
-   Agora a IA revê o nome no fim de TODA resposta até a 15ª, e depois a cada 5. O MANTER segura o
-   nome quando o assunto não mudou (a chamada custa ~2 s do Haiku pelo login, sem cobrança). */
-const NOME_TODA_RESPOSTA_ATE = 15;
-function proximoMarcoNome(feito) {
-  if (feito < NOME_TODA_RESPOSTA_ATE) return feito + 1;
-  return (Math.floor(feito / 5) + 1) * 5;
-}
-/* O material: as mensagens dele (a 1a e as 9 mais recentes) e a PRIMEIRA e a ULTIMA resposta do
-   assistente (medido com 25 conversas reais: com as duas ultimas, um pedido lateral do fim, tipo
-   "reativa meu login", roubava o nome de uma conversa inteira sobre outra coisa). Sem a pasta:
-   com ela a IA chamava tudo de "Adsure". */
+/* O backend separa saudação/continuação de pedido real e decide MANTER ou um nome novo.
+   O renderer só acompanha pedidos novos, sem intervalos de cinco mensagens nem comparação
+   de palavras do cliente. O nome escolhido por uma pessoa sempre fica protegido. */
+function proximoMarcoNome(feito) { return feito + 1; }
 function materialDoNome(P) {
-  const dele = mensagensDele(P).map(t => t.slice(0, 3000));
-  const bots = (P.hist || []).filter(h => h.quem !== 'Você' && h.texto).map(h => String(h.texto).slice(0, 4000));
+  const cortar = (t, teto) => t.length <= teto ? t : t.slice(0, Math.floor(teto / 2)) + '\n…\n' + t.slice(-(Math.ceil(teto / 2) - 3));
+  const dele = mensagensDele(P).map(t => cortar(t, 3000));
+  const bots = (P.hist || []).filter(h => h && h.quem !== 'Você' && !h.isMeta && !h.is_meta && h.texto).map(h => cortar(String(h.texto), 4000));
   return {
     mensagens: dele.length > 10 ? [dele[0], ...dele.slice(-9)] : dele,
-    // quantas ele mandou na conversa inteira: sem isto a IA via 10 mensagens numeradas de 1 a 10 e
-    // achava a conversa curta ("2 mensagens puladas" quando foram 20)
     total: dele.length,
     respostas: bots.length > 2 ? [bots[0], bots[bots.length - 1]] : bots,
-    atual: P.nomeCurto ? P.titulo : '',
-    // 3a versao do nome (26/09): a pasta do chat é pista do cliente (o nome é "<o que> <cliente>")
-    pasta: P.cwd || '',
+    atual: P.nomeCurto ? P.titulo : '', pasta: P.cwd || '',
+    engine: P.engine, id: P.forkPendente ? '' : (P.sessaoId || P.resumeId || ''),
+    paneId: P.id, revisao: P.revisaoConversa || 0,
   };
 }
-/* Quem e dono do nome: a conversa marcada em P.nomeDono, que e o PROPRIO P.hist. Toda troca de
-   conversa no painel (nova, aberta da lista, outra pasta) cria um P.hist novo, entao a resposta
-   atrasada da conversa anterior nunca cai na nova. Conversa que ja existia (aberta da lista, aba que
-   voltou ao reabrir o app) ganha o dono pelo nomes.json (assumirNome): nome dado por ele fica
-   intocado; nome da IA, novo ou do formato antigo, volta a ser acompanhado. Nome que ele trocou a mao
-   (nomeManual) nunca e mexido.
-   Uma chamada por vez por chat: pedido que chega com outra no ar espera e sai uma vez so, quando
-   ela voltar — com o material mais novo. Se a IA falhar ou devolver lixo, fica o nome que estava;
-   se ainda nao ha nome da IA, entra o titulo do proprio Claude como reserva (buscarNome). */
+function conversaDoNomeAtual(P, pedido) {
+  return painelAindaAtual(P, pedido.revisao) && P.hist === pedido.hist && P.engine === pedido.engine
+    && (!pedido.id || (P.sessaoId || P.resumeId || '') === pedido.id);
+}
 async function nomearCurto(P, comeco) {
-  // 1a mensagem de conversa sem nome: nome vazio nunca e nome dado por ele
   if (comeco === 'comeco') {
-    P.nomeManual = false; P.nomeCurto = false; P.nomeDono = P.hist; P.nomeMarco = 0; P.nomePendente = ''; P.nomeSemResposta = false;
+    P.nomeManual = false; P.nomeCurto = false; P.nomeDono = P.hist; P.nomeMarco = 0;
   }
   if (P.nomeManual || P.nomeDono !== P.hist || !window.api.nomeCurto || !mensagensDele(P).length) return;
-  if (P.nomeando) { P.nomeDeNovo = true; return; }
-  P.nomeando = true;
-  const hist = P.hist;
+  if (P.nomePedido && conversaDoNomeAtual(P, P.nomePedido)) { P.nomePedido.deNovo = true; return; }
   const material = materialDoNome(P);
+  const pedido = { hist: P.hist, engine: P.engine, id: material.id, revisao: material.revisao, total: material.total, deNovo: false };
+  P.nomePedido = pedido; P.nomeando = true;
   let nome = '';
   try { nome = await window.api.nomeCurto(material); } catch {}
-  P.nomeando = false;
-  if (!P.nomeManual && P.hist === hist && P.nomeDono === hist) {
-    if (nome) {
-      if (trocarNome(P, nome)) { P.titulo = nome; pintarNome(P); savePanes(); }
-      P.nomeCurto = true;
-      // nome que so viu a 1a mensagem: o 1o fim de turno (que ja ve a resposta) pode trocar direto.
-      // Depois que a IA viu uma resposta (trocando ou nao), troca so com a confirmacao do trocarNome.
-      if (material.respostas.length) P.nomeSemResposta = false;
-      else if (P.titulo === nome) P.nomeSemResposta = true;
-      salvarNomeCurto(P);
-    } else if (!P.nomeCurto) buscarNome(P);
+  if (P.nomePedido !== pedido) return;
+  // Não aplicar um resultado que ainda só conhecia o pedido anterior da mesma conversa.
+  const atual = conversaDoNomeAtual(P, pedido) && !P.nomeManual && P.nomeDono === pedido.hist;
+  const mudouPedido = atual && mensagensDele(P).length !== pedido.total;
+  try {
+    if (atual && !mudouPedido && typeof nome === 'string' && nome.trim()) {
+      if (await salvarNomeCurto(P, nome)) {
+        if (conversaDoNomeAtual(P, pedido) && !P.nomeManual) {
+          if (comeco !== 'comeco') P.nomeMarco = pedido.total;
+          savePanes();
+        }
+      }
+    }
+  } finally {
+    if (P.nomePedido === pedido) { P.nomePedido = null; P.nomeando = false; }
   }
-  if (P.nomeDeNovo) { P.nomeDeNovo = false; nomearCurto(P); }
+  if (atual && (pedido.deNovo || (mudouPedido && !P.busy))) return nomearCurto(P);
 }
-/* O nome nao pode ficar pulando: e por ele que ele acha a conversa na lista. Medido em 25/09 dentro
-   do app, a mesma conversa trocou 4 vezes em 5 mensagens ("Video de IA do Instagram" → "Trend de
-   Video Fake COLORS" → "Video IA Estilo COLORS" → "Video IA com Voces Cantando"), e um pedido lateral
-   do fim tomava o nome ("Transferencia de Videos para SSD"). Regras, na ordem:
-   - a IA disse MANTER (o main devolve o nome atual) ou repetiu: fica;
-   - ainda nao ha nome da IA (frase provisoria, titulo do Claude, nome do formato antigo): troca;
-   - o nome novo diz o mesmo assunto com outras palavras (mesmoAssunto): fica;
-   - o nome de agora so tinha visto a 1a mensagem: troca (e a 1a vez que a IA ve a resposta);
-   - assunto novo: so troca se o marco SEGUINTE confirmar o mesmo assunto novo. Pedido lateral
-     aparece uma vez e some; trabalho que mudou de verdade aparece de novo. */
-function trocarNome(P, nome) {
-  if (nome === P.titulo) { P.nomePendente = ''; return false; }
-  if (!P.nomeCurto) return true;
-  if (mesmoAssunto(nome, P.titulo)) { P.nomePendente = ''; return false; }
-  if (P.nomeSemResposta) return true;
-  if (P.nomePendente && mesmoAssunto(nome, P.nomePendente)) { P.nomePendente = ''; return true; }
-  P.nomePendente = nome;
-  return false;
-}
-/* Dois nomes dizem o mesmo assunto quando metade das palavras de verdade do menor esta no outro (sem
-   acento, sem preposicao, sem o plural): "Video IA Estilo COLORS" e "Trend de Video Fake COLORS" sim;
-   "Video de IA do Instagram" e "Transferencia de Videos para SSD" nao. */
-const PALAVRA_DE_LIGACAO = new Set(['de', 'do', 'da', 'dos', 'das', 'com', 'para', 'pra', 'pro', 'no', 'na', 'nos', 'nas',
-  'em', 'e', 'a', 'o', 'as', 'os', 'ao', 'aos', 'por', 'sem', 'um', 'uma']);
-function palavrasDoNome(t) {
-  return new Set(String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .split(/[^a-z0-9]+/).filter(p => p && !PALAVRA_DE_LIGACAO.has(p)).map(p => p.length > 3 ? p.replace(/s$/, '') : p));
-}
-function mesmoAssunto(a, b) {
-  const A = palavrasDoNome(a), B = palavrasDoNome(b);
-  if (!A.size || !B.size) return false;
-  let comum = 0;
-  for (const p of A) if (B.has(p)) comum++;
-  return comum / Math.min(A.size, B.size) >= 0.5;
-}
-/* Fim do turno: passou de um marco desde a ultima olhada? Conta as mensagens dele, e nao os
-   turnos, porque mensagem que esperou na fila junta dois pedidos num turno so; "passou de" (e nao
-   "e igual a") pelo mesmo motivo: de 3 para 5 mensagens tambem cruzou o marco 4. */
+function trocarNome(P, nome) { return typeof nome === 'string' && !!nome.trim() && nome !== P.titulo; }
 function nomearNoFimDoTurno(P) {
   if (P.nomeManual || P.nomeDono !== P.hist) return;
-  const n = mensagensDele(P).length;
-  if (n < proximoMarcoNome(P.nomeMarco || 0)) return;
-  P.nomeMarco = n;
-  nomearCurto(P);
+  if (mensagensDele(P).length < proximoMarcoNome(P.nomeMarco || 0)) return;
+  return nomearCurto(P);
 }
-/* Conversa que ja existia: o dono do nome vem do nomes.json (donoDoNome no nomes-conversa.js).
-   'ia' e nome novo da IA: vai como "atual" e a contagem dos marcos segue de onde a conversa esta.
-   'antigo' e o nome do formato velho ("Criacao Dupla"): a IA troca no fim do proximo turno, sem
-   receber o nome velho como "atual" (senao ela o repetia). 'manual' e dele: nunca e mexido. */
+/* Na abertura, título humano fica intocado. Nome automático acompanha a conversa a partir
+   do próximo pedido. Título nativo/provisório também pode ganhar o nome da demanda real. */
 function assumirNome(P, dono) {
   if (P.nomeManual || P.nomeDono === P.hist) return;
   if (dono === 'manual') { P.nomeManual = true; return; }
-  if (dono !== 'ia' && dono !== 'antigo') return;
-  P.nomeDono = P.hist; P.nomePendente = ''; P.nomeSemResposta = false;
-  P.nomeCurto = dono === 'ia';
+  if (dono !== 'ia' && dono !== 'antigo' && dono !== '') return;
+  P.nomeDono = P.hist; P.nomeCurto = dono === 'ia';
   P.nomeMarco = dono === 'ia' ? mensagensDele(P).length : 0;
+  if (dono === 'ia') P.nomePersistido = { engine: P.engine, id: P.sessaoId || P.resumeId || '', nome: P.titulo };
 }
 async function lembrarDonoDoNome(P, id, titulo, revisao) {
   if (!id || !titulo || !window.api.donoNome) return;
+  const pedido = { id, hist: P.hist, engine: P.engine, revisao };
   let dono = '';
   try { dono = await window.api.donoNome({ id, titulo }); } catch { return; }
-  // outra conversa no painel, ou o nome mudou enquanto perguntava: nao mexe
-  if (!painelAindaAtual(P, revisao) || P.titulo !== titulo) return;
+  if (!conversaDoNomeAtual(P, pedido) || P.titulo !== titulo) return;
   assumirNome(P, dono);
   savePanes();
 }
-/* Grava no nomes.json para a lista lateral e a reabertura mostrarem o mesmo nome, marcado como da
-   IA ('auto'). Na 1a mensagem o id da conversa ainda nao existe: o fim do turno chama de novo.
-   Com a lateral aberta, redesenha a lista quando a gravacao termina: o nome chega uns 3 s depois
-   do fim do turno, e a lista (relida no fim do turno) ficava com o nome da rodada anterior. */
-function salvarNomeCurto(P) {
-  const id = P.sessaoId || P.resumeId, nome = P.titulo, selo = id + '|' + nome;
-  if (!P.nomeCurto || P.nomeManual || !id || P.nomeCurtoSalvo === selo || P.nomeSalvando === selo) return;
-  const engine = P.engine, file = P.sessaoFile || '', revisao = P.revisaoConversa || 0;
-  P.nomeSalvando = selo;
-  return Promise.resolve().then(() => window.api.renomear({ engine, id, nome, origem: 'auto' }))
-    .then(r => {
-      if (r !== true && !(r && r.ok === true)) throw new Error(r && r.error || 'Não consegui salvar o nome da conversa.');
-      if (!painelAindaAtual(P, revisao) || P.titulo !== nome) return;
-      P.nomeCurtoSalvo = selo;
-      lembrarNomeDaParte({ engine, id, file }, nome);
-      if (lateralAberta()) loadHist(engine, true);
-    }).catch(() => {}).finally(() => { if (P.nomeSalvando === selo) P.nomeSalvando = ''; });
+/* Só o ACK muda título/cache/config. O servidor protege nomes manuais e compara o último
+   nome persistido conhecido antes de aceitar uma gravação automática de outra janela. */
+function salvarNomeCurto(P, candidato) {
+  const explicito = typeof candidato === 'string' && !!candidato.trim();
+  const nome = explicito ? candidato.trim() : P.titulo;
+  if ((!P.nomeCurto && !explicito) || P.nomeManual || !nome) return Promise.resolve(false);
+  const id = P.forkPendente ? '' : (P.sessaoId || P.resumeId), engine = P.engine;
+  const pedido = { id, engine, hist: P.hist, revisao: P.revisaoConversa || 0, total: mensagensDele(P).length };
+  if (!id) {
+    P.titulo = nome; P.nomeCurto = true; pintarNome(P); savePanes();
+    return Promise.resolve(true);
+  }
+  const selo = id + '|' + nome;
+  if (P.nomeCurtoSalvo === selo && P.nomePersistido?.engine === engine && P.titulo === nome) return Promise.resolve(true);
+  if (P.nomeGravacao && conversaDoNomeAtual(P, P.nomeGravacao)) {
+    if (P.nomeGravacao.nome === nome) return P.nomeGravacao.promise;
+    return P.nomeGravacao.promise.then(() => conversaDoNomeAtual(P, pedido) && !P.nomeManual ? salvarNomeCurto(P, nome) : false);
+  }
+  const base = P.nomePersistido, file = P.sessaoFile || '', antesNaTela = P.titulo;
+  // Sem baseline conhecido, só criar se ainda não houver nome salvo. O conflito devolve
+  // o estado verdadeiro e impede que outra tela sobrescreva um nome automático mais novo.
+  const args = { engine, id, nome, origem: 'auto', anterior: base && base.engine === engine && base.id === id ? base.nome : '' };
+  const gravacao = { ...pedido, nome, promise: null };
+  P.nomeGravacao = gravacao; P.nomeSalvando = selo;
+  gravacao.promise = Promise.resolve().then(() => {
+    if (!conversaDoNomeAtual(P, pedido) || P.nomeManual || mensagensDele(P).length !== pedido.total) return null;
+    return window.api.renomear(args);
+  }).then(r => {
+    if (!conversaDoNomeAtual(P, pedido) || P.nomeManual || P.titulo !== antesNaTela) return false;
+    if (r && r.conflito) {
+      if (typeof r.nome === 'string') P.nomePersistido = { engine, id, nome: r.nome };
+      if (typeof r.nome === 'string' && r.nome) {
+        P.titulo = r.nome; P.nomeCurto = r.origem === 'auto'; P.nomeManual = r.origem === 'manual';
+        P.nomePersistido = { engine, id, nome: r.nome };
+        P.nomeCurtoSalvo = P.nomeCurto ? id + '|' + r.nome : '';
+        pintarNome(P); lembrarNomeDaParte({ engine, id, file }, r.nome); savePanes();
+        if (lateralAberta()) loadHist(engine, true);
+      }
+      return false;
+    }
+    if (r !== true && !(r && r.ok === true)) return false;
+    P.nomePersistido = { engine, id, nome };
+    if (mensagensDele(P).length !== pedido.total) return false;
+    P.titulo = nome; P.nomeCurto = true; P.nomeCurtoSalvo = selo;
+    pintarNome(P); lembrarNomeDaParte({ engine, id, file }, nome); savePanes();
+    if (lateralAberta()) loadHist(engine, true);
+    return true;
+  }).catch(() => false).finally(() => {
+    if (P.nomeGravacao === gravacao) { P.nomeGravacao = null; P.nomeSalvando = ''; }
+  });
+  return gravacao.promise;
 }
 
-/* O titulo do proprio Claude e a RESERVA: vale enquanto a IA do Cockpit nao deu um nome valido (ela
-   falhou, passou do prazo ou a 1a mensagem era so um print). Sem a reserva, a conversa ficava para
-   sempre com a frase provisoria na barra e com outro nome na lista. Com a IA pensando, espera ela. */
+/* Reserva explícita do Claude. Não é disparada por saudações nem por falha do gerador de nome. */
 async function buscarNome(P) {
   if (P.engine !== 'claude' || !P.sessaoId || P.nomeManual || P.nomeCurto || P.nomeando) return;
-  /* 25/09: chat que veio de uma troca de IA: o titulo que o Claude inventa para a parte NOVA
-     nasce do contexto colado ("Estou continuando uma conversa…"). O nome da conversa e o que
-     atravessou a troca, e ele vale para a cadeia inteira. */
   if (P.parteAnterior || (Array.isArray(P.partesAnteriores) && P.partesAnteriores.length)) return;
-  const hist = P.hist;
+  const pedido = { hist: P.hist, engine: P.engine, id: P.sessaoId, revisao: P.revisaoConversa || 0 };
   let t = '';
   try { t = await window.api.sessionTitulo({ engine: 'claude', file: P.sessaoFile, id: P.sessaoId }); } catch { return; }
-  // a IA respondeu (ou ele renomeou, ou trocou de conversa) enquanto o titulo era lido: fica o dela
-  if (P.nomeManual || P.nomeCurto || P.nomeando || P.hist !== hist) return;
+  if (P.nomeManual || P.nomeCurto || P.nomeando || !conversaDoNomeAtual(P, pedido)) return;
   if (t && t !== P.titulo) { P.titulo = t; pintarNome(P); savePanes(); }
 }
 
@@ -11174,7 +11145,8 @@ function linhaConversa(s, termo, trecho) {
          zerar sumiria com TODAS as conversas daquela IA ate a releitura: o nome novo entra
          direto na linha guardada (e no titulo da cadeia, que e a parte mais nova). */
       lembrarNomeDaParte(s, novo);
-      for (const P of panes.values()) if (P.resumeId === s.id || P.sessaoId === s.id) { P.titulo = novo; P.nomeManual = true; pintarNome(P); }
+      for (const P of panes.values()) if (P.engine === s.engine && (P.resumeId === s.id || P.sessaoId === s.id)) { P.titulo = novo; P.nomeManual = true; pintarNome(P); }
+      savePanes();
     };
     inp.onclick = (ev) => ev.stopPropagation();
     inp.addEventListener('keydown', (ev) => {
@@ -11434,11 +11406,12 @@ async function openSession(s, el) {
   } catch (e) {
     if (painelAindaAtual(P, revisao)) note(P, 'Não consegui abrir o histórico: ' + (e.message || e), true);
   } finally {
-    if (painelAindaAtual(P, revisao)) P.carregandoHistorico = false;
+    if (painelAindaAtual(P, revisao)) {
+      P.carregandoHistorico = false;
+      // A cadeia sai do try com return: o dono também precisa ser descoberto nesse caminho.
+      lembrarDonoDoNome(P, s.id, s.title || '', revisao);
+    }
   }
-  /* de quem e o nome: sem isto, conversa aberta da lista nunca mais era renomeada, e a "Criacao
-     Dupla" do exemplo dele ficava com esse nome mesmo com ele continuando a conversa por dias */
-  lembrarDonoDoNome(P, s.id, s.title || '', revisao);   // sem await: quem abriu nao espera por isso
   return P;   // R2-033: devolve o painel pra quem chamou saber onde a conversa abriu (ex.: reabrir fechado)
 }
 

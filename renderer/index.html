@@ -252,15 +252,16 @@
 <template id="tplPane">
   <section class="pane">
     <header class="pane-hd">
-      <!-- leva 10.4: branch do git desta pasta; some sozinho fora de repositório -->
-      <div class="hd-lado hd-esq"><button class="p-git hidden" title="Branch do git"></button></div>
       <div class="p-chave" role="group" aria-label="Escolher assistente">
-        <button class="ch-lado" data-motor="claude"><span></span>Claude</button>
-        <button class="ch-lado" data-motor="codex"><span></span>Codex</button>
-        <button class="ch-lado" data-motor="gemini"><span></span>Gemini</button>
-        <button class="ch-lado" data-motor="grok"><span></span>Grok</button>
+        <button class="ch-lado" data-motor="claude"><span></span><span class="ch-nome">Claude</span></button>
+        <button class="ch-lado" data-motor="codex"><span></span><span class="ch-nome">Codex</span></button>
+        <button class="ch-lado" data-motor="gemini"><span></span><span class="ch-nome">Gemini</span></button>
+        <button class="ch-lado" data-motor="grok"><span></span><span class="ch-nome">Grok</span></button>
       </div>
+      <!-- redesenho 26/09: seletor à esquerda; à direita branch, medidor e fechar (README, "Painel de chat") -->
       <div class="hd-lado hd-dir">
+      <!-- leva 10.4: branch do git desta pasta; some sozinho fora de repositório -->
+      <button class="p-git hidden" title="Branch do git"></button>
       <!-- medidor de contexto: existia so no molde do celular e a tela do Mac ficava sem ele -->
       <span class="p-tokens" title="Tamanho da conversa agora, comparado ao que cabe neste modelo"></span>
       <span class="p-dot dot off"></span>
@@ -278,7 +279,6 @@
     <div class="pane-chat">
       <div class="pane-empty">
         <div class="pe-logo"></div>
-        <div class="pe-txt">Escreva embaixo pra começar</div>
       </div>
     </div>
     <div class="pane-perm hidden">

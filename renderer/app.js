@@ -1571,8 +1571,12 @@ function marcaTroca(P, de, para) {
   clearEmpty(P);
   const d = document.createElement('div');
   d.className = 'troca';
-  d.innerHTML = '<span></span>';
-  $('span', d).textContent = 'daqui em diante quem responde é o ' + para + ' (antes era o ' + de + ')';
+  /* Redesenho 26/09: discreta, só "Claude › Codex" entre dois fios. A frase inteira (que era o
+     próprio texto da marca) vai para o balão do mouse: nada de frase explicativa na tela. */
+  d.innerHTML = '<span class="tr-de"></span>' + ico('chevron-right') + '<span class="tr-para"></span>';
+  $('.tr-de', d).textContent = de;
+  $('.tr-para', d).textContent = para;
+  d.title = 'Daqui em diante quem responde é o ' + para + ' (antes era o ' + de + ')';
   P.chat.appendChild(d); scroll(P, true);
 }
 
@@ -1718,17 +1722,18 @@ function pintarTokens(P) {
   const el = $('.p-tokens', P.el);
   if (!el) return;
   if (!P.tokens) { el.innerHTML = ''; return; }
-  const usado = (P.tokens / 1000).toFixed(1) + 'k';
+  /* Redesenho 26/09: o cabeçalho mostra só "312k / 1000k" em 11px (README, "Painel de chat").
+     A barrinha azul saiu: o quanto já encheu é o anel da caixa de escrever (pintarAnel), e um
+     segundo azul no cabeçalho brigava com o único botão azul da área. Número inteiro de k: a
+     casa decimal só fazia o texto dançar a cada evento. */
+  const usado = Math.round(P.tokens / 1000) + 'k';
   if (P.janela) {
     const pct = Math.min(100, Math.round((P.tokens / P.janela) * 100));
-    el.innerHTML = '<b></b><span class="tok-bar"><span class="tok-fill"></span></span>';
-    $('b', el).textContent = usado + ' / ' + Math.round(P.janela / 1000) + 'k';
-    $('.tok-fill', el).style.width = pct + '%';
+    el.textContent = usado + ' / ' + Math.round(P.janela / 1000) + 'k';
     el.title = 'A conversa já ocupa ' + usado + ' das ' + Math.round(P.janela / 1000)
       + 'k palavras-token que cabem neste modelo (' + pct + '%). Quando enche, a conversa é resumida.';
   } else {
-    el.innerHTML = '<b></b>';
-    $('b', el).textContent = usado;
+    el.textContent = usado;
     el.title = 'Tamanho da conversa até agora.';
   }
 }
@@ -1788,10 +1793,9 @@ function pintarPonto(P) {
 
 /* ============ desenho das mensagens ============ */
 function clearEmpty(P) { const e = $('.pane-empty', P.el); if (e) e.remove(); }
-// conversa zerada: volta o "Escreva embaixo pra começar" com o logo do motor certo
+// conversa zerada: volta o estado vazio, só o logo do motor certo no meio (redesenho: sem frase)
 function voltarVazio(P) {
-  P.chat.innerHTML = '<div class="pane-empty"><div class="pe-logo"></div>'
-    + '<div class="pe-txt">Escreva embaixo pra começar</div></div>';
+  P.chat.innerHTML = '<div class="pane-empty"><div class="pe-logo"></div></div>';
   paintEngine(P);
 }
 
@@ -2267,8 +2271,9 @@ function faixaDeRamo(Q, P) {
   clearEmpty(Q);   // a tela de "chat vazio" ocupa a altura toda e empurraria a faixa pra fora
   const d = document.createElement('div');
   d.className = 'troca'; d.innerHTML = '<span></span>';
-  $('span', d).textContent = 'ramo de “' + (P.titulo || 'conversa anterior')
-    + '” — ele lembra da conversa inteira; a tela começa daqui. Escreva pra continuar.';
+  // na tela só o nome do ramo; o que ele significa fica no balão do mouse (redesenho 26/09)
+  $('span', d).textContent = 'Ramo de “' + (P.titulo || 'conversa anterior') + '”';
+  d.title = 'Ele lembra da conversa inteira; a tela começa daqui. Escreva pra continuar.';
   Q.chat.appendChild(d);
   const c = $('.p-input', Q.el); if (c) c.focus();
 }
@@ -2443,9 +2448,9 @@ function abrirBuscaConversa(P) {
     barra = document.createElement('div');
     barra.className = 'p-busca';
     barra.innerHTML = '<span class="pb-ic">' + ico('search') + '</span>'
-      + '<input class="pb-inp" placeholder="Buscar nesta conversa…" spellcheck="false">'
+      + '<input class="pb-inp" placeholder="Buscar" spellcheck="false">'
       + '<span class="pb-conta"></span>'
-      + '<button class="pb-bt" data-vai="-1" title="Anterior">' + ico('chevron-down') + '</button>'
+      + '<button class="pb-bt" data-vai="-1" title="Anterior">' + ico('chevron-up') + '</button>'
       + '<button class="pb-bt pb-baixo" data-vai="1" title="Próximo">' + ico('chevron-down') + '</button>'
       + '<button class="pb-bt pb-x" title="Fechar (Esc)">' + ico('x') + '</button>';
     P.chat.parentElement.insertBefore(barra, P.chat);
@@ -10035,7 +10040,7 @@ async function atualizarGit(P) {
   if (!g || !g.branch) {
     if (P.worktree) {
       chip.classList.remove('hidden');
-      chip.textContent = '⎇ ' + P.worktree + ' (a criar)';
+      chip.textContent = P.worktree + ' (a criar)';   // o ícone de branch é o ::before do chip
       chip.title = 'O worktree nasce na primeira mensagem deste chat';
       chip.onclick = null;
     } else chip.classList.add('hidden');

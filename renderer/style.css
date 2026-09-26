@@ -189,21 +189,15 @@ select{font:inherit;color:inherit;background:none;border:none;outline:none;curso
 .pane.eng-claude{--motor:var(--claude)}
 .pane.eng-acp{--motor:var(--acp)}
 
-.pane-hd{height:auto;min-height:34px;flex:none;display:flex;align-items:center;gap:7px;padding:5px 8px;
-  background:var(--bg3);border-bottom:1px solid var(--line);font-size:11.5px}
-.pane.focus .pane-hd{background:var(--bg4)}
+/* (redesenho 26/09) cabeçalho do chat (.pane-hd): agora em redesign/painel.css */
 .p-engine{color:var(--accent);font-weight:600;font-size:11.5px;padding:2px 3px;border-radius:4px}
 .p-engine:hover{background:var(--hover)}
 .p-cwd{color:var(--fg-dim);font:11px var(--mono);padding:2px 6px;border-radius:4px;
   max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .p-cwd:hover{background:var(--hover);color:var(--fg)}
 .p-spacer{flex:1;min-width:28px;min-height:24px}
-.p-tokens{color:var(--fg-fraco);font-size:10.5px;white-space:nowrap;display:flex;align-items:center;gap:5px}
-.p-tokens b{font-weight:500;color:var(--fg-fraco)}
-.tok-bar{width:34px;height:4px;border-radius:2px;background:var(--bg4);overflow:hidden}
-.tok-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .3s}
-.p-close{flex:none;width:24px;height:24px;border-radius:4px;color:var(--fg-dim);font-size:11px}
-.p-close:hover{background:var(--erro-fundo);color:#fff}
+/* (redesenho 26/09) medidor do cabeçalho (.p-tokens): agora em redesign/painel.css */
+/* (redesenho 26/09) fechar o chat (.p-close): agora em redesign/painel.css */
 .dot{width:7px;height:7px;border-radius:50%;flex:none}
 .dot.off{background:var(--fg-fraco)}.dot.idle{background:var(--green)}
 .dot.busy{background:var(--yellow);animation:pulse 1.1s ease-in-out infinite}
@@ -213,8 +207,7 @@ select{font:inherit;color:inherit;background:none;border:none;outline:none;curso
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
 
 .pane-chat{flex:1;overflow-y:auto;overflow-x:hidden;padding:14px 0 6px}
-.pane-empty{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;opacity:.35}
-.pe-txt{font-size:12px;color:var(--fg-dim)}
+/* (redesenho 26/09) estado vazio (.pane-empty): agora em redesign/painel.css */
 
 /* ===== janela de configuração do Claude ===== */
 .cf{margin-top:10px}
@@ -292,20 +285,7 @@ body.foco .exec,body.foco .think{display:none !important}
 .tar-l.espera{color:var(--fg-dim)}
 .tar-l.espera .tar-ic::before{content:'';width:7px;height:7px;border-radius:50%;border:1.5px solid var(--fg-fraco)}
 
-/* barra de busca dentro da conversa (⌘F) */
-.p-busca{flex:none;display:flex;align-items:center;gap:6px;margin:0 12px 6px;padding:5px 8px;
-  background:var(--bg2);border:1px solid var(--accent);border-radius:9px}
-.p-busca.hidden{display:none !important}
-.pb-ic{display:grid;place-items:center;color:var(--fg-fraco)}
-.pb-ic .ic{width:13px;height:13px}
-.pb-inp{flex:1;background:none;border:none;outline:none;color:var(--fg);font:12px var(--sans)}
-.pb-conta{font-size:10.5px;color:var(--fg-fraco);flex:none;min-width:46px;text-align:right}
-.pb-bt{width:22px;height:22px;border-radius:6px;color:var(--fg-dim);display:grid;place-items:center;flex:none}
-.pb-bt:hover{background:var(--hover3);color:var(--fg)}
-.pb-bt .ic{width:12px;height:12px}
-.pb-bt[data-vai="-1"] .ic{transform:rotate(180deg)}
-mark.acha{background:color-mix(in srgb,var(--yellow) 45%,transparent);color:inherit;border-radius:2px}
-mark.acha.agora{background:var(--yellow);color:#1a1a1a}
+/* (redesenho 26/09) busca dentro da conversa ⌘F (.p-busca, .pb-*, mark.acha): agora em redesign/painel.css */
 
 /* a selecao precisa SALTAR aos olhos: em cinza fraco ele da ⌘A, nao ve nada acender e conclui
    que o atalho nao funcionou. Vale nas quatro aparencias (claro, escuro e os de contraste). */
@@ -543,10 +523,7 @@ mark.acha.agora{background:var(--yellow);color:#1a1a1a}
 .p-model:hover{background:var(--hover2);color:var(--fg);border-color:var(--line2)}
 .p-menu-top{bottom:auto;top:34px;left:auto;right:8px;min-width:270px;max-width:340px}
 
-/* marca de troca de motor no meio da conversa */
-.troca{display:flex;align-items:center;gap:10px;padding:6px 18px 14px;color:var(--fg-fraco);font-size:11px}
-.troca::before,.troca::after{content:"";flex:1;height:1px;background:var(--line)}
-.troca span{flex:none;white-space:nowrap}
+/* (redesenho 26/09) marca de troca de motor no meio da conversa (.troca): agora em redesign/painel.css */
 
 /* ---------- barra de esforço (trilho contínuo) ---------- */
 .ef-blk{--ef-prog:0;--ef-thumb:22px;padding:10px 9px 4px;user-select:none}
@@ -668,7 +645,6 @@ mark.acha.agora{background:var(--yellow);color:#1a1a1a}
 .logo-motor{width:100%;height:100%;fill:currentColor;stroke:none;display:block}
 .msg-role .av{padding:3px}
 .msg.bot .av{background:transparent;color:var(--motor,var(--accent));width:17px;height:17px;padding:0}
-.pe-logo{width:30px;height:30px;background:none;border-radius:0;color:var(--motor,var(--accent))}
 .act .logo-motor{width:20px;height:20px;fill:currentColor;stroke:none}
 
 /* ícones de traço, sem emoji */
@@ -738,17 +714,7 @@ mark.acha.agora{background:var(--yellow);color:#1a1a1a}
 .p-modal .ef-blk{padding:8px 4px 2px}
 .p-modal .mo-sub{margin-bottom:6px}
 
-/* nome da conversa no topo do painel */
-/* O fundo era um banho da cor do motor e a bolinha era a cor do motor: com o redesenho a cor do
-   assistente fica so no logo, entao o cabecalho e o proprio fundo da conversa e a bolinha fica
-   invisivel (sem estado, sem sinal — README). Ela continua ocupando o lugar, que o ::after espelha. */
-.pane-nome{flex:none;padding:9px 40px 8px;border-bottom:1px solid var(--line);position:relative;
-  background:var(--bg);display:flex;align-items:center;
-  justify-content:center;gap:9px}
-.pane-nome::before{content:"";width:7px;height:7px;border-radius:50%;background:transparent;flex:none}
-.pn-txt{flex:0 1 auto;min-width:0;font-size:14px;color:var(--fg-strong);font-weight:650;letter-spacing:-.1px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pane-nome.vazio{display:none}
+/* (redesenho 26/09) nome da conversa, linha 2 do cabeçalho (.pane-nome, .pn-txt): agora em redesign/painel.css */
 
 /* mensagem sua fica do lado direito, como num chat */
 .msg.user .msg-role{flex-direction:row-reverse;justify-content:flex-start}
@@ -892,17 +858,7 @@ textarea.cxq-input{min-height:62px;resize:vertical}
 .hi-marca{background:color-mix(in srgb,var(--accent) 40%,transparent);border-radius:3px;padding:0 2px}
 .hist-cab{padding:7px 10px 3px;font-size:9.5px;color:var(--fg-fraco);text-transform:uppercase;letter-spacing:.6px}
 
-/* lápis no nome do painel */
-.pn-edit{width:20px;height:20px;border-radius:5px;color:var(--fg-dim);flex:none;opacity:0;
-  display:grid;place-items:center;transition:opacity .12s}
-.pane-nome:hover .pn-edit{opacity:1}
-.pane-nome .pn-edit{position:absolute;right:10px;top:50%;margin-top:-10px}
-/* espaço invisível do tamanho da bolinha: sem ele o nome fica 8px fora do centro */
-.pane-nome::after{content:"";width:7px;flex:none}
-.pn-edit:hover{background:var(--hover2);color:var(--fg)}
-.pn-edit .ic{width:12px;height:12px}
-.pn-input{flex:1;background:var(--fundo-fundo);border:1px solid var(--accent);border-radius:6px;
-  padding:3px 7px;color:var(--fg);font:12px var(--sans);outline:none}
+/* (redesenho 26/09) lápis e campo de renomear (.pn-edit, .pn-input): agora em redesign/painel.css */
 .hi-edit{width:20px;height:20px;border-radius:5px;color:var(--fg-dim);flex:none;opacity:0;
   display:grid;place-items:center}
 .hist-item:hover .hi-edit{opacity:1}
@@ -1060,27 +1016,12 @@ html[data-theme^="light"] .ef-thumb{background:var(--puxador);border-color:var(-
 .pane.ocupado .p-modoenvio{color:var(--accent);border-color:var(--line2)}
 .envio-nota{padding:2px 18px 8px;font-size:11px;color:var(--fg-fraco)}
 
-/* Faixa própria para os quatro assistentes: nomes completos, inclusive em chats estreitos. */
-.p-chave{position:relative;display:flex;align-items:center;background:var(--fundo-fundo);
-  border:1px solid var(--line);border-radius:8px;padding:2px;gap:1px;flex:0 1 auto;min-width:0;
-  max-width:100%;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-width:thin}
-.ch-lado{position:relative;display:flex;align-items:center;gap:5px;flex:none;white-space:nowrap;
-  padding:4px 9px;border-radius:6px;font-size:11px;font-weight:600;color:var(--fg-fraco);
-  background:transparent;transition:background .18s,color .18s}
-.ch-lado span{flex:none;width:13px;height:13px;display:block;opacity:.85;transition:opacity .18s}
-.ch-lado span svg{width:100%;height:100%;fill:currentColor}
-.ch-lado:hover{color:var(--fg);background:var(--hover)}
-.ch-lado[aria-pressed="true"]{color:var(--sobre-accent);background:var(--accent)}
-.ch-lado[aria-pressed="true"] span{opacity:1}
-.ch-lado:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+/* (redesenho 26/09) seletor de assistente segmented (.p-chave, .ch-lado): agora em redesign/painel.css */
 /* motor que nao esta instalado neste Mac: apagado, igual ao .na-motor.apagado da tela
    "Nova aba". Antes aparecia identico aos outros tres e so falhava depois do chat criado. */
 .ch-lado.apagado{opacity:.35;cursor:not-allowed}
 .ch-lado.apagado:hover{background:transparent;color:var(--fg-fraco)}
-.pane-hd .p-git{max-width:110px}
-/* As logos ficam no meio: os dois lados crescem por igual, então o centro é o centro de verdade. */
-.hd-lado{flex:1 1 0;min-width:0;display:flex;align-items:center;gap:6px}
-.hd-dir{justify-content:flex-end}
+/* (redesenho 26/09) lado direito do cabeçalho (.hd-dir): agora em redesign/painel.css */
 .pane-cmp .p-cwd{position:relative;max-width:none;padding:0;font:inherit;color:var(--fg-dim)}
 .pane-cmp .p-cwd:hover{background:var(--hover2);color:var(--fg)}
 .cwd-wt{position:absolute;right:-2px;bottom:-3px;font-size:9px;color:var(--accent)}
@@ -1717,12 +1658,7 @@ body.arrastando-aba,body.arrastando-aba *{cursor:grabbing !important}
   color:var(--fg-dim);flex:none;align-self:center}
 .ti-acao:hover{color:var(--fg);border-color:var(--accent)}
 
-/* chip do git no cabeçalho do chat: nasce escondido e só aparece dentro de repositório */
-.p-git{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  font:10.5px var(--mono);color:var(--fg-fraco);padding:2px 7px;border-radius:999px;
-  border:1px solid transparent}
-.p-git:hover{background:var(--hover2);color:var(--fg);border-color:var(--line2)}
-.p-git.hidden{display:none}
+/* (redesenho 26/09) chip do git no cabeçalho (.p-git): agora em redesign/painel.css */
 
 /* ===== leva 6: faixa de avisos da JANELA (não do chat) =====
    Aviso importante não pode ficar só dentro de um painel: some no meio da conversa e ele
@@ -1810,7 +1746,7 @@ body.arrastando-aba,body.arrastando-aba *{cursor:grabbing !important}
 .ri-acao:disabled:hover{color:var(--fg-dim);border-color:var(--line2)}
 
 /* Motores adicionais, mantendo os mesmos tamanhos e componentes do Cockpit. */
-.motor-extra{color:var(--accent);font-size:12px;font-weight:600;white-space:nowrap;padding:0 7px}
+/* (redesenho 26/09) rótulo do motor ACP (.motor-extra): agora em redesign/painel.css */
 .act.ic-gemini{color:var(--gemini)}
 .pane.eng-gemini{--motor:var(--gemini)}
 .act.ic-grok{color:var(--grok)}

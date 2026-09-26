@@ -7,7 +7,465 @@
    Entrada e Avançado em cartão --fill-4, linhas de 36, (i) com a explicação no tooltip, toggle
    32×18 ligado em --status-ok; Aparência: Automática / Clara / Escura).
    Seletores de hoje: #sidebar, .side-*, .sc-*, .hist*, .hi-*, .new-chat, .grp-*, .aba-grupo, .torre*,
-   .ti-*, .rot*, .ri-*, .settings, .aj*, .chave, .temas, .tema-*, .info, .dica, #dragbar.
+   .ti-*, .rot*, .ri-*, .settings, .aj*, .chave, .info, .dica, .sh-conta, #dragbar.
    Carrega DEPOIS do style.css e do quadro.css (e do celular.css no iPhone): ganha deles sem
    !important. Usar os tokens (../cockpit-tokens.css) e as peças rd- do base.css.
+   As medidas saem do "Cockpit Janela.dc.html" (estilo inline de cada elemento, telas 16 a 20) e
+   os estados (hover, selecionado, foco, desativado) do "Cockpit Sistema.dc.html".
    ============================================================================ */
+
+/* ---------- a coluna ----------
+   Vidro de controles: o --bg-sidebar translúcido sobre o fundo da janela, como no desenho. No Mac
+   a coluna fica AO LADO do conteúdo, nunca por cima: o desfoque não teria o que borrar, então por
+   baixo vai o --bg-window e a cor sai igual à da referência (sobre o fundo da conversa ficava mais
+   escura). No celular, onde a coluna é gaveta por cima do chat, o vidro é de verdade (lá embaixo).
+   A borda esquerda é de 1pt e fica FORA dos 280 (281 no total, como no desenho: sem isso os botões
+   "Copiar comando" e "Abrir pasta" da torre não cabiam lado a lado). A direita é a alça #dragbar. */
+#sidebar{width:281px;color:var(--label-1);
+  background:linear-gradient(var(--bg-sidebar),var(--bg-sidebar)),var(--bg-window);
+  -webkit-backdrop-filter:var(--blur-glass);backdrop-filter:var(--blur-glass);
+  border-left:1px solid var(--separator)}
+#dragbar::before{background:var(--separator)}
+/* sem azul no fio: borda colorida é só do foco. O cursor de alargar já diz que dá para puxar. */
+#dragbar:hover::before{background:var(--separator-strong)}
+.side-view{min-height:0}
+/* As listas roláveis guardam 8pt fixos à direita para a barra de rolagem (scrollbar-gutter): a
+   barra deixa de comer a largura dos itens só quando aparece, e a borda direita dos itens fica
+   onde o desenho põe (8pt da borda da coluna) com ou sem rolagem. Barra de 8 com polegar de 4. */
+.hist,.torre,.rot,.settings{scrollbar-gutter:stable}
+.hist::-webkit-scrollbar,.torre::-webkit-scrollbar,.rot::-webkit-scrollbar,.settings::-webkit-scrollbar,
+.side-pastas::-webkit-scrollbar{width:8px}
+.hist::-webkit-scrollbar-thumb,.torre::-webkit-scrollbar-thumb,.rot::-webkit-scrollbar-thumb,.settings::-webkit-scrollbar-thumb,
+.side-pastas::-webkit-scrollbar-thumb,
+.hist::-webkit-scrollbar-thumb:hover,.torre::-webkit-scrollbar-thumb:hover,.rot::-webkit-scrollbar-thumb:hover,
+.settings::-webkit-scrollbar-thumb:hover,.side-pastas::-webkit-scrollbar-thumb:hover{border-width:2px}
+/* Barra de rolagem como a do Mac: some quando o mouse não está na lista (o desenho não mostra
+   polegar nenhum). Com o mouse em cima, ou rolando com ele ali, o polegar de 4 aparece. Só com
+   mouse: no toque o sistema já esconde a barra sozinho. */
+@media (hover:hover){
+  :is(.hist,.torre,.rot,.settings,.side-pastas):not(:hover)::-webkit-scrollbar-thumb{background:transparent}
+}
+
+/* título Title 3 (15/20 600) com padding 14 16 12 */
+.side-head{position:relative;height:auto;flex:none;display:flex;align-items:center;justify-content:flex-start;gap:8px;
+  padding:14px 16px 12px;font:var(--f-title3);color:var(--label-1);text-transform:none;letter-spacing:0}
+.side-head > span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* contagem ao lado do título (Rotinas "6"): 11/16, label-3, números tabulares, colada à direita */
+.sh-conta{flex:none;margin-left:auto;font:400 11px/16px var(--font-sans);color:var(--label-3);
+  font-variant-numeric:tabular-nums;transition:opacity var(--dur-fast) ease-out}
+.sh-conta:empty{display:none}
+.side-head .mini{flex:none;width:24px;height:24px;margin:-2px -6px -2px 0;padding:0;border:0;border-radius:6px;
+  background:transparent;color:var(--label-2);font-size:0;
+  transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out,opacity var(--dur-fast) ease-out}
+.side-head .mini:hover{background:var(--fill-3);color:var(--label-1)}
+.side-head .mini:active{background:var(--fill-2);color:var(--label-1)}
+.side-head .mini:focus-visible{outline:none;box-shadow:var(--anel-foco)}
+.side-head .mini .ic{width:var(--ic-botao);height:var(--ic-botao)}
+/* O ↻ (atualizar agora) não está no desenho: o cabeçalho é só o título (e a contagem). Com mouse
+   ele fica escondido no canto e aparece ao passar sobre o cabeçalho, como os botões de seção da
+   barra lateral do Mac; em cima da contagem, que sai enquanto ele está à vista. Pelo teclado
+   (Tab) ele aparece ao ganhar o foco. No toque não há passar por cima: lá ele fica sempre. */
+@media (hover:hover){
+  .side-head .mini{position:absolute;top:12px;right:10px;margin:0;opacity:0}
+  .side-head:hover .mini,.side-head .mini:focus-visible{opacity:1}
+  .side-head:hover .sh-conta,.side-head:focus-within .sh-conta{opacity:0}
+}
+
+/* ============================ CONVERSAS ============================ */
+
+/* uso do plano: um bloco por IA. Logo na cor da IA (SÓ o logo) + nome + plano; barras Sessão e
+   Semana com rótulo 11, % 600 tabular, "zera …" em label-3, trilho de 3 em fill-1 e o
+   preenchimento em label-2 (nada de azul: uso não é ação). */
+/* A linha da IA tem a geometria da linha de título do desenho (26/09): 20 de altura, logo de
+   16 e o nome 8pt depois dele, o plano à direita em 11/16 label-2, e 12 até a barra Sessão. O
+   nome da IA fica em 13/16 600 e não em Title 3: na lista única o título da coluna é
+   "Conversas", e quatro nomes de IA no mesmo corpo do título brigariam com ele. */
+.cv-uso{gap:12px;padding:0 16px 12px}
+.cv-uso-motor{gap:12px;border-radius:0}
+.cv-uso-cab{min-height:20px;gap:8px;font:var(--f-body)}
+.cv-uso-logo{width:16px;height:16px}
+.cv-uso-logo svg{width:16px;height:16px}
+.cv-uso-nome{font:var(--f-headline);color:var(--label-1)}
+.cv-uso-plano{font:400 11px/16px var(--font-sans);color:var(--label-2);text-transform:capitalize}
+.cv-uso-entrar{flex:none;height:22px;padding:0 10px;border:0;border-radius:6px;background:var(--fill-2);
+  color:var(--label-1);font:var(--f-callout);transition:background-color var(--dur-fast) ease-out}
+.cv-uso-entrar:hover{background:var(--fill-1)}
+.cv-uso-entrar:active{background:var(--separator-strong)}
+.cv-uso-janelas{gap:8px}
+.cv-uso-janela{gap:4px}
+.cv-uso-top{font:var(--f-sub);font-variant-numeric:tabular-nums}
+.cv-uso-rot{color:var(--label-2)}
+.cv-uso-pct{font-weight:600;color:var(--label-1)}
+.cv-uso-zera{margin-left:6px;color:var(--label-3)}
+.cv-uso-barra{height:3px;border-radius:2px;background:var(--fill-1)}
+.cv-uso-barra span{height:3px;border-radius:2px;background:var(--label-2)}
+.cv-uso-motor:not(.sem-conta):hover .cv-uso-rot{color:var(--label-1)}
+
+/* pop-up de pasta + campo de busca na mesma linha, os dois com 24 de altura em fill-2 */
+.side-ferramentas{flex:none;position:relative;display:flex;gap:6px;padding:0 16px 10px}
+.side-filtro{flex:none;max-width:132px;height:24px;margin:0;padding:0 6px 0 8px;display:flex;align-items:center;gap:4px;
+  border:0;border-radius:6px;background:var(--fill-2);color:var(--label-1);font:400 12px/15px var(--font-sans);
+  transition:background-color var(--dur-fast) ease-out}
+.side-filtro:hover{background:var(--fill-1);color:var(--label-1)}
+.side-filtro:active{background:var(--separator-strong)}
+.side-filtro.on{border:0;color:var(--label-1)}
+.sf-ic,.sb-ic{flex:none;display:flex}
+.sf-ic .ic,.sb-ic .ic,.sf-seta .ic{width:12px;height:12px}
+.sf-txt{flex:0 1 auto;margin-left:2px}
+.sf-seta{flex:none;display:flex;width:auto;height:auto;border:0;opacity:1;color:var(--label-3)}
+.side-busca-cx{flex:1;min-width:0;height:24px;padding:0 8px;display:flex;align-items:center;gap:6px;
+  border-radius:6px;background:var(--fill-2);color:var(--label-3);cursor:text}
+.side-busca-cx:focus-within{box-shadow:var(--anel-foco)}
+.side-busca{flex:1;min-width:0;height:100%;margin:0;padding:0;border:0;border-radius:0;background:transparent;
+  color:var(--label-1);font:400 12px/15px var(--font-sans);outline:none}
+.side-busca:focus{border-color:transparent}
+.side-busca::placeholder{color:var(--label-3)}
+
+/* a lista de pastas abre como popover logo abaixo da linha (raio 12, padding 6, sombra de
+   flutuar). Opaco (--bg-elevated) e não vidro: ele abre POR CIMA da coluna, que já é vidro, e
+   vidro sobre vidro o desenho não deixa. Item atual com ✓; destacado em azul, como os menus. */
+.side-pastas{position:absolute;z-index:30;top:28px;left:16px;right:16px;margin:0;max-height:min(360px,60vh);
+  overflow-y:auto;padding:6px;border:0;border-radius:12px;background:var(--bg-elevated);box-shadow:var(--shadow-float);
+  display:flex;flex-direction:column;gap:1px}
+html[data-theme$="-hc"] .side-pastas{box-shadow:var(--shadow-float),inset 0 0 0 1px var(--glass-edge)}
+.sp-item{flex:none;width:100%;height:24px;padding:0 8px;display:flex;align-items:center;gap:6px;border-radius:6px;
+  font:var(--f-body);color:var(--label-1);text-align:left}
+.sp-item::before{content:"";flex:none;width:12px;height:12px;background:currentColor;visibility:hidden;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px 12px no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px 12px no-repeat}
+.sp-item.on{background:transparent;color:var(--label-1);font-weight:400}
+.sp-item.on::before{visibility:visible}
+.sp-item:hover{background:var(--accent);color:var(--on-accent)}
+.sp-q{flex:none;font:400 12px/15px var(--font-sans);color:var(--label-3);font-variant-numeric:tabular-nums}
+.sp-item:hover .sp-q{color:rgba(255,255,255,.82)}
+
+/* faixa dos grupos que ele criou: pílulas de 22, a escolhida em fill-1 (sem contorno azul) */
+.grp-abas{gap:4px;padding:0 16px 10px}
+.aba-grupo{height:22px;max-width:120px;padding:0 8px;gap:5px;border:0;border-radius:6px;background:transparent;
+  color:var(--label-2);font:500 12px/15px var(--font-sans);
+  transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
+.aba-grupo:hover{background:var(--fill-3);color:var(--label-1)}
+.aba-grupo.on{background:var(--fill-1);color:var(--label-1);font-weight:600;border-color:transparent}
+.aba-grupo.aba-add{padding:0 5px;color:var(--label-3)}
+.aba-grupo.aba-add .ic{width:12px;height:12px}
+.aba-grupo .aba-cor{width:7px;height:7px;border-radius:50%}
+
+/* "Novo chat nesta aba ⌘T": linha de 28 sem moldura, lápis de 14 em label-2, atalho em label-3.
+   O atalho vem antes no HTML (o teste do nome exige que o botão termine no texto): o order o leva
+   para a direita. */
+.new-chat{flex:none;height:28px;margin:0 8px 6px;padding:0 8px;display:flex;align-items:center;gap:8px;
+  border:0;border-radius:6px;background:transparent;color:var(--label-1);font:var(--f-body);text-align:left;
+  transition:background-color var(--dur-fast) ease-out}
+.new-chat:hover{background:var(--fill-3)}
+.new-chat:active{background:var(--fill-2)}
+.new-chat .ic{flex:none;width:14px;height:14px;color:var(--label-2)}
+.nc-atalho{order:2;margin-left:auto;font:var(--f-sub);color:var(--label-3)}
+
+/* a IA cuja lista não veio: pílula curta (o motivo fica no title) */
+.cv-erros{padding:0 16px 8px}
+.cv-erro{height:22px;padding:0 8px;border-radius:6px;background:var(--fill-2);color:var(--label-2);font:400 12px/15px var(--font-sans)}
+.cv-erro:hover{color:var(--label-1)}
+
+/* a lista: fio de 1pt em cima, grupos Hoje/Ontem/... (11, 600, label-2) e itens de 28 */
+.hist{flex:1;min-height:0;overflow:auto;padding:10px 0 12px 8px;border-top:1px solid var(--separator)}
+.hist-load{padding:6px 8px;font:400 12px/16px var(--font-sans);color:var(--label-3)}
+/* o cabeçalho do grupo gruda no alto ao rolar: fundo da própria coluna, para o item passar por baixo.
+   top:-10px = o padding de cima da lista: com 0 ele grudava 10pt abaixo da borda e o item que
+   subia aparecia cortado por cima dele. */
+.hist-cab{position:sticky;top:-10px;z-index:2;margin-top:10px;margin-bottom:1px;padding:4px 8px 4px;font:600 11px/14px var(--font-sans);
+  color:var(--label-2);text-transform:none;letter-spacing:0;
+  background:linear-gradient(var(--bg-sidebar),var(--bg-sidebar)),var(--bg-window)}
+.hist-cab:first-child{margin-top:-4px}
+/* "no nome", "dentro da conversa", "setembro": o grupo começa com maiúscula, como "Hoje" */
+.hist-cab::first-letter{text-transform:uppercase}
+.hist-item{height:28px;margin-bottom:1px;padding:0 8px;gap:8px;border-radius:6px;color:var(--label-1)}
+.hist-item:hover{background:var(--fill-3)}
+/* selecionada = a conversa do chat EM FOCO (.no-foco, pintarAberta): fill-1 e peso 600, uma só.
+   Aberta em outro chat da tela: só o título em 500, sem fundo — com o fundo em todas, três chats
+   abertos acendiam três linhas iguais. A clicada por último (.on) não pinta mais nada: ela já é
+   a do chat em foco, e depois que ele troca de chat o destaque tem de ir junto. Antes era um
+   contorno azul (borda colorida o desenho não quer). */
+.hist-item.on,.hist-item.aberta{background:transparent;outline:0}
+.hist-item.aberta .hi-t{font-weight:500}
+.hist-item.no-foco{background:var(--fill-1)}
+.hist-item.no-foco .hi-t{font-weight:600}
+/* foco do teclado: anel de 2 em accent 45% (folha do Sistema, "Item da lista de conversas") */
+.hist-item:focus-visible{outline:none;box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 45%,transparent)}
+/* título + logos das IAs da conversa + tempo à direita. No HTML o tempo vem primeiro (a busca e os
+   testes contam com essa ordem): o order põe cada peça no lugar do desenho sem mexer no DOM. */
+.hi-t{order:1;font:var(--f-body);color:var(--label-1)}
+.hist-item.favorita .hi-t{color:var(--label-1)}
+.hi-motores{order:2;gap:3px}
+.hi-w{order:3;font:var(--f-sub);color:var(--label-3);font-variant-numeric:tabular-nums}
+.hi-fav{order:4}
+.hi-edit{order:5}
+.hi-grupo{order:6}
+.hi-mais{order:7}
+/* os botões da linha (estrela, lápis, pasta de grupo, "…"): botão-ícone mini, só no hover */
+.hi-fav,.hi-edit,.hi-grupo,.hi-mais{height:20px;border-radius:6px;color:var(--label-3);
+  transition:width .12s,opacity .12s,background-color var(--dur-fast) ease-out}
+.hi-fav:hover,.hi-edit:hover,.hi-grupo:hover,.hi-mais:hover{background:var(--fill-2);color:var(--label-1)}
+.hi-fav .ic,.hi-edit .ic,.hi-grupo .ic,.hi-mais .ic{width:12px;height:12px}
+/* favorita: estrela cheia em label-2, sem amarelo (cor fica para estado, não para enfeite) */
+.hi-fav.on{color:var(--label-2)}
+.hi-fav.on .ic{fill:currentColor;stroke:currentColor}
+.hi-fav.on:hover{color:var(--label-1)}
+/* Os quatro botões da linha não estão no desenho (a folha do Sistema mostra o hover só com o
+   fundo fill-3): são funções da lista que só aparecem com o mouse em cima. Fora do hover eles
+   ficam com largura zero e o recuo cancela o vão INTEIRO do item (8): o style.css cancelava 7,
+   do vão antigo, e sobrava 1pt por botão, que empurrava o tempo 4pt para dentro da borda.
+   No hover o tempo sai da frente e os quatro entram juntos, com 2 entre eles (um grupo só): o
+   título fica com ~134pt em vez dos ~116 de antes. Só com mouse; no toque os botões ficam
+   sempre à vista (celular.css). */
+@media (hover:hover){
+  .hist-item:not(.com-trecho):not(.com-onde) .hi-fav:not(.on),
+  .hist-item:not(.com-trecho):not(.com-onde) .hi-edit,
+  .hist-item:not(.com-trecho):not(.com-onde) .hi-grupo:not(.on),
+  .hist-item:not(.com-trecho):not(.com-onde) .hi-mais{margin-left:-8px}
+  .hist-item:not(.com-trecho):not(.com-onde):hover .hi-w{display:none}
+  .hist-item:not(.com-trecho):not(.com-onde):hover .hi-fav{margin-left:0}
+  .hist-item:not(.com-trecho):not(.com-onde):hover :is(.hi-edit,.hi-grupo,.hi-mais){margin-left:-6px}
+}
+
+/* resultado da busca: título, "IA · cliente" em label-3 e o trecho achado com a marca amarela */
+.hist-item.com-onde,.hist-item.com-trecho{height:auto;min-height:28px;padding:6px 8px}
+.hist-item.com-onde .hi-t,.hist-item.com-trecho .hi-t{line-height:16px}
+.hi-onde{margin-top:1px;font:var(--f-sub);color:var(--label-3)}
+.hi-trecho{margin-top:2px;font:var(--f-sub);color:var(--label-2)}
+.hi-marca{padding:0 1px;border-radius:3px;background:var(--highlight);color:inherit}
+.hist-item.com-onde .hi-w{right:8px;bottom:6px}
+/* o trecho corta na MARGEM (não no padding) antes do tempo: com padding, a marca amarela de uma
+   palavra cortada pelas reticências ainda pintava o fundo embaixo do "2 d" */
+.hist-item.com-onde .hi-onde,.hist-item.com-onde .hi-trecho{padding-right:0;margin-right:44px}
+/* com mouse, os botões só aparecem no hover: fora dele o título usa a linha inteira */
+@media (hover:hover){
+  .hist-item.com-onde:not(:hover) .hi-t{padding-right:0}
+  .hist-item.com-onde:not(:hover):has(.hi-fav.on,.hi-grupo.on) .hi-t{padding-right:98px}
+  .hist-item.com-onde:not(:hover) .hi-fav:not(.on),.hist-item.com-onde:not(:hover) .hi-edit,
+  .hist-item.com-onde:not(:hover) .hi-grupo:not(.on),.hist-item.com-onde:not(:hover) .hi-mais{visibility:hidden}
+}
+.hist-item.com-onde .hi-fav,.hist-item.com-onde .hi-edit,.hist-item.com-onde .hi-grupo,.hist-item.com-onde .hi-mais,
+.hist-item.com-trecho .hi-fav,.hist-item.com-trecho .hi-edit,.hist-item.com-trecho .hi-grupo,.hist-item.com-trecho .hi-mais{top:4px}
+/* os logos das IAs ficam à DIREITA do título, como na lista (título, logos, tempo); o style.css
+   punha à esquerda. Com o mouse em cima os botões ocupam o canto e os logos saem da frente. */
+.hist-item.com-onde .hi-motores,.hist-item.com-trecho .hi-motores{float:right;margin:2px 0 0 8px}
+@media (hover:hover){
+  .hist-item.com-onde:hover .hi-motores,.hist-item.com-trecho:hover .hi-motores{display:none}
+}
+.pn-input{height:22px;padding:0 6px;border:0;border-radius:6px;background:var(--fill-2);color:var(--label-1);
+  font:var(--f-body);box-shadow:var(--anel-foco)}
+
+/* grupo que ele criou, dentro da lista: mesmo cabeçalho dos grupos de data, com seta e contador */
+.grp-cab{height:24px;margin-top:13px;padding:0 8px;gap:6px;border-radius:6px;font:600 11px/14px var(--font-sans);
+  color:var(--label-2);text-transform:none;letter-spacing:0}
+.grp-cab:first-child{margin-top:0}
+.grp-cab:hover{background:var(--fill-3);color:var(--label-1)}
+.grp-cab .chev{color:var(--label-3)}
+.grp-cab .chev .ic{width:10px;height:10px}
+.grp-cor{border-radius:50%}
+.grp-conta{font:400 11px/14px var(--font-sans);color:var(--label-3);font-variant-numeric:tabular-nums}
+.grp-gear{width:20px;height:20px;border-radius:6px;color:var(--label-3)}
+.grp-gear:hover{background:var(--fill-2);color:var(--label-1)}
+.grp-gear .ic{width:12px;height:12px}
+.grp-vazio{padding:4px 8px 6px;font:var(--f-sub);color:var(--label-3)}
+.grp-corpo{margin-top:1px}
+
+/* ============================ TORRE ============================ */
+.torre{padding:0 0 12px 8px;gap:1px;font:var(--f-body)}
+/* só aparece sem chat nenhum aberto ("Nenhum chat aberto"): o resumo com a contagem saiu da tela */
+.torre-resumo{padding:0 8px 10px;font:var(--f-sub);color:var(--label-3);font-variant-numeric:tabular-nums}
+/* grupo por aba: 11, 600, label-2; a bolinha azul saiu (azul é "resposta nova") */
+.torre-aba{margin-top:15px;padding:0 8px 4px;gap:8px;font:600 11px/14px var(--font-sans);color:var(--label-2);
+  text-transform:none;letter-spacing:0}
+/* o primeiro grupo cola no título (y=46 no desenho) */
+.torre-aba:first-child,.torre-resumo + .torre-aba{margin-top:0}
+.torre-cor{display:none}
+.torre-conta{font-weight:400;color:var(--label-3);font-variant-numeric:tabular-nums}
+.torre-fora{padding-top:12px;border-top:1px solid var(--separator)}
+/* linha: logo de 14 + título + linha de estado (sinal + texto 11). Selecionada = o chat em foco */
+.torre-item{flex-wrap:wrap;align-items:flex-start;gap:0 8px;padding:6px 8px;border-radius:6px;
+  transition:background-color var(--dur-fast) ease-out}
+.torre-item:hover{background:var(--fill-3)}
+.torre-item.foco{background:var(--fill-1)}
+.torre-item.fora{cursor:default}
+.torre-item.fora:hover{background:transparent}
+.ti-logo{flex:none;width:14px;height:14px;margin-top:1px;display:flex;color:var(--label-2)}
+.ti-logo svg{width:14px;height:14px}
+.ti-logo[data-motor="claude"]{color:var(--logo-claude)}
+.ti-logo[data-motor="codex"]{color:var(--logo-codex)}
+.ti-logo[data-motor="gemini"]{color:var(--logo-gemini)}
+.ti-logo[data-motor="grok"]{color:var(--logo-grok)}
+.ti-logo[data-motor="acp"]{color:var(--acp)}
+.ti-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.ti-cab{display:flex;align-items:center;gap:8px;min-width:0}
+.ti-tit{flex:1;min-width:0;font:var(--f-body);color:var(--label-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ti-caminho{font:400 12px/16px var(--font-mono)}
+.ti-ha{flex:none;font:var(--f-sub);color:var(--label-3);font-variant-numeric:tabular-nums}
+.ti-est{display:flex;align-items:center;gap:6px;min-width:0;font:var(--f-sub);color:var(--label-2);
+  font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
+.ti-est-txt{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.ti-sinal:not(.rd-anel):not(.rd-espera):not(.rd-nova){display:none}
+/* resposta nova: ponto azul de 6 (na linha de estado da torre o desenho usa 6, não os 7 da aba) */
+.ti-sinal.rd-nova{width:6px;height:6px}
+.ti-sinal.rd-anel{width:9px;height:9px}
+.ti-sinal.rd-espera{width:12px;height:12px;font-size:9px}
+.torre-item.espera .ti-est{color:var(--status-wait-text)}
+.torre-item.vazio .ti-est{color:var(--label-3)}
+/* sessão de fora: caminho em mono + tempo; embaixo "Copiar comando" e "Abrir pasta" (22, fill-2).
+   Os dois somam 227 e o vão é de 226: o próprio desenho passa 1pt da borda do item (o "Abrir pasta"
+   termina em x=266). O recuo de -2 à direita (1 do desenho + 1 de folga para o arredondamento
+   do texto) mantém os dois lado a lado nos 280;
+   com a coluna mais estreita (a alça deixa ir até 220) o segundo DESCE para a linha de baixo em
+   vez de sair da coluna cortado ("Abri"). */
+.ti-acoes{flex:1 0 calc(100% + 2px);flex-wrap:wrap;gap:6px;margin-right:-2px;padding:6px 0 0 22px}
+.ti-acao{flex:none;height:22px;padding:0 8px;display:flex;align-items:center;gap:5px;border:0;border-radius:6px;
+  background:var(--fill-2);color:var(--label-1);font:400 12px/15px var(--font-sans);white-space:nowrap;align-self:auto;
+  transition:background-color var(--dur-fast) ease-out}
+.ti-acao .ic{width:12px;height:12px}
+.ti-acao:hover{background:var(--fill-1);color:var(--label-1);border-color:transparent}
+.ti-acao:active{background:var(--separator-strong)}
+
+/* ============================ ROTINAS ============================ */
+.rot{padding:0 0 12px 8px;gap:2px;font:var(--f-body)}
+.rot-carregando{padding:0 8px;font:var(--f-sub);color:var(--label-3)}
+/* só para exceção (lista vazia, launchd que não respondeu, lista velha): a contagem foi para o
+   cabeçalho (.sh-conta) e o resumo por extenso para a dica dela */
+.rot-resumo{padding:0 8px 10px;font:var(--f-sub);color:var(--label-3);font-variant-numeric:tabular-nums}
+.rot-grupo{margin-top:12px;padding:0 8px 4px;gap:8px;font:600 11px/14px var(--font-sans);color:var(--label-2);
+  text-transform:none;letter-spacing:0}
+.rot > .rot-grupo:first-child,.rot > .rot-caixa:first-child > .rot-grupo:first-child,
+.rot-resumo + .rot-grupo,.rot-resumo + .rot-caixa > .rot-grupo:first-child{margin-top:0}
+.rot-conta{font-weight:400;color:var(--label-3);font-variant-numeric:tabular-nums}
+.rot-grupo.clicavel{height:24px;padding:0 8px;border-radius:6px}
+.rot-grupo.clicavel:hover{background:var(--fill-3);color:var(--label-1)}
+.rot-seta{opacity:1;color:var(--label-3)}
+.rot-seta svg{width:10px;height:10px}
+/* o bloco das que pararam vem primeiro, sem caixa colorida: o que diz "parou" é o triângulo
+   vermelho de cada linha e o texto do motivo (forma + texto, nunca só cor) */
+.rot-caixa{display:flex;flex-direction:column;gap:2px;margin:0;padding:0;border:0;border-radius:0;background:transparent}
+.rot-caixa .rot-grupo{color:var(--status-error)}
+.rot-item{flex-wrap:nowrap;align-items:flex-start;gap:10px;padding:8px;border-radius:6px;
+  transition:background-color var(--dur-fast) ease-out}
+.rot-item:hover{background:var(--fill-3)}
+.ri-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.ri-nome{display:flex;align-items:center;gap:6px;min-width:0}
+.ri-alerta{flex:none;display:flex;color:var(--status-error)}
+.ri-alerta:empty{display:none}
+.ri-alerta .ic{width:12px;height:12px}
+.ri-tit{min-width:0;font:500 13px/16px var(--font-sans);color:var(--label-1)}
+.ri-est{display:flex;align-items:center;gap:6px;min-width:0;font:var(--f-sub);color:var(--label-2)}
+.ri-est-txt{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.ri-sinal:not(.rd-anel){display:none}
+.ri-sinal.rd-anel{width:9px;height:9px}
+.ri-quando{font:var(--f-sub);color:var(--label-3);font-variant-numeric:tabular-nums;white-space:normal}
+.rot-item.espera .ri-est{color:var(--status-error);font-weight:400;white-space:normal}
+.rot-item.espera .ri-est-txt,.rot-item.fora .ri-est-txt{white-space:normal}
+/* ▶ Disparar: botão de 26 com raio 6 em fill-3, à direita e no alto da linha */
+.ri-acao{flex:none;width:26px;height:26px;margin:0;padding:0;display:grid;place-items:center;align-self:flex-start;
+  border:0;border-radius:6px;background:var(--fill-3);color:var(--label-2);
+  transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
+.ri-acao .ic{width:12px;height:12px}
+.ri-acao .rd-anel{width:10px;height:10px}
+.ri-acao:hover{background:var(--fill-2);color:var(--label-1);border-color:transparent}
+.ri-acao:active{background:var(--fill-1)}
+/* desativado = o do botão normal da folha do Sistema: fill-3 + label-3 (label-4 sobre fill-4
+   sumia no claro) */
+.ri-acao:disabled,.ri-acao:disabled:hover{opacity:1;background:var(--fill-3);color:var(--label-3);cursor:default}
+
+/* ============================ AJUSTES ============================
+   Grupos Geral, Entrada e Avançado: rótulo 11/600 em label-2 e o cartão em fill-4, raio 10,
+   contorno de 1pt. Cada linha tem 36: título + (i) + controle, fio de 1pt entre as linhas. */
+.settings{flex:1;min-height:0;overflow:auto;padding:0 4px 16px 12px;display:flex;flex-direction:column;gap:14px}
+.aj-grupo{display:flex;flex-direction:column;gap:6px}
+.aj-gtit{padding:0 4px;font:600 11px/14px var(--font-sans);color:var(--label-2)}
+.aj-cartao{display:flex;flex-direction:column;border-radius:10px;background:var(--fill-4);
+  box-shadow:inset 0 0 0 1px var(--separator)}
+.aj{display:flex;flex-wrap:wrap;align-items:center;column-gap:8px;min-height:36px;padding:0 10px;
+  border-top:1px solid var(--separator)}
+.aj:first-child{border-top:0}
+/* 36 de linha + o fio de 1 em cima = 37 a partir da segunda (o cartão Geral mede 110, como no
+   desenho); o fio é borda, então sem isto ele comia 1pt da linha */
+.aj + .aj{border-top:1px solid var(--separator);min-height:37px}
+.aj-tit{flex:1;min-width:0;min-height:0;margin:0;display:flex;align-items:center;justify-content:space-between;gap:8px;
+  font:var(--f-body);color:var(--label-1);text-transform:none;letter-spacing:0}
+.aj-txt{flex:none;font:400 12px/15px var(--font-sans);color:var(--label-2);font-variant-numeric:tabular-nums}
+/* (i): a explicação fica no tooltip, nunca na tela */
+.info{width:18px;height:18px;margin:0 -2px;border-radius:50%;color:var(--label-3);
+  transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
+.info svg{width:14px;height:14px}
+.info:hover,.info:focus-visible,.info.aberto{background:var(--fill-3);color:var(--label-1)}
+.dica{max-width:250px;padding:6px 10px;border:0;border-radius:8px;background:var(--bg-elevated);color:var(--label-1);
+  font:400 12px/16px var(--font-sans);box-shadow:var(--shadow-float)}
+html[data-theme$="-hc"] .dica{box-shadow:var(--shadow-float),inset 0 0 0 1px var(--glass-edge)}
+/* o que vem embaixo da linha (endereço do celular, aviso do atalho de voz) ocupa a largura toda */
+.aj .web-info,.aj .hint{flex:1 0 100%;margin:0 0 10px}
+.aj .hint{font:var(--f-sub);color:var(--status-wait-text)}
+.web-info{padding:6px 8px;border:0;border-radius:6px;background:var(--fill-3);font:var(--f-sub);color:var(--label-2)}
+.web-info b{font:400 11px/16px var(--font-mono);color:var(--label-1)}
+
+/* toggle 32×18: bolinha branca de 14; ligado em --status-ok (verde do sistema, não o azul) */
+.settings .chave{flex:none;margin:0;min-height:0;gap:0;flex-direction:row;justify-content:flex-end}
+.settings .chave span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.chave input{width:32px;height:18px;margin:0;border:0;border-radius:9px;background:var(--fill-1);
+  transition:background-color var(--dur-fast) ease-out}
+.chave input::after{top:2px;left:2px;width:14px;height:14px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);
+  transition:transform var(--dur-fast) ease-out}
+.chave input:checked{background:var(--status-ok)}
+.chave input:checked::after{transform:translateX(14px);background:#fff}
+.chave input:focus-visible{outline:none;box-shadow:var(--anel-foco)}
+.chave input:disabled{background:var(--fill-2);opacity:.45;cursor:default}
+/* contraste aumentado: o trilho desligado ganha contorno (o fill-1 do claro some no cartão) */
+html[data-theme$="-hc"] .chave input:not(:checked){box-shadow:inset 0 0 0 1px var(--separator-strong)}
+html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inset 0 0 0 1px var(--separator-strong),var(--anel-foco)}
+
+/* Aparência: pop-up de 22 em fill-2 à direita, como a Pasta inicial ("Automática ⇅"). O <select>
+   de verdade fica invisível por cima do botão inteiro: o clique abre o menu do sistema, e o anel
+   de foco do teclado aparece no botão. Os seletores velhos (.temas, .tema-bt) saíram do HTML. */
+.aj-sel{position:relative;cursor:default}
+.aj-sel select{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:0;opacity:0;
+  font:400 12px/15px var(--font-sans);cursor:default;-webkit-appearance:none;appearance:none}
+.aj-sel:focus-within{box-shadow:var(--anel-foco)}
+
+/* Foto: círculo de 22 + botões small (22, fill-2, raio 6) */
+.foto-linha{flex:none;gap:6px}
+.foto-prev{width:22px;height:22px;border:0;background:var(--fill-2);color:var(--label-3);font-size:10px}
+.foto-prev .ic{width:12px;height:12px}
+.foto-btns{flex:none;flex-direction:row;gap:6px}
+.foto-btns .btn-wide,.foto-btns .btn-wide:hover{width:auto}
+/* "Remover" não está no desenho (só "Alterar…"): com mouse ele aparece ao passar sobre a linha
+   da Foto (ou ao chegar nela pelo Tab); fora disso a linha fica igual ao desenho, com o (i) perto
+   do controle. No toque, sem passar por cima, ele fica sempre. */
+@media (hover:hover){
+  .aj:not(:hover):not(:focus-within) #btnFotoTirar{display:none}
+}
+.foto-btns .btn-wide,.aj-pop{height:22px;margin:0;padding:0 8px;border:0;border-radius:6px;background:var(--fill-2);
+  color:var(--label-1);font:400 12px/15px var(--font-sans);white-space:nowrap;
+  transition:background-color var(--dur-fast) ease-out}
+.foto-btns .btn-wide:hover,.aj-pop:hover{background:var(--fill-1)}
+.foto-btns .btn-wide:active,.aj-pop:active{background:var(--separator-strong)}
+/* pop-up com a pasta dentro: 22 de altura, até 120 de largura, corta pelo começo do caminho */
+.aj-pop{flex:0 1 auto;min-width:0;max-width:120px;padding:0 4px 0 8px;display:flex;align-items:center;gap:2px}
+.aj-pop .path-box{flex:0 1 auto;min-width:0;padding:0;border:0;border-radius:0;background:none;
+  font:400 12px/15px var(--font-sans);color:var(--label-1);user-select:none}
+.aj-seta{flex:none;display:flex;color:var(--label-3)}
+.aj-seta .ic{width:12px;height:12px}
+
+/* ============================ CELULAR ============================
+   Só no telefone (index-web.html, a página que tem o #btnGaveta): lá a coluna é gaveta POR CIMA
+   do chat, então o vidro é de verdade (translúcido + desfoque), a sombra é a de flutuar (a preta
+   de 40px pesava no claro) e o véu atrás é o --scrim do tema. Alvos de toque maiores e a busca com
+   16px (o Safari dá zoom sozinho em campo com letra menor). Numa janela estreita do Mac nada disto
+   vale: a coluna continua ao lado do chat, opaca, com os itens de 28. */
+@media (max-width: 820px), (pointer: coarse) and (max-width: 1100px) {
+  body:has(#btnGaveta) #sidebar{background:var(--bg-sidebar);box-shadow:var(--shadow-float)}
+  body.gaveta::before{background:var(--scrim)}
+  /* na gaveta translúcida um fundo no cabeçalho virava uma faixa mais clara: lá ele não gruda */
+  body:has(#btnGaveta) .hist-cab{position:static;background:none}
+  body:has(#btnGaveta) :is(.side-filtro,.side-busca-cx){height:32px}
+  body:has(#btnGaveta) .side-filtro{max-width:150px}
+  body:has(#btnGaveta) .side-busca{font-size:16px}
+  body:has(#btnGaveta) .new-chat{height:40px}
+  body:has(#btnGaveta) .hist-item{height:auto;min-height:40px;padding:10px 9px}
+  body:has(#btnGaveta) .sp-item{height:36px}
+  body:has(#btnGaveta) .aj{min-height:44px}
+}

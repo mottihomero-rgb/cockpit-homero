@@ -16,7 +16,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const Ajv = require('ajv');
-const { loadMain } = require('./main-harness.cjs');
+const { loadMain: loadMainBase } = require('./main-harness.cjs');
+const loadMain = () => loadMainBase({ directories: ['/projeto', '/projetos/cockpit'] });
 
 const ler = (f) => fs.readFileSync(path.resolve(__dirname, '..', f), 'utf8');
 const app = ler('renderer/app.js');

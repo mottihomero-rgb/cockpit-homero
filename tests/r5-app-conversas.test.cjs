@@ -39,7 +39,7 @@ function pegarConst(nome, src = app) {
 const CADEIA = ['ligacaoDe', 'partesDaCadeia', 'tituloDaCadeia', 'motoresDaCadeia', 'itemDaCadeia',
   'montarCadeias', 'mapaDasCadeias'];
 function contexto(extras = {}) {
-  const ctx = { console, Map, Set, Math, Object, Promise, Date, LIGACOES: {}, NOMES_LIGADOS: {}, ...extras };
+  const ctx = { console, Map, Set, Math, Object, Promise, Date, clearTimeout() {}, setTimeout() {}, savePanes() {}, note() {}, LIGACOES: {}, NOMES_LIGADOS: {}, ...extras };
   vm.createContext(ctx);
   vm.runInContext([pegarConst('chaveParte'), pegarConst('refDaParte'), pegarConst('chaveFav')].join('\n')
     + '\nthis.chaveParte = chaveParte; this.refDaParte = refDaParte; this.chaveFav = chaveFav;', ctx);
@@ -60,7 +60,7 @@ function contextoTroca() {
   return { ctx, gravadas };
 }
 
-test('troca de IA: a parte anterior fica guardada e a ligação nova → anterior é gravada quando o motor novo abre', () => {
+test('troca de IA: a parte anterior fica guardada e a ligação nova → anterior é gravada quando o motor novo abre', async () => {
   const { ctx, gravadas } = contextoTroca();
   // 25/09 (consertos): a conversa de antes tem conteúdo na tela — é dele que sai o contexto
   const P = { engine: 'claude', cwd: '/p', sessaoId: 'A', resumeId: 'A', sessaoFile: '/c/A.jsonl', partesAnteriores: [],
@@ -69,7 +69,7 @@ test('troca de IA: a parte anterior fica guardada e a ligação nova → anterio
   P.engine = 'codex'; P.sessaoId = null; P.resumeId = null; P.sessaoFile = '';
   // o Codex abriu a conversa dele (evento 'sessao')
   P.sessaoId = 'C'; P.resumeId = 'C'; P.sessaoFile = '/x/C.jsonl';
-  ctx.ligarParteAnterior(P);
+  await ctx.ligarParteAnterior(P);
   assert.equal(gravadas.length, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(gravadas[0])), {
     nova: { engine: 'codex', id: 'C', file: '/x/C.jsonl', cwd: '/p' },
@@ -80,7 +80,7 @@ test('troca de IA: a parte anterior fica guardada e a ligação nova → anterio
   assert.ok(ctx.LIGACOES['codex:C'], 'a tela já enxerga a costura sem esperar reler o arquivo');
 });
 
-test('trocar duas vezes sem mandar nada não cria ligação fantasma', () => {
+test('trocar duas vezes sem mandar nada não cria ligação fantasma', async () => {
   const { ctx, gravadas } = contextoTroca();
   const P = { engine: 'claude', cwd: '/p', sessaoId: 'A', resumeId: 'A', sessaoFile: '', partesAnteriores: [],
     hist: [{ quem: 'Você', texto: 'quero o vídeo' }] };
@@ -90,7 +90,7 @@ test('trocar duas vezes sem mandar nada não cria ligação fantasma', () => {
   P.engine = 'gemini';
   assert.equal(P.parteAnterior.id, 'A', 'a parte pendente continua sendo a do Claude, não um Codex vazio');
   P.sessaoId = 'G';
-  ctx.ligarParteAnterior(P);
+  await ctx.ligarParteAnterior(P);
   assert.equal(gravadas.length, 1, 'uma ligação só: Gemini → Claude');
   assert.equal(gravadas[0].anterior.id, 'A');
   assert.equal(gravadas[0].nova.id, 'G');
@@ -141,7 +141,7 @@ function contextoTrocarMotor() {
   };
   vm.runInContext([pegar('guardarParteAnterior'), pegar('ligarParteAnterior'), pegar('trocarMotor'), pegar('forkClaude')].join('\n'), ctx);
   // o que o evento 'sessao' faz quando o motor novo abre a conversa dele
-  const sessao = (P, id) => { P.sessaoId = id; P.resumeId = id; P.sessaoFile = '/x/' + id + '.jsonl'; if (P.parteAnterior) ctx.ligarParteAnterior(P); };
+  const sessao = (P, id) => { P.sessaoId = id; P.resumeId = id; P.sessaoFile = '/x/' + id + '.jsonl'; if (P.parteAnterior) return ctx.ligarParteAnterior(P); };
   const painel = (o) => { const P = { id: 'p' + (panes.size + 1), cwd: '/p', hist: [], partesAnteriores: [], parteAnterior: null,
     blocks: new Map(), tools: new Map(), ...o }; panes.set(P.id, P); return P; };
   return { ctx, gravadas, sessao, painel };
@@ -157,7 +157,7 @@ test('trocarMotor (rodando de verdade) guarda a parte anterior ANTES de zerar o 
   assert.deepEqual(JSON.parse(JSON.stringify(P.parteAnterior)), { engine: 'claude', id: 'A', file: '/c/A.jsonl', cwd: '/p' },
     'sem guardar antes de zerar, a conversa de antes some da costura');
   assert.equal(P.passarContexto, 'CTX:quero o vídeo|feito', 'e o Codex recebe o contexto do que já foi conversado');
-  sessao(P, 'C');
+  await sessao(P, 'C');
   assert.equal(gravadas.length, 1);
   assert.equal(gravadas[0].nova.id, 'C'); assert.equal(gravadas[0].anterior.id, 'A');
   assert.match(pegar('receberEventoPane'), /case 'sessao': \{[\s\S]{0,400}if \(P\.parteAnterior\) ligarParteAnterior\(P\);/);
@@ -315,7 +315,7 @@ test('estrela e grupo ficam no item da cadeia, e a estrela antiga da parte velha
 /* ---------------- abrir a cadeia: ordem do histórico ---------------- */
 
 function contextoDesenho() {
-  const ctx = { console, Promise, feito: [], NA_VPS: (c) => String(c).startsWith('vps:') };
+  const ctx = { console, Promise, feito: [], document: { createElement: () => ({ appendChild() {} }) }, NA_VPS: (c) => String(c).startsWith('vps:') };
   vm.createContext(ctx);
   ctx.nomeDoMotor = (m) => ({ claude: 'Claude', codex: 'Codex' }[m] || m);
   ctx.marcaTroca = (P, de, para) => ctx.feito.push('troca:' + de + '>' + para);
@@ -323,7 +323,7 @@ function contextoDesenho() {
     ctx.feito.push(P.engine + ':' + m.text);
     P.hist.push({ quem: m.role === 'user' ? 'Você' : ctx.nomeDoMotor(P.engine), texto: m.text });
   };
-  vm.runInContext([pegar('lerHistoricoDaParte'), pegar('lerPartes'), pegar('desenharPartes')].join('\n'), ctx);
+  vm.runInContext([pegar('lerHistoricoDaParte'), pegar('lerPartes'), pegar('avisarPartesIndisponiveis'), pegar('desenharPartes')].join('\n'), ctx);
   return ctx;
 }
 
@@ -337,7 +337,7 @@ test('ordem de carregar: da parte mais velha para a mais nova, com a faixa de tr
         A2: [{ role: 'user', text: 'pedido 3' }] }[o.id]; },
     sessionHistoryRemoto: async () => [],
   } };
-  const P = { engine: 'claude', hist: [] };
+  const P = { engine: 'claude', hist: [], chat: { appendChild() {} } };
   const lidas = await ctx.lerPartes([A, C, A2]);
   assert.equal(ctx.desenharPartes(P, lidas), 5);
   assert.deepEqual([...ctx.feito], ['claude:pedido 1', 'claude:resp claude', 'troca:Claude>Codex',
@@ -350,7 +350,7 @@ test('ordem de carregar: da parte mais velha para a mais nova, com a faixa de tr
 test('uma parte que falha (ou sumiu) não derruba as outras', async () => {
   const ctx = contextoDesenho();
   ctx.window = { api: { sessionHistory: async (o) => { if (o.id === 'C') throw new Error('ilegível'); return [{ role: 'bot', text: o.id }]; } } };
-  const P = { engine: 'claude', hist: [] };
+  const P = { engine: 'claude', hist: [], chat: { appendChild() {} } };
   const lidas = await ctx.lerPartes([A, C, A2]);
   assert.ok(lidas[1].erro);
   ctx.desenharPartes(P, lidas);
@@ -376,14 +376,14 @@ function contextoAbrir() {
     NA_VPS: () => false, abaDoCaminho: () => ({}), nomePasta: x => x,
     newPane: (o) => { const P = { id: 'p' + (panes.size + 1), busy: false, hist: [], blocks: new Map(), tools: new Map(),
       el: el(), chat: el(), ...o }; panes.set(P.id, P); return P; },
-    invalidarConversa() {}, painelAindaAtual: () => true, escondePerm() {}, fillModels() {}, paintEngine() {},
+    lembrarDonoDoNome() {}, invalidarConversa() {}, painelAindaAtual: () => true, escondePerm() {}, fillModels() {}, paintEngine() {},
     setDot() {}, pintarPasta() {}, mostrarPastaNoPainel() {}, atualizarGit() {}, pintarModo() {}, pintarNome() {},
     setFocus: (P) => { ctx.focusPane = P; }, savePanes() {}, marcarAbertas() {}, note() {}, scroll() {}, somarTempoDoHistorico() {},
     limparPlano() {}, limparSugestoes() {}, piscar() {}, ico: () => '', $: () => el(), $$: () => [],
     renderizarHistorico: (P, m) => ctx.feito.push(P.engine + ':' + m.text),
     marcaTroca: () => ctx.feito.push('troca'), nomeDoMotor: m => m,
   });
-  vm.runInContext([pegarConst('refDaParte'), pegar('lerHistoricoDaParte'), pegar('lerPartes'), pegar('desenharPartes'),
+  vm.runInContext([pegarConst('refDaParte'), pegar('lerHistoricoDaParte'), pegar('lerPartes'), pegar('avisarPartesIndisponiveis'), pegar('desenharPartes'),
     pegar('openSession')].join('\n') + '\nthis.openSession = openSession;', ctx);
   ctx.partesDaCadeia = (s) => [s];
   ctx.window.api.sessionHistory = async (o) => [{ role: 'bot', text: o.id }];
@@ -431,7 +431,7 @@ function contextoReabrir(chats, ligacoes, historicos) {
   });
   ctx.window.api.sessionHistory = async (o) => historicos[o.id] || [];
   ctx.somarTempoDoHistorico = () => {};   // 26/09: o tempo total do chat é lido à parte
-  vm.runInContext([pegar('lerHistoricoDaParte'), pegar('lerPartes'), pegar('desenharPartes'), pegar('restaurarAbasCorpo')].join('\n')
+  vm.runInContext([pegar('lerHistoricoDaParte'), pegar('lerPartes'), pegar('avisarPartesIndisponiveis'), pegar('desenharPartes'), pegar('restaurarAbasCorpo')].join('\n')
     + '\nthis.restaurarAbasCorpo = restaurarAbasCorpo;', ctx);
   return ctx;
 }

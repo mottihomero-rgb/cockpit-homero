@@ -74,7 +74,7 @@ def sinalizar_sessao(pid, sinal):
             pass
 
 
-def encerrar_filho(pid):
+def encerrar_filho(pid, status=None):
     """Fecha o comando do terminal -- e qualquer job em 2o plano que ele
     tenha aberto na mesma sessao -- e devolve o codigo de saida do comando
     principal.
@@ -89,8 +89,7 @@ def encerrar_filho(pid):
     """
     sinalizar_sessao(pid, signal.SIGHUP)
     limite = time.time() + 1.5
-    status = None
-    while True:
+    while status is None:
         try:
             morto, st = os.waitpid(pid, os.WNOHANG)
         except ChildProcessError:
@@ -131,6 +130,9 @@ def main():
 
     pid, master = os.forkpty()
     if pid == 0:
+        # O canal de resize pertence só à ponte, nunca ao shell nem aos jobs.
+        if ctrl is not None:
+            os.close(ctrl)
         os.environ['TERM'] = os.environ.get('TERM', 'xterm-256color')
         os.environ['COLUMNS'] = str(cols)
         os.environ['LINES'] = str(rows)
@@ -214,18 +216,36 @@ def main():
         except ChildProcessError:
             break
         if fim == pid:
-            # esvazia o que sobrou na tela antes de sair
-            while True:
-                try:
-                    resto = os.read(master, 65536)
-                except OSError:
-                    break
-                if not resto:
-                    break
-                os.write(1, resto)
-            return os.waitstatus_to_exitcode(status) if hasattr(os, 'waitstatus_to_exitcode') else 0
+            # Mesmo com o shell morto, jobs da sessão podem segurar o PTY.
+            # Limpa esses filhos ANTES do dreno e preserva o código do shell.
+            return finalizar_terminal(pid, master, status)
 
-    return encerrar_filho(pid)
+    return finalizar_terminal(pid, master)
+
+
+def finalizar_terminal(pid, master, status=None):
+    codigo = encerrar_filho(pid, status)
+    try:
+        os.set_blocking(master, False)
+        # Os escritores já foram encerrados. Um último read nunca pode ficar
+        # esperando um job órfão; ainda entrega toda a saída que ficou no PTY.
+        while True:
+            try:
+                resto = os.read(master, 65536)
+            except OSError:
+                break
+            if not resto:
+                break
+            try:
+                view = memoryview(resto)
+                while view:
+                    view = view[os.write(1, view):]
+            except OSError:
+                break
+    finally:
+        os.close(master)
+    return codigo
+
 
 
 if __name__ == '__main__':

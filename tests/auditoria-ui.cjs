@@ -48,9 +48,15 @@ async function esperarPintura(page) {
 async function desenharRetangulo(page, mobileMode) {
   const ferramenta = page.locator('.qd-fer[data-f=retangulo]');
   if (mobileMode) await ferramenta.tap(); else await ferramenta.click();
+  await esperarPintura(page);
   const c = await page.locator('.qd-canvas').boundingBox();
-  const inicio = { x: c.x + 35, y: c.y + 45 };
-  const fim = { x: c.x + 155, y: c.y + 115 };
+  // As ferramentas flutuam sobre o canto do canvas. Desenhar numa área livre
+  // testa o quadro, sem acionar acidentalmente Selecionar em telas pequenas.
+  const inicio = { x: c.x + Math.min(160, c.width * .4), y: c.y + Math.min(160, c.height * .4) };
+  const fim = { x: inicio.x + 100, y: inicio.y + 70 };
+  if (!await page.evaluate(p => document.elementFromPoint(p.x, p.y)?.matches('.qd-canvas'), inicio)) {
+    throw new Error('O ponto inicial do desenho está encoberto por outro controle');
+  }
   if (mobileMode) {
     // CDP produz eventos touch reais do navegador, incluindo pointer capture.
     // Mouse em viewport estreita não comprova que desenhar com o dedo funciona.

@@ -171,8 +171,9 @@
         // de "uma resposta ao vivo chegou durante a espera" (aí sim tem que barrar embaixo).
         const busyAntes = P.busy;
         const estado = await window.api.paneEstado({ paneId: P.id }).catch(() => null);
-        if (!estado || estado.busy || (P.busy && !busyAntes) || !panes.has(P.id) || focusPane !== P || sessao(P) !== id) return;
+        if (!estado || !panes.has(P.id) || focusPane !== P || sessao(P) !== id || P.engine !== engine) return;
         if (estado.aprovacao) receberEventoPane({ paneId: P.id, kind: estado.aprovacao.tipo, ...estado.aprovacao.dados });
+        if (estado.busy || (P.busy && !busyAntes)) return;
         // R4-004: quem zera P.busy normalmente é o turn-end, que foi o evento perdido na queda
         // do WebSocket — sem reconciliar aqui, a guarda "if (P.busy...) return" mais abaixo
         // descartava a releitura e a tela ficava presa em "trabalhando…" pra sempre, mesmo com
@@ -192,7 +193,10 @@
       const msgs = lidas ? lidas[lidas.length - 1].msgs : (engine === 'claude' && NA_VPS(P.cwd))
         ? await window.api.sessionHistoryRemoto({ id })
         : await window.api.sessionHistory({ engine, file: P.sessaoFile, id, cwd: P.cwd });
-      if (P.busy || !panes.has(P.id) || sessao(P) !== id || P.engine !== engine || !Array.isArray(msgs) || !msgs.length) return;
+      if (P.busy || !panes.has(P.id) || focusPane !== P || sessao(P) !== id || P.engine !== engine) return;
+      if (lidas && lidas.some(x => x.erro)) { avisarPartesIndisponiveis(P, lidas); return; }
+      if (!Array.isArray(msgs) || !msgs.length) return;
+      if (P.historicoIncompleto) { P.historicoIncompleto = null; }
       const selo = JSON.stringify(lidas ? lidas.map(x => x.msgs) : msgs);
       if (selos.get(P) === selo) return;
       const topo = P.chat.scrollTop;

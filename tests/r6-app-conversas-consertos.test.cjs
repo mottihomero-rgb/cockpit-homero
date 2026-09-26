@@ -51,7 +51,7 @@ function contextoNome() {
   const ctx = { console, Map, Set, Math, Object, Promise, Date, LIGACOES: {}, NOMES_LIGADOS: {},
     histCache: { claude: [{ ...A }], codex: [{ ...C }] },
     window: { api: { renomear: async (o) => { renomeados.push(o); return true; } } },
-    lateralAberta: () => true, pintarConversas: () => { pinturas++; } };
+    painelAindaAtual: () => true, loadHist() {}, lateralAberta: () => true, pintarConversas: () => { pinturas++; } };
   vm.createContext(ctx);
   vm.runInContext([pegarConst('chaveParte'), pegarConst('refDaParte')].join('\n'), ctx);
   vm.runInContext(['ligacaoDe', 'partesDaCadeia', 'tituloDaCadeia', 'motoresDaCadeia', 'itemDaCadeia', 'montarCadeias',
@@ -59,24 +59,24 @@ function contextoNome() {
   return { ctx, renomeados, pinturas: () => pinturas };
 }
 
-test('nome curto novo na parte de agora vale na hora para o título da cadeia na lista', () => {
+test('nome curto novo na parte de agora vale na hora para o título da cadeia na lista', async () => {
   const { ctx, renomeados, pinturas } = contextoNome();
   ctx.LIGACOES = lig(C, A);
   ctx.NOMES_LIGADOS = { A: 'Vídeo IA' };                         // o nome que a parte do Claude ganhou
   // 4a mensagem no Codex: o nomearCurto trocou o nome e chama o salvarNomeCurto
   const P = { engine: 'codex', sessaoId: 'C', resumeId: 'C', sessaoFile: '/x/C.jsonl', titulo: 'Criação de Vídeo com IA', nomeCurto: true };
-  ctx.salvarNomeCurto(P);
+  await ctx.salvarNomeCurto(P);
   assert.equal(renomeados.length, 1, 'o nomes.json continua sendo gravado');
   const item = ctx.montarCadeias(ctx.histCache.codex.concat(ctx.histCache.claude))[0];
   assert.equal(item.title, 'Criação de Vídeo com IA', 'a lista mostrava "Vídeo IA" até fechar e abrir a lateral');
   assert.ok(pinturas() >= 1, 'com a lateral aberta a lista se redesenha');
 });
 
-test('com a lateral fechada o nome novo não redesenha a lista à toa', () => {
+test('com a lateral fechada o nome novo não redesenha a lista à toa', async () => {
   const { ctx, pinturas } = contextoNome();
   ctx.lateralAberta = () => false;
   ctx.LIGACOES = lig(C, A);
-  ctx.salvarNomeCurto({ engine: 'codex', sessaoId: 'C', sessaoFile: '/x/C.jsonl', titulo: 'Novo', nomeCurto: true });
+  await ctx.salvarNomeCurto({ engine: 'codex', sessaoId: 'C', sessaoFile: '/x/C.jsonl', titulo: 'Novo', nomeCurto: true });
   assert.equal(ctx.NOMES_LIGADOS.C, 'Novo', 'a memória da cadeia acompanha mesmo fechada');
   assert.equal(pinturas(), 0);
 });

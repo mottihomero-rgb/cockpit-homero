@@ -37,7 +37,7 @@ const PERMITIDOS = new Set([
   'voz:transcrever',
   'quadro:salvar', 'quadro:rascunhoGravar', 'quadro:rascunhoLer',
   'arquivo:ver', 'arquivo:verVps', 'term:linhaShell',
-  'conta:ler', 'uso:ler', 'agentes:claude', 'agentes:nomes', 'detalhe:perguntar', 'git:status', 'git:diff',
+  'conta:ler', 'uso:ler', 'agentes:claude', 'agentes:nomes', 'detalhe:perguntar', 'detalhe:cancelar', 'git:status', 'git:diff',
   'motores:versoes', 'motores:disponiveis', 'rotinas:listar',
   'mcp:list', 'mcp:acao', 'auth:acao',
   /* Estes tres a tela do celular OFERECE no menu, e sem eles aqui o toque so respondia
@@ -396,6 +396,8 @@ function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somente
   // aqui: vao pela rota /upload, que grava direto no disco.
   const wss = new WebSocketServer({ server: servidor, path: '/ws', maxPayload: 12 * 1024 * 1024 });
   wss.on('connection', (ws, req) => {
+    const contexto = { remoto: true, ip: ip(req), conexaoId: crypto.randomBytes(16).toString('hex') };
+    const detalhes = new Set();
     ws.on('error', (e) => { aoLog && aoLog('erro do telefone: ' + ((e && e.message) || e)); });
     // Navegadores sempre informam a origem. Sem esta checagem, uma página aberta
     // no celular poderia tentar falar com o Cockpit usando a sessão já existente.
@@ -406,7 +408,12 @@ function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somente
     ws.ck = t;                       // guarda a sessao deste telefone para reconferir depois
     clientes.add(ws); ouvintes.add(ws);
     aoLog && aoLog('telefone conectado');
-    ws.on('close', () => { clientes.delete(ws); ouvintes.delete(ws); aoLog && aoLog('telefone saiu'); });
+    ws.on('close', () => {
+      for (const requestId of detalhes) {
+        try { Promise.resolve(handlers['detalhe:cancelar'] && handlers['detalhe:cancelar'](contexto, { requestId })).catch(() => {}); } catch {}
+      }
+      detalhes.clear(); clientes.delete(ws); ouvintes.delete(ws); aoLog && aoLog('telefone saiu');
+    });
     ws.on('message', async (bruto) => {
       // A sessao era conferida uma unica vez, no aperto de mao. Quem ja estava conectado
       // nunca mais era checado: podia rodar comando no Mac para sempre, mesmo depois das
@@ -425,8 +432,12 @@ function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somente
       }
       const fn = handlers[m.nome];
       let resposta = null, erro = null;
-      try { resposta = fn ? await fn({ remoto: true, ip: ip(req) }, m.arg) : null; if (!fn) erro = 'comando desconhecido: ' + m.nome; }
+      const requestId = m.nome === 'detalhe:perguntar' && m.arg && m.arg.requestId;
+      const jaRastreado = detalhes.has(requestId);
+      if (typeof requestId === 'string') detalhes.add(requestId);
+      try { resposta = fn ? await fn(contexto, m.arg) : null; if (!fn) erro = 'comando desconhecido: ' + m.nome; }
       catch (e) { erro = String(e && e.message || e); }
+      finally { if (typeof requestId === 'string' && !jaRastreado) detalhes.delete(requestId); }
       try { ws.send(JSON.stringify({ tipo: 'resposta', id: m.id, resposta, erro })); } catch {}
     });
   });
@@ -452,25 +463,46 @@ function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somente
   // o ws se pendura no mesmo servidor e REPASSA o erro para si: sem ouvinte aqui, um
   // "porta ocupada" virava excecao nao tratada e derrubava o processo
   wss.on('error', (e) => { aoLog && aoLog('erro do canal do telefone: ' + ((e && e.message) || e)); });
+  let cancelarInicio = () => {};
   const pronto = new Promise((ok, deuErro) => {
+    let terminou = false, limite;
     const limparInicio = () => {
+      clearTimeout(limite);
       servidor.removeListener('listening', iniciou);
       servidor.removeListener('error', caiu);
+      servidor.removeListener('close', fechou);
       wss.removeListener('error', caiu);
     };
-    const iniciou = () => { limparInicio(); ok(); };
+    const iniciou = () => {
+      if (terminou) return;
+      terminou = true; limparInicio(); ok();
+    };
     const caiu = (e) => {
+      if (terminou) return;
+      terminou = true;
       limparInicio();
       try { clearInterval(varredura); } catch {}
       try { wss.close(); } catch {}
       try { servidor.close(); } catch {}
-      deuErro(new Error(e && e.code === 'EADDRINUSE'
+      const erro = new Error(e && e.code === 'EADDRINUSE'
         ? 'a porta ' + porta + ' ja esta sendo usada por outro programa'
-        : ((e && e.message) || String(e))));
+        : ((e && e.message) || String(e)));
+      if (e && e.code) erro.code = e.code;
+      deuErro(erro);
     };
+    // close() antes de listening pode emitir apenas close, sem erro. Sem rejeitar aqui,
+    // o main fica esperando para sempre e os próximos pedidos de ligar ficam presos.
+    const fechou = () => caiu(new Error('A abertura do acesso pelo celular foi cancelada.'));
+    cancelarInicio = fechou;
     servidor.once('listening', iniciou);
     servidor.once('error', caiu);
+    servidor.once('close', fechou);
     wss.once('error', caiu);
+    limite = setTimeout(() => {
+      const e = new Error('O acesso pelo celular demorou demais para abrir. Tente ligar novamente.');
+      e.code = 'ETIMEDOUT'; caiu(e);
+    }, 10000);
+    limite.unref?.();
   });
   // O Node corta sozinho qualquer pedido que passe de 5 minutos. Um video de 100 MB subindo
   // pelo 4G leva mais que isso e morria no meio, sem explicacao. Os 15 minutos valem so' para
@@ -484,6 +516,7 @@ function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somente
   const fechar = () => {
     if (encerrado) return;
     encerrado = true;
+    cancelarInicio();
     sessoes.clear(); tentativas.clear();
     clearInterval(varredura);
     for (const ws of [...clientes]) {

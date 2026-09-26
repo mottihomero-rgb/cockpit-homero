@@ -184,20 +184,10 @@ test('R1-013/R1-047: se o tailscale nao estiver servindo a porta 7788, devolve o
   assert.match(endereco, /Sem endereço/i);
 });
 
-test('R1-013/R1-047: os dois pontos de chamada usam a versao assincrona — execFileSync nao sobra em lugar nenhum do arquivo', () => {
-  // O require('./servidor-web.js') e' bloqueado de proposito no harness (nao simula o modulo
-  // de verdade), entao os dois handlers ('web:ligar' e o boot) nao dao pra rodar ponta a
-  // ponta por aqui. A prova e' no texto-fonte: os dois pontos tem de usar a forma assincrona,
-  // e a forma sincrona antiga (que ja gerou ETIMEDOUT de verdade no log) nao pode sobrar.
+test('R1-013/R1-047: boot compartilha a transição assíncrona de web:ligar, sem execFileSync', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
-  assert.match(src, /endereco:\s*await enderecoTailscale\(\)/,
-    '"web:ligar" (Ajustes > ligar o celular) tem de dar await em enderecoTailscale() antes de montar o endereco');
-  assert.match(src, /endereco:\s*'Endereço: carregando…'/,
-    'no BOOT nao da pra dar await (atrasaria a janela inteira): tem de subir com um endereco provisorio');
-  assert.match(src, /enderecoTailscale\(\)\.then\(\(end\)\s*=>\s*\{\s*if\s*\(web\)\s*web\.endereco\s*=\s*end;/,
-    'no boot, o endereco real tem de ser aplicado depois, em paralelo (.then), sem bloquear o resto do boot');
-  // so o COMENTARIO (explicando por que o conserto existe) pode citar a palavra; a CHAMADA
-  // de verdade (execFileSync( ... )) nao pode sobrar em lugar nenhum
-  assert.doesNotMatch(src, /execFileSync\s*\(/,
-    'a chamada sincrona e bloqueante (ja travou o app de verdade, 2x ETIMEDOUT no log real) nao pode sobrar em nenhum lugar do arquivo');
+  assert.match(src, /const endereco = await enderecoTailscale\(\);/);
+  assert.match(src, /HANDLERS\['web:ligar'\]\(null, true\)\.then/,
+    'o boot dispara a mesma transição em paralelo, sem bloquear janela e sem servidor concorrente');
+  assert.doesNotMatch(src, /execFileSync\s*\(/);
 });

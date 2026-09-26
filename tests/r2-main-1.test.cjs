@@ -11,7 +11,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { loadMain } = require('./main-harness.cjs');
+const { loadMain: loadMainBase } = require('./main-harness.cjs');
+const loadMain = () => loadMainBase({ directories: ['/projetos/cockpit'] });
 
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
 

@@ -30,6 +30,7 @@
 const fs = require('fs');
 const { horaDaUltimaFala } = require('./hora-da-fala');
 const path = require('path');
+const crypto = require('crypto');
 const { StringDecoder } = require('string_decoder');
 
 const COMANDO_PADRAO = 'gemini --acp';
@@ -378,15 +379,49 @@ function listarSessoes(pastaDados) {
   out.sort((a, b) => b.when - a.when);
   return out.slice(0, 300);
 }
+const MIME_MINI = { ...MIME_IMG, bmp: 'image/bmp', heic: 'image/heic', svg: 'image/svg+xml' };
+function anexosDaMensagem(anexos, texto = '', comMini = false) {
+  const lista = Array.isArray(anexos) ? anexos : [];
+  // Registros anteriores guardavam os caminhos só no texto. Recupera antes
+  // de semContexto retirar esse trecho para desenhar o balão.
+  const bloco = String(texto).match(/(?:Arquivos que anexei[^\n]*|Arquivos anexados (?:no Mac|pelo usuário)):\r?\n([\s\S]*)$/);
+  const caminhos = bloco ? bloco[1].split(/\r?\n/).map(l => l.replace(/^\s*-\s*/, '').trim()).filter(p => path.isAbsolute(p)) : [];
+  const vistos = new Set();
+  return [...lista, ...caminhos].flatMap(item => {
+    const a = typeof item === 'string' ? { path: item } : item;
+    if (!a || typeof a.path !== 'string' || !a.path || vistos.has(a.path)) return [];
+    vistos.add(a.path);
+    const ext = path.extname(a.path).slice(1).toLowerCase();
+    const r = { path: a.path, nome: String(a.nome || a.name || path.basename(a.path)), ext };
+    if (Number.isFinite(a.bytes)) r.bytes = a.bytes;
+    else try { r.bytes = fs.statSync(a.path).size; } catch {}
+    if (comMini) {
+      if (typeof a.mini === 'string') r.mini = a.mini;
+      else if (MIME_MINI[ext]) {
+        try {
+          if (fs.statSync(a.path).size <= 8 * 1024 * 1024) r.mini = 'data:' + MIME_MINI[ext] + ';base64,' + fs.readFileSync(a.path).toString('base64');
+        } catch {}
+      }
+    }
+    return [r];
+  });
+}
 function historicoDaSessao(arquivo, maxMsgs) {
   const { msgs } = lerTranscrito(arquivo);
   const out = [];
   for (const m of msgs) {
-    if (m.role === 'user') { if (String(m.text || '').trim()) out.push({ role: 'user', text: String(m.text) }); }
+    if (m.role === 'user') {
+      const attachments = anexosDaMensagem(m.attachments || m.anexos, m.text);
+      if (String(m.text || '').trim() || attachments.length) out.push({ role: 'user', text: String(m.text || ''), ...(attachments.length ? { attachments, anexos: attachments } : {}) });
+    }
     else if (m.role === 'bot') { if (String(m.text || '').trim()) out.push({ role: 'bot', text: String(m.text) }); }
     else if (m.role === 'tool') out.push({ role: 'tool', name: m.name || 'Ferramenta', arg: String(m.arg || '').slice(0, 120) });
   }
-  return out.slice(-(maxMsgs || 60));
+  return out.slice(-(maxMsgs || 60)).map(m => {
+    if (!m.attachments?.length) return m;
+    const attachments = anexosDaMensagem(m.attachments, '', true);
+    return { ...m, attachments, anexos: attachments };
+  });
 }
 
 /* ======================= o motor de verdade ======================= */
@@ -394,10 +429,12 @@ function criarAcp(dep) {
   const { emit, spawnBin, buildEnv, matarProcesso, HOME, pastaDados, aoPedirPermissao, aoCair, aoFimDoTurno } = dep;
   const autoLiberada = dep.autoLiberada || (() => false);
   const paineis = new Map();     // paneId -> st
+  const partidas = new Map();
+  const encerrando = new Map(); // aguarda o grupo anterior morrer antes de religar
   const iniciando = new Map();   // paneId -> { comando, promessa }: dois Enter durante o "Ligando…" viram UM start
 
   const escrever = (st, obj) => {
-    if (!st.proc || !st.proc.stdin) return false;
+    if (st.invalidado || !st.proc || !st.proc.stdin) return false;
     try { st.proc.stdin.write(JSON.stringify(obj) + '\n'); return true; } catch { return false; }
   };
   function mandar(st, method, params, msTimeout) {
@@ -487,6 +524,13 @@ function criarAcp(dep) {
 
   function pedidoDoAgente(st, m) {
     const p = m.params || {};
+    const geracao = st.geracao;
+    const ativo = () => paineis.get(st.paneId) === st && !st.invalidado && !st.cancelando && st.geracao === geracao;
+    const conferir = () => { if (!ativo()) throw new Error('pedido cancelado'); };
+    if (!ativo()) {
+      if (m.method === 'session/request_permission') return responder(st, m.id, { outcome: { outcome: 'cancelled' } });
+      return responderErro(st, m.id, -32800, 'pedido cancelado');
+    }
     if (p.sessionId && st.sessionId && String(p.sessionId) !== st.sessionId) {
       return responderErro(st, m.id, -32602, 'sessão desconhecida');
     }
@@ -497,10 +541,12 @@ function criarAcp(dep) {
       const alvo = caminho(p.path);
       fs.promises.stat(alvo)
         .then((s) => {
+          conferir();
           if (s.size > LIM_LEITURA) throw Object.assign(new Error('arquivo acima de 20 MB'), { code: 'EFBIG' });
           return fs.promises.readFile(alvo, 'utf8');
         })
         .then((txt) => {
+          conferir();
           if (p.line != null || p.limit != null) {
             const linhas = txt.split('\n');
             const de = Math.max(0, (Number(p.line) || 1) - 1);
@@ -510,6 +556,7 @@ function criarAcp(dep) {
           responder(st, m.id, { content: txt });
         })
         .catch((e) => {
+          if (!ativo()) return;
           // arquivo que nao existe = conteudo vazio (armadilha 4 do cabecalho)
           if (e && e.code === 'ENOENT') return responder(st, m.id, { content: '' });
           responderErro(st, m.id, -32603, 'não consegui ler: ' + (e && e.message || e));
@@ -519,9 +566,9 @@ function criarAcp(dep) {
     if (m.method === 'fs/write_text_file') {
       const alvo = caminho(p.path);
       fs.promises.mkdir(path.dirname(alvo), { recursive: true })
-        .then(() => fs.promises.writeFile(alvo, String(p.content == null ? '' : p.content), 'utf8'))
-        .then(() => responder(st, m.id, {}))
-        .catch((e) => responderErro(st, m.id, -32603, 'não consegui escrever: ' + (e && e.message || e)));
+        .then(() => { conferir(); return fs.promises.writeFile(alvo, String(p.content == null ? '' : p.content), 'utf8'); })
+        .then(() => { if (ativo()) responder(st, m.id, {}); })
+        .catch((e) => { if (ativo()) responderErro(st, m.id, -32603, 'não consegui escrever: ' + (e && e.message || e)); });
       return;
     }
     // terminal/* e o que mais vier: o Cockpit nao anunciou, o agente usa o dele
@@ -529,6 +576,7 @@ function criarAcp(dep) {
   }
 
   function tratarLinha(st, linha) {
+    if (st.invalidado || paineis.get(st.paneId) !== st) return;
     let m; try { m = JSON.parse(linha); } catch { return; }   // banner/aviso fora do protocolo
     if (!m || typeof m !== 'object') return;
     if (m.id !== undefined && m.method === undefined) {
@@ -542,6 +590,7 @@ function criarAcp(dep) {
     if (!m.method) return;
     if (m.id !== undefined) return pedidoDoAgente(st, m);
     if (m.method === 'session/update') {
+      if (st.cancelando) return;
       const p = m.params || {};
       if (st.sessionId && p.sessionId && String(p.sessionId) !== st.sessionId) return;
       for (const ev of traduzirUpdate(st, p.update)) despachar(st, ev);
@@ -600,9 +649,12 @@ function criarAcp(dep) {
   async function startDeVerdade(paneId, comando, opts) {
     const { bin, args } = comandoEmPartes(comando);
     if (!bin) throw new Error('O comando do agente ACP está vazio. Escolha um no menu do modelo.');
-    parar(paneId);
+    const partida = {}; partidas.set(paneId, partida);
+    if (paineis.has(paneId) || encerrando.has(paneId)) await parar(paneId, true);
+    else parar(paneId, true);
+    if (partidas.get(paneId) !== partida) throw new Error('início do agente cancelado');
     const st = {
-      paneId, comando, cwd: opts.cwd || HOME, approval: opts.approval || 'manual',
+      paneId, comando, geracao: 0, invalidado: false, cwd: opts.cwd || HOME, approval: opts.approval || 'manual',
       proc: null, buf: '', erro: '', rpcId: 0, pend: new Map(), pedidos: new Map(),
       sessionId: '', nova: false, caps: {}, info: {}, modos: [], modoAtual: '', modelos: [], modeloAtual: '', comandos: [],
       ferramentas: new Map(), msgId: null, acc: '', seq: 0, carregando: false, ocupado: false, cancelando: false,
@@ -629,7 +681,7 @@ function criarAcp(dep) {
       if (chave) env.GEMINI_API_KEY = chave;
     }
     let proc;
-    try { proc = spawnBin(bin, args, { cwd: st.cwd, env, stdio: ['pipe', 'pipe', 'pipe'] }); }
+    try { proc = spawnBin(bin, args, { cwd: st.cwd, env, detached: (typeof process !== 'undefined' ? process : require('process')).platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'] }); }
     catch (e) { throw new Error('Não consegui rodar "' + st.comando + '": ' + (e && e.message || e)); }
     st.proc = proc;
     proc.stdin.on('error', () => {});
@@ -639,7 +691,7 @@ function criarAcp(dep) {
        resto do byte e so' entrega a letra quando ela fecha - igual cli-motors.js */
     const decoder = new StringDecoder('utf8');
     proc.stdout.on('data', (chunk) => {
-      if (paineis.get(paneId) !== st) return;
+      if (st.invalidado || paineis.get(paneId) !== st) return;
       // o que ja estava no buffer foi varrido e nao tinha '\n' (o laco abaixo so' para quando
       // nao sobra quebra): a busca comeca no pedaco NOVO. Refazer o indexOf do zero a cada
       // pedaco deixava uma linha longa quadratica (80MB = bilhoes de comparacoes no processo principal).
@@ -786,6 +838,7 @@ function criarAcp(dep) {
   }
 
   function fimDoTurno(st, motivo) {
+    const cancelado = st.cancelando || st.parandoDeProposito || motivo === 'cancelled';
     // R2-006: turno fechou por qualquer caminho, o watchdog do cancelamento nao serve mais
     if (st.timerCancelamento) { clearTimeout(st.timerCancelamento); st.timerCancelamento = null; }
     const out = [];
@@ -810,7 +863,7 @@ function criarAcp(dep) {
     if (motivo === 'refusal') emit(st.paneId, 'note', { text: 'O agente recusou continuar este pedido.', error: true });
     else if (motivo === 'max_turn_requests') emit(st.paneId, 'note', { text: 'O agente parou no teto de passos do turno. Mande "continue" pra seguir.' });
     else if (motivo === 'max_tokens') emit(st.paneId, 'note', { text: 'A resposta bateu no teto de tamanho. Mande "continue" pra seguir.' });
-    emit(st.paneId, 'turn-end', {});
+    emit(st.paneId, 'turn-end', { turnId: st.somTurno, resultado: cancelado ? 'cancelado' : motivo === 'end_turn' ? 'sucesso' : 'erro' });
   }
 
   function textoDoContextoAntigo(msgs) {
@@ -827,7 +880,7 @@ function criarAcp(dep) {
 
   function enviar(paneId, texto, anexos) {
     const st = paineis.get(paneId);
-    if (!st || !st.proc || !st.sessionId) return false;
+    if (!st || st.invalidado || st.cancelando || !st.proc || !st.sessionId) return false;
     if (st.ocupado || st.timerFila) {
       // ocupado NAO e' morto: a tela traduzia o false como "conexao caiu" e
       // religava por cima do turno. Vai pra fila e sai no fim do turno.
@@ -838,7 +891,8 @@ function criarAcp(dep) {
     const prompt = [];
     let t = String(texto == null ? '' : texto);
     const sobraram = [];
-    for (const f of (anexos || [])) {
+    const attachments = anexosDaMensagem(anexos, t);
+    for (const { path: f } of attachments) {
       const mime = MIME_IMG[path.extname(String(f)).slice(1).toLowerCase()];
       if (!mime || !pc.image) { sobraram.push(f); continue; }
       try {
@@ -851,11 +905,13 @@ function criarAcp(dep) {
     }
     // grava o que VOCE escreveu; o prefixo de contexto vai so' pro agente
     // (gravado, virava o titulo da conversa e um balao seu de 14 KB ao reabrir)
-    anotar(st.arquivo, { role: 'user', text: t, ...(st.contextoAntigo ? { comContexto: true } : {}) }, avisarFalhaDeGravar(st));
+    anotar(st.arquivo, { role: 'user', text: t, ...(attachments.length ? { attachments } : {}), ...(st.contextoAntigo ? { comContexto: true } : {}) }, avisarFalhaDeGravar(st));
     if (st.contextoAntigo) { t = textoDoContextoAntigo(st.contextoAntigo) + t; st.contextoAntigo = null; }
     prompt.push({ type: 'text', text: t });
+    st.geracao++;
     st.ocupado = true; st.cancelando = false; st.ferramentas.clear(); st.msgId = null; st.acc = '';
-    emit(paneId, 'busy', {});
+    st.somTurno = crypto.randomUUID();
+    emit(paneId, 'busy', { turnId: st.somTurno });
     // sem prazo: um turno de agente pode levar meia hora, e quem encerra e' o
     // proprio agente (ou o botao de parar, via session/cancel)
     const promessaDoPrompt = mandar(st, 'session/prompt', { sessionId: st.sessionId, prompt }, 0);
@@ -881,7 +937,7 @@ function criarAcp(dep) {
     // spec: ao cancelar, o cliente responde 'cancelled' a TODO pedido de
     // permissao pendente - agora, nao quando o prompt voltar (agente que espera
     // a resposta pra devolver o prompt travaria pra sempre)
-    st.cancelando = true;
+    st.cancelando = true; st.geracao++;
     cancelarPedidos(st);   // primeiro destrava quem esta' esperando a permissao...
     notificar(st, 'session/cancel', { sessionId: st.sessionId });   // ...depois avisa que o turno acabou
     // R2-006: se o agente nao responder ao cancel, o proprio session/prompt (msTimeout=0)
@@ -892,23 +948,33 @@ function criarAcp(dep) {
       if (paineis.get(paneId) !== st) return;
       const pendente = st.promptRpcId != null ? st.pend.get(st.promptRpcId) : null;
       if (!pendente) return;   // ja respondeu (ou ja fechou por outro caminho)
-      st.pend.delete(st.promptRpcId);
-      pendente.rej(new Error('o agente não respondeu ao cancelamento'));
+      // Sem confirmação de fim, este processo nunca pode receber outro turno.
+      // Invalida callbacks antes de esperar a morte de toda a árvore.
+      const motivo = 'o agente não respondeu ao cancelamento; o processo foi encerrado';
+      const out = []; fecharFala(st, out); for (const ev of out) despachar(st, ev);
+      Promise.resolve(parar(paneId)).then(() => {
+        if (paineis.has(paneId)) return; // outro start já assumiu a tela
+        try { aoCair && aoCair(paneId); } catch {}
+        emit(paneId, 'engine-down', { motivo, codigo: null });
+        emit(paneId, 'turn-end', {});
+      });
     }, PRAZO_CANCELAMENTO_MS);
     try { aoFimDoTurno && aoFimDoTurno(paneId); } catch {}
     return true;
   }
 
-  function parar(paneId) {
+  function parar(paneId, manterInicio = false) {
+    if (!manterInicio) partidas.delete(paneId);
     iniciando.delete(paneId);
     const st = paineis.get(paneId);
-    if (!st) return Promise.resolve();
+    if (!st) return encerrando.get(paneId) || Promise.resolve();
     st.parandoDeProposito = true;
     pararFala(st);
     if (st.timerFila) { clearTimeout(st.timerFila); st.timerFila = null; }
     if (st.timerCancelamento) { clearTimeout(st.timerCancelamento); st.timerCancelamento = null; }   // R2-006
     st.fila = [];
     cancelarPedidos(st);
+    st.invalidado = true; st.geracao++;
     for (const [, q] of [...st.pend]) q.rej(new Error('painel parado'));
     st.pend.clear();
     // R3-009: devolve a Promise do matarProcesso (so' resolve quando o processo morre de
@@ -916,7 +982,10 @@ function criarAcp(dep) {
     let espera = Promise.resolve();
     if (st.proc) { try { st.proc.stdout.removeAllListeners('data'); } catch {} espera = matarProcesso(st.proc); st.proc = null; }
     paineis.delete(paneId);
-    return espera;
+    const fim = Promise.resolve(espera);
+    encerrando.set(paneId, fim);
+    fim.finally(() => { if (encerrando.get(paneId) === fim) encerrando.delete(paneId); });
+    return fim;
   }
 
   // sempre: o "Sempre permitir" do cartao escolhe o allow_always do proprio agente
@@ -956,7 +1025,9 @@ function criarAcp(dep) {
     ocupado: paneId => !!paineis.get(paneId)?.ocupado,
     vivo: paneId => !!paineis.get(paneId)?.proc,
     // R3-009: shutdown() precisa esperar o kill de verdade, nao so' disparar e seguir
-    fechar: () => Promise.all([...paineis.keys()].map(id => parar(id))),
+    // Um start pode estar esperando a limpeza do grupo anterior, sem painel
+    // vivo ainda. Invalida também essas partidas antes de esperar os kills.
+    fechar: () => Promise.all([...new Set([...partidas.keys(), ...paineis.keys(), ...encerrando.keys()])].map(id => parar(id))),
     sessoes: () => listarSessoes(pastaDados),
     historico: (id, file, max) => historicoDaSessao(file && fs.existsSync(file) ? file : arquivoDaSessao(pastaDados, id), max || 60),
     arquivoDe: (id) => arquivoDaSessao(pastaDados, id),

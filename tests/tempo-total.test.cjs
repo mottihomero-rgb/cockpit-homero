@@ -12,12 +12,12 @@ const main = fs.readFileSync(path.join(raiz, 'main.js'), 'utf8');
 const app = fs.readFileSync(path.join(raiz, 'renderer/app.js'), 'utf8');
 const pega = (src, n) => { const i = src.indexOf('function ' + n + '('); let k = src.indexOf('{', i), d = 0;
   for (; k < src.length; k++) { if (src[k] === '{') d++; else if (src[k] === '}' && --d === 0) break; } return src.slice(i, k + 1); };
-const ctx = { fs, Date, JSON, Map }; vm.createContext(ctx);
-vm.runInContext('const TEMPO_PAUSA_MAX = 10 * 60 * 1000; const tempoCache = new Map();' + pega(main, 'falaDeGenteClaude') + pega(main, 'tempoDeTrabalho') + ';this.t = tempoDeTrabalho;', ctx);
+const { loadMain } = require('./main-harness.cjs');
+const ctx = { t: async (engine, file) => { const h = loadMain(); h.put(file, fs.readFileSync(file)); return h.call('sessions:tempo', { engine, file }); } };
 const arq = (linhas) => { const f = path.join(os.tmpdir(), 'tempo-' + Math.random().toString(36).slice(2) + '.jsonl'); fs.writeFileSync(f, linhas.map(l => JSON.stringify(l)).join('\n')); return f; };
 const T = (s) => new Date(Date.UTC(2026, 8, 26, 10, 0, s)).toISOString();
 
-test('Claude: soma cada resposta; o tempo parado entre uma resposta e a próxima pergunta não conta', () => {
+test('Claude: soma cada resposta; o tempo parado entre uma resposta e a próxima pergunta não conta', async () => {
   const f = arq([
     { type: 'user', timestamp: T(0), message: { content: 'faz a página' } },
     { type: 'assistant', timestamp: T(30), message: { content: [] } },
@@ -26,27 +26,27 @@ test('Claude: soma cada resposta; o tempo parado entre uma resposta e a próxima
     { type: 'user', timestamp: T(3000), message: { content: 'agora troca a cor' } },         // ele voltou 49 min depois
     { type: 'assistant', timestamp: T(3020), message: { content: [] } },
   ]);
-  assert.equal(ctx.t('claude', f), 80000, '60 s da 1a + 20 s da 2a');
+  assert.equal(await ctx.t('claude', f), 80000, '60 s da 1a + 20 s da 2a');
 });
 
-test('pausa longa no meio (esperando aprovar) não conta', () => {
+test('pausa longa no meio (esperando aprovar) não conta', async () => {
   const f = arq([
     { type: 'user', timestamp: T(0), message: { content: 'roda' } },
     { type: 'assistant', timestamp: T(10), message: { content: [] } },
     { type: 'assistant', timestamp: T(10 + 1200), message: { content: [] } },   // 20 min parado
     { type: 'assistant', timestamp: T(10 + 1200 + 5), message: { content: [] } },
   ]);
-  assert.equal(ctx.t('claude', f), 15000);
+  assert.equal(await ctx.t('claude', f), 15000);
 });
 
-test('Codex: cada resposta vem marcada do começo ao fim', () => {
+test('Codex: cada resposta vem marcada do começo ao fim', async () => {
   const f = arq([
     { type: 'event_msg', timestamp: T(0), payload: { type: 'task_started' } },
     { type: 'response_item', timestamp: T(20), payload: { type: 'message' } },
     { type: 'event_msg', timestamp: T(45), payload: { type: 'task_complete' } },
     { type: 'event_msg', timestamp: T(900), payload: { type: 'token_count' } },   // depois do fim: não conta
   ]);
-  assert.equal(ctx.t('codex', f), 45000);
+  assert.equal(await ctx.t('codex', f), 45000);
 });
 
 test('rodapé: soma do arquivo + turnos de agora + o turno rodando; some com zero', () => {

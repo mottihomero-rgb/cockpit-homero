@@ -82,6 +82,7 @@ contextBridge.exposeInMainWorld('api', {
   // nome simples de cada agente do time (2 palavras + linha curta), num lote so
   agentesNomes: (o) => ipcRenderer.invoke('agentes:nomes', o),
   detalhePerguntar: (o) => ipcRenderer.invoke('detalhe:perguntar', o),
+  detalheCancelar: (o) => ipcRenderer.invoke('detalhe:cancelar', o),
   // apagar conversa: manda para a Lixeira. Fora do mapa HANDLERS de proposito (R1) — o iPhone
   // nao pode apagar arquivo do Mac pelo Wi-Fi
   apagarSessao: (o) => ipcRenderer.invoke('sessao:apagar', o),

@@ -76,12 +76,14 @@ test('R2-006: agente ACP que ignora session/cancel nao trava o turno pra sempre 
   assert.ok(h.eventos.some(e => e.paneId === 'p' && e.kind === 'turn-end'),
     'sem o conserto o turno fica preso pra sempre: turn-end nunca sai depois do Parar');
 
-  // turno fechado = P.busy liberou; um pedido novo tem que sair na hora, nao
-  // ficar preso atras do turno que travou
+  // Sem confirmação de fim, o processo antigo não pode receber outro prompt.
   const antes = prompts(p).length;
-  h.acp.enviar('p', 'proxima', []);
-  assert.equal(prompts(p).length, antes + 1,
-    'depois do watchdog fechar o turno, o proximo pedido precisa poder sair (nao fica na fila pra sempre)');
+  assert.equal(h.acp.enviar('p', 'proxima', []), false);
+  assert.equal(prompts(p).length, antes);
+  await h.acp.start('p', { comando: 'falso', cwd: h.dir });
+  assert.equal(h.acp.enviar('p', 'proxima', []), true);
+  assert.equal(prompts(h.procs[1]).length, 1);
+
 });
 
 test('R2-006: agente que responde ao cancelamento antes do prazo fecha normal (sem duplicar turn-end nem mostrar erro)', async t => {

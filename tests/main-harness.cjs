@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
 
-function loadMain() {
+function loadMain(options = {}) {
   const root = path.resolve(__dirname, '..');
   const files = new Map();
   const ipc = new Map();
@@ -16,28 +16,53 @@ function loadMain() {
   const violations = [];
   let timerId = 0, bootExecuted = false;
   const HOME = '/cockpit-test/home';
+  // Pastas existem independentemente de arquivos. Só HOME e as fixtures
+  // declaradas pelo teste começam válidas; um cwd qualquer continua ausente.
+  const directories = new Set();
+  function mkdir(name) {
+    let dir = String(name);
+    while (dir && !directories.has(dir)) {
+      directories.add(dir);
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  }
+  mkdir(HOME);
+  for (const dir of options.directories || []) mkdir(dir);
   const missing = name => Object.assign(new Error('ENOENT: ' + name), { code: 'ENOENT' });
   const fakeFs = {
-    existsSync: name => files.has(String(name)),
+    existsSync: name => files.has(String(name)) || directories.has(String(name)),
     readFileSync(name, encoding) {
       const b = files.get(String(name));
       if (!b) throw missing(name);
       return encoding ? b.toString(typeof encoding === 'string' ? encoding : encoding.encoding) : Buffer.from(b);
     },
     statSync(name) {
+      if (!files.has(String(name)) && directories.has(String(name))) {
+        return { size: 0, isFile: () => false, isDirectory: () => true, mtimeMs: 1 };
+      }
       if (!files.has(String(name))) throw missing(name);
       return { size: files.get(String(name)).length, isFile: () => true, isDirectory: () => false, mtimeMs: 1 };
     },
     realpathSync: name => String(name),
     readdirSync: () => [],
-    mkdirSync() {},
-    writeFileSync(name, data) { files.set(String(name), Buffer.from(String(data))); },
-    appendFileSync(name, data) { files.set(String(name), Buffer.concat([files.get(String(name)) || Buffer.alloc(0), Buffer.from(String(data))])); },
-    copyFileSync(from, to) { files.set(String(to), Buffer.from(fakeFs.readFileSync(from))); },
-    renameSync(from, to) { files.set(String(to), fakeFs.readFileSync(from)); files.delete(String(from)); },
+    mkdirSync: mkdir,
+    writeFileSync(name, data) { mkdir(path.dirname(String(name))); files.set(String(name), Buffer.from(String(data))); },
+    appendFileSync(name, data) { mkdir(path.dirname(String(name))); files.set(String(name), Buffer.concat([files.get(String(name)) || Buffer.alloc(0), Buffer.from(String(data))])); },
+    copyFileSync(from, to) { mkdir(path.dirname(String(to))); files.set(String(to), Buffer.from(fakeFs.readFileSync(from))); },
+    renameSync(from, to) { mkdir(path.dirname(String(to))); files.set(String(to), fakeFs.readFileSync(from)); files.delete(String(from)); },
     unlinkSync(name) { files.delete(String(name)); },
     chmodSync() {}, utimesSync() {},
   };
+  const descritores = new Map(); let proximoFd = 10;
+  fakeFs.openSync = name => { const fd = proximoFd++; descritores.set(fd, fakeFs.readFileSync(name)); return fd; };
+  fakeFs.fstatSync = fd => ({ size: descritores.get(fd).length });
+  fakeFs.readSync = (fd, buf, off, len, pos) => {
+    const origem = descritores.get(fd), n = Math.max(0, Math.min(len, origem.length - pos));
+    origem.copy(buf, off, pos, pos + n); return n;
+  };
+  fakeFs.closeSync = fd => descritores.delete(fd);
   function fakeSpawn(bin, args, options) {
     const proc = new EventEmitter();
     proc.stdout = new EventEmitter(); proc.stderr = new EventEmitter();
@@ -91,7 +116,7 @@ function loadMain() {
   };
   const moduleCache = new Map();
   const ctx = vm.createContext({
-    Buffer, Date, Map, Set, URL, URLSearchParams, TextDecoder, TextEncoder,
+    Buffer, Date, Map, Set, setImmediate, URL, URLSearchParams, TextDecoder, TextEncoder,
     console: { log() {}, warn() {}, error() {} }, process: processStub,
     setTimeout(fn) { const id = ++timerId; timers.set(id, fn); return id; },
     clearTimeout(id) { timers.delete(id); },
@@ -146,7 +171,7 @@ function loadMain() {
   }
   ctx.__replyTransport = evaluate('codexIncoming');
   return {
-    HOME, files, ipc, events, wire, spawned, timers, violations, appEvents, nativeTheme,
+    HOME, files, directories, mkdir, ipc, events, wire, spawned, timers, violations, appEvents, nativeTheme,
     attachCodex, evaluate,
     onAgyUso(fn) { ctx.__agyUso = fn; },
     // `resto` leva os argumentos extras de um handler que recebe mais de um (ex.: o
@@ -156,7 +181,7 @@ function loadMain() {
     notify(method, params, destino = 'local') { return ctx.__replyTransport(destino, { method, params }); },
     paneEvents(kind) { return events.filter(e => e.canal === 'pane:event').map(e => e.dados).filter(e => !kind || e.kind === kind); },
     clear() { events.length = 0; wire.length = 0; },
-    put(name, value) { files.set(name, Buffer.isBuffer(value) ? value : Buffer.from(value)); },
+    put(name, value) { mkdir(path.dirname(String(name))); files.set(name, Buffer.isBuffer(value) ? value : Buffer.from(value)); },
     get bootExecuted() { return bootExecuted; },
   };
 }

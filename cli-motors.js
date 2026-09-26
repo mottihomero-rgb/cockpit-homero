@@ -1,7 +1,7 @@
 'use strict';
 // Leitura de sessões/comandos portada do fork ohugomotti/cockpit (52dee0f).
 const fs = require('fs');
-const { horaDaUltimaFala } = require('./hora-da-fala');
+const { horaDaUltimaFala, horaDoRegistro } = require('./hora-da-fala');
 const path = require('path');
 const crypto = require('crypto');
 const { StringDecoder } = require('string_decoder');
@@ -17,8 +17,7 @@ const headRead = (file, max) => {
   } catch { return ''; }
   finally { if (fd !== undefined) fs.closeSync(fd); }
 };
-// R1-040: acima disto, start() nao le mais o arquivo inteiro de uma vez (trava
-// o processo PRINCIPAL do Electron, app inteiro, nao so o painel do Gemini).
+// Limite do contexto legado ao trocar o runtime; a ficha da lateral tem cache próprio.
 const TETO_LEITURA_COMPLETA = 4 * 1024 * 1024;
 const CAUDA_RETOMADA = 1024 * 1024; // os marcadores de retomada/runtime ficam perto de onde a conversa esta sendo escrita agora
 const caudaRead = (file, tamanho, max) => {
@@ -45,14 +44,99 @@ const cliTexto = (c) => (Array.isArray(c)
   ? c.map((p) => (p && typeof p.text === 'string' ? p.text : '')).join('')
   : (typeof c === 'string' ? c : ''));
 
+/* A lateral usa uma ficha pequena por arquivo, invalidada por tamanho/data.
+   Nos JSONL escritos por append, somente os registros novos entram na ficha.
+   O corpo completo continua disponível em historico(), sem corte para título. */
+const fichas = new Map();
+function fichaSessao(file) {
+  const stat = fs.statSync(file);
+  let f = fichas.get(file);
+  if (f && f.mtime === stat.mtimeMs && f.size === stat.size && f.ctime === stat.ctimeMs) return f;
+  const lerTrecho = (pos, bytes) => {
+    const fd = fs.openSync(file, 'r');
+    try { const b = Buffer.alloc(bytes); return b.subarray(0, fs.readSync(fd, b, 0, bytes, pos)).toString('base64'); }
+    finally { fs.closeSync(fd); }
+  };
+  const json = /\.json$/i.test(file);
+  const segue = !json && f && stat.ino === f.ino && stat.size > f.size
+    && lerTrecho(0, Math.min(256, f.size)) === f.cabeca
+    && lerTrecho(Math.max(0, f.size - 256), Math.min(256, f.size)) === f.cauda;
+  if (!segue) f = { meta: {}, primeiro: null, retomada: '', runtime: '', hora: 0, ids: new Map(), offset: 0 };
+  const resumirMensagem = m => ({ id: m.id, type: m.type,
+    titulo: m.type === 'user' && cliFalaDeGente(cliTexto(m.content))
+      ? cliTexto(m.content).replace(/\s+/g, ' ').trim().slice(0, 120) : '' });
+  const aplicar = d => {
+    if (!mensagemValida(d)) return;
+    f.hora = Math.max(f.hora, horaDoRegistro(d));
+    if (d.cockpit) f.meta = { cockpit: d.cockpit, id: d.id, cwd: d.cwd };
+    if (d.role === 'user' && !f.primeiro) f.primeiro = { text: String(d.text || '').replace(/\s+/g, ' ').slice(0, 120) };
+    if (d.retomada) f.retomada = d.retomada;
+    if (d.runtime) f.runtime = d.runtime;
+    if (typeof d.sessionId === 'string') f.meta.sessionId = d.sessionId;
+    if (typeof d.$rewindTo === 'string') {
+      const ids = [...f.ids.keys()], i = ids.indexOf(d.$rewindTo);
+      if (i < 0) f.ids.clear();
+      else for (const id of ids.slice(i)) f.ids.delete(id);
+    }
+    if (d.$set && typeof d.$set === 'object') {
+      if (d.$set.sessionId) f.meta.sessionId = d.$set.sessionId;
+      if (Array.isArray(d.$set.messages)) {
+        f.ids.clear();
+        for (const m of d.$set.messages) if (m && typeof m.id === 'string') f.ids.set(m.id, resumirMensagem(m));
+      }
+    }
+    if (typeof d.id === 'string' && !d.cockpit) f.ids.set(d.id, resumirMensagem(d));
+  };
+  if (json) {
+    const { meta, msgs } = cliLerConversa(file);
+    aplicar({ sessionId: meta.sessionId, startTime: meta.startTime, timestamp: meta.timestamp });
+    for (const [i, m] of msgs.entries()) aplicar({ ...m, id: typeof m.id === 'string' ? m.id : String(i) });
+  } else {
+    const fd = fs.openSync(file, 'r');
+    try {
+      const buf = Buffer.alloc(64 * 1024), decoder = new StringDecoder('utf8');
+      let pos = f.offset, linhaInicio = pos, partes = [];
+      while (pos < stat.size) {
+        const n = fs.readSync(fd, buf, 0, Math.min(buf.length, stat.size - pos), pos);
+        if (!n) break;
+        pos += n;
+        const trecho = decoder.write(buf.subarray(0, n));
+        let inicio = 0, fim;
+        while ((fim = trecho.indexOf('\n', inicio)) >= 0) {
+          partes.push(trecho.slice(inicio, fim));
+          const linha = partes.length === 1 ? partes[0] : partes.join('');
+          partes = []; inicio = fim + 1;
+          linhaInicio += Buffer.byteLength(linha) + 1;
+          try { aplicar(JSON.parse(linha)); } catch {}
+        }
+        if (inicio < trecho.length) partes.push(trecho.slice(inicio));
+      }
+      // A linha grande só é juntada uma vez. Busca de quebra nunca revisita
+      // os blocos anteriores (base64 de dezenas de MB permanece linear).
+      const pendente = partes.join('');
+      f.offset = linhaInicio;
+      if (!decoder.lastNeed) {
+        if (pendente.trim()) try { aplicar(JSON.parse(pendente)); f.offset = pos; } catch {}
+        else f.offset = pos;
+      }
+    } finally { fs.closeSync(fd); }
+  }
+  f.titulo = f.primeiro?.text || [...f.ids.values()].find(m => m.titulo)?.titulo || '';
+  Object.assign(f, { mtime: stat.mtimeMs, ctime: stat.ctimeMs, size: stat.size, ino: stat.ino,
+    cabeca: lerTrecho(0, Math.min(256, stat.size)), cauda: lerTrecho(Math.max(0, stat.size - 256), Math.min(256, stat.size)) });
+  if (fichas.size >= 2000) fichas.clear();
+  fichas.set(file, f);
+  return f;
+}
+
 /* Remonta o mapa de mensagens de um arquivo de conversa, na mesma ordem e com
    as mesmas regras do CLI. Devolve { meta, msgs }. */
-function cliLerConversa(file, tetoBytes) {
+function cliLerConversa(file) {
   const mapa = new Map();
   let meta = {};
   let bruto = '';
   try {
-    bruto = tetoBytes && !/\.json$/i.test(file) ? headRead(file, tetoBytes) : fs.readFileSync(file, 'utf8');
+    bruto = fs.readFileSync(file, 'utf8');
   } catch { return { meta, msgs: [] }; }
   // As versões atuais também usam um JSON completo, não apenas JSONL.
   try {
@@ -102,7 +186,6 @@ function cliMapaProjetos(engine) {
   return fora;
 }
 
-const CLI_TETO_TITULO = 512 * 1024;   // pro titulo nao precisa do arquivo inteiro
 
 function cliSessions(engine) {
   const cli = CLIS[engine];
@@ -123,15 +206,14 @@ function cliSessions(engine) {
       let quando = 0;
       try { quando = fs.statSync(p).mtimeMs; } catch { continue; }
       quando = horaDaUltimaFala(p, quando);   // 26/09: a última fala, não a última gravação do arquivo
-      const { meta, msgs } = cliLerConversa(p, CLI_TETO_TITULO);
-      const id = meta && meta.sessionId;
-      if (!id) continue;
-      const primeira = msgs.find((m) => m.type === 'user' && cliFalaDeGente(cliTexto(m.content)));
-      if (!primeira) continue;   // conversa que nunca saiu do contexto inicial
+      let ficha; try { ficha = fichaSessao(p); } catch { continue; }
+      if (ficha.hora) quando = Math.min(ficha.hora, ficha.mtime);
+      const id = ficha.meta.sessionId;
+      if (!id || !ficha.titulo) continue;   // conversa que nunca saiu do contexto inicial
       out.push({
         engine, id, file: p, when: quando, entrada: 'cockpit',
         cwd: projetos[apelido] || HOME,
-        title: cliTexto(primeira.content).replace(/\s+/g, ' ').trim().slice(0, 120),
+        title: ficha.titulo,
       });
     }
   };
@@ -143,7 +225,7 @@ function cliSessions(engine) {
 /* Reabrir a conversa na tela, no mesmo formato que o Claude e o Codex ja
    devolvem: { role: 'user' | 'bot' | 'tool', text, name, arg }. */
 function cliHistory(file, maxMsgs) {
-  const { msgs } = cliLerConversa(file, 0);
+  const { msgs } = cliLerConversa(file);
   const out = [];
   for (const m of msgs) {
     if (!m || m.type === 'info' || m.type === 'error' || m.type === 'warning') continue;
@@ -255,6 +337,7 @@ function evento(st, ev) {
     emit(st.paneId, 'note', { text: st.erro, error: true });
     st.avisou = true;
   } else if (ev.type === 'result') {
+    st.resultadoSucesso = ev.status === 'success';
     const s = ev.stats || {};
     const entrada = s.input_tokens || s.inputTokens || 0, saida = s.output_tokens || s.outputTokens || 0;
     if (entrada || saida) emit(st.paneId, 'tokens', { total: entrada + saida });
@@ -304,7 +387,7 @@ function eventoAntigravity(st, ev) {
       evento(st, { type: 'error', message: r.error || 'O Gemini terminou com estado ' + r.status + '.' });
     } else {
       if (r.status === 'SUCCESS') aoConfirmarConta?.();
-      evento(st, { type: 'result', stats: r.usage || {} });
+      evento(st, { type: 'result', status: r.status === 'SUCCESS' ? 'success' : 'unknown', stats: r.usage || {} });
     }
   }
 }
@@ -318,7 +401,7 @@ function parar(paneId, manter) {
   // verdade), pra shutdown() esperar em vez de deixar o Electron fechar antes da hora
   const espera = proc ? matarGrupo(proc) : Promise.resolve();
   if (!manter) paineis.delete(paneId);
-  else if (proc) emit(paneId, 'turn-end', {});
+  else if (proc) emit(paneId, 'turn-end', { turnId: st.somTurno, resultado: 'cancelado' });
   return espera;
 }
 function start(paneId, opts) {
@@ -357,28 +440,32 @@ function start(paneId, opts) {
     // IDs do Gemini antigo não são aceitos pelo Antigravity. Mantém o arquivo
     // antigo legível e transmite as falas como contexto na primeira retomada.
     const fonte = fs.existsSync(file) ? file : cliSessions('gemini').find(s => s.id === opts.resumeId)?.file;
-    // R2-030: historico(fonte) le o arquivo inteiro de forma sincrona (linhasDoArquivo/
-    // cliLerConversa sem teto). Acima do teto do R1-040, isso trava o processo PRINCIPAL
-    // do Electron so' pra montar contexto de enriquecimento — le so' a cauda, como start()
-    // ja faz pro marcador de retomada. Contexto legado parcial/vazio e' aceitavel aqui;
-    // travar o app nao e'.
-    let msgs = [];
-    let tamanhoFonte = 0;
+    let msgs = [], tamanhoFonte = 0;
     try { tamanhoFonte = fonte ? fs.statSync(fonte).size : 0; } catch {}
-    if (fonte && tamanhoFonte > TETO_LEITURA_COMPLETA) {
-      let cauda = caudaRead(fonte, tamanhoFonte, CAUDA_RETOMADA);
-      if (cauda) cauda = cauda.slice(cauda.indexOf('\n') + 1); // descarta a 1a linha, truncada no meio
-      msgs = String(cauda || '').split('\n').flatMap((l) => {
-        try {
-          const d = JSON.parse(l);
-          return mensagemValida(d) && ['user', 'bot'].includes(d.role) ? [{ role: d.role, text: String(d.text || '') }] : [];
-        } catch { return []; }
-      }).slice(-60);
+    const cockpit = fonte && /"cockpit"\s*:\s*1/.test(headRead(fonte, 1024));
+    if (fonte && cockpit && tamanhoFonte > TETO_LEITURA_COMPLETA) {
+      // Cresce até achar falas COMPLETAS. Uma última resposta >1MB não pode
+      // sumir por começar antes do recorte original da cauda.
+      for (let bytes = Math.min(CAUDA_RETOMADA, tamanhoFonte); ; bytes = Math.min(bytes * 2, tamanhoFonte)) {
+        let cauda = caudaRead(fonte, tamanhoFonte, bytes);
+        if (bytes < tamanhoFonte) cauda = cauda.slice(cauda.indexOf('\n') + 1);
+        msgs = cauda.split('\n').flatMap(l => {
+          try {
+            const d = JSON.parse(l);
+            return mensagemValida(d) && ['user', 'bot'].includes(d.role) ? [{ role: d.role, text: String(d.text || '') }] : [];
+          } catch { return []; }
+        }).slice(-60);
+        if (msgs.length >= 60 || bytes === tamanhoFonte) break;
+      }
     } else if (fonte) {
+      // JSON/JSONL nativo pode ter $set e $rewindTo: só o leitor completo
+      // sabe quais mensagens continuam na conversa após essas operações.
       msgs = historico(fonte).filter(m => ['user', 'bot'].includes(m.role)).slice(-60);
     }
     mensagensLegado = msgs;
-    contextoLegado = msgs.map(m => (m.role === 'user' ? 'Usuário: ' : 'Assistente: ') + String(m.text || '')).join('\n\n').slice(-80000);
+    const legado = msgs.map(m => (m.role === 'user' ? 'Usuário: ' : 'Assistente: ') + String(m.text || '')).join('\n\n');
+    if (tamanhoFonte > TETO_LEITURA_COMPLETA || msgs.length >= 60 || legado.length > 80000) emit(paneId, 'note', { text: 'Ao trocar o motor Gemini, retomei só as últimas falas como contexto. O histórico completo continua salvo nesta conversa.' });
+    contextoLegado = legado.slice(-80000);
     resumeId = '';
   }
   const st = { paneId, id, file, resumeId, runtime, contextoLegado, cwd: opts.cwd || HOME, model: opts.model || '',
@@ -414,7 +501,7 @@ function enviar(paneId, texto, anexos = []) {
   let proc;
   try { proc = spawnBin(acharBin(st.runtime), args, { cwd: st.cwd, env: buildEnv(), detached: process.platform !== 'win32', stdio: ['pipe', 'pipe', 'pipe'] }); }
   catch (e) { emit(paneId, 'note', { text: motivo(e.message), error: true }); return false; }
-  st.proc = proc; st.erro = ''; st.avisou = false; st.teveTexto = false; st.tools.clear();
+  st.proc = proc; st.somTurno = crypto.randomUUID(); st.resultadoSucesso = false; st.erro = ''; st.avisou = false; st.teveTexto = false; st.tools.clear();
   const decoder = new StringDecoder('utf8'); let buf = '', fim = false;
   const ler = chunk => {
     buf += chunk;
@@ -430,7 +517,7 @@ function enviar(paneId, texto, anexos = []) {
       if (st.runtime === 'agy' && /auth|credentials|login|UNAUTHENTICATED|401/i.test(error?.message || st.erro)) aoFalharConta?.();
       emit(paneId, 'note', { text: motivo(error?.message || st.erro), error: true });
     }
-    emit(paneId, 'turn-end', {});
+    emit(paneId, 'turn-end', { turnId: st.somTurno, resultado: code === 0 && !error && !st.avisou && st.resultadoSucesso ? 'sucesso' : 'erro' });
   };
   proc.stdout.on('data', d => { if (paineis.get(paneId) === st && st.proc === proc) ler(decoder.write(d)); });
   proc.stderr.on('data', d => { st.erro = (st.erro + d.toString('utf8')).slice(-4000); });
@@ -443,7 +530,7 @@ function enviar(paneId, texto, anexos = []) {
     emit(paneId, 'note', { text: 'Não consegui salvar a mensagem no Mac: ' + e.message, error: true });
     return false;
   }
-  emit(paneId, 'busy', {});
+  emit(paneId, 'busy', { turnId: st.somTurno });
   proc.stdin.end(agy ? JSON.stringify({ event: 'user', message: { content: enviado } }) + '\n' : enviado);
   return true;
 }
@@ -454,13 +541,12 @@ function sessoes() {
     if (!nome.endsWith('.jsonl')) continue;
     try {
     const file = path.join(dir, nome);
-    const linhas = linhasDoArquivo(file);
-    const meta = linhas[0], user = linhas.find(m => m.role === 'user');
-    if (!meta?.cockpit || !user) continue;
-    const retomada = linhas.filter(m => m.retomada).pop()?.retomada;
+    const ficha = fichaSessao(file), meta = ficha.meta;
+    if (!meta?.cockpit || !ficha.primeiro) continue;
+    const retomada = ficha.retomada;
     const existente = out.findIndex(s => s.id === retomada || s.id === meta.id);
     if (existente >= 0) out.splice(existente, 1);
-    out.push({ engine: 'gemini', id: meta.id, file, cwd: meta.cwd, when: horaDaUltimaFala(file, fs.statSync(file).mtimeMs), title: String(user.text).replace(/\s+/g, ' ').slice(0, 120) });
+    out.push({ engine: 'gemini', id: meta.id, file, cwd: meta.cwd, when: horaDaUltimaFala(file, fs.statSync(file).mtimeMs), title: ficha.titulo });
     } catch { /* Uma sessão ilegível não esconde as demais. */ }
   } } catch {}
   return out.sort((a, b) => b.when - a.when).slice(0, 300);

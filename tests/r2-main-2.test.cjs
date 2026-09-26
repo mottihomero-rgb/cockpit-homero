@@ -16,13 +16,21 @@ const tick = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); 
 // ---------------------------------------------------------------------------
 // R2-035 — codexHistory() sem teto de tamanho para arquivo .jsonl gigante
 // ---------------------------------------------------------------------------
-/* 26/09: o teto subiu de 6 para 64 MB (reabrir traz a conversa inteira; a maior do Claude tem 59 MB).
-   Os dois leitores continuam com o MESMO teto e acima dele leem só o final. */
-test('R2-035: codexHistory tem o mesmo teto de tamanho que claudeHistory (nao le arquivo gigante inteiro)', () => {
-  const fonte = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'main.js'), 'utf8');
-  assert.match(fonte, /const HIST_TETO = 64 \* 1024 \* 1024;/);
-  assert.equal((fonte.match(/data = st\.size > HIST_TETO \? tailRead\(file, HIST_TETO\) : fs\.readFileSync\(file, 'utf8'\);/g) || []).length, 2,
-    'claudeHistory e codexHistory com o mesmo teto');
+// Leitura inteira em blocos preserva a fala inicial sem bloquear numa string de 64 MB.
+test('R2-035: leitores de histórico compartilham varredura em blocos, sem corte por bytes', async () => {
+  const h = loadMain();
+  h.evaluate(`globalThis.__visitados = [];
+    varrerLinhasSessao = async (file, visitar) => {
+      __visitados.push(file);
+      if (file.includes('claude')) visitar(JSON.stringify({type:'user',message:{content:'Primeiro pedido'}}));
+      else visitar(JSON.stringify({type:'response_item',payload:{type:'message',role:'user',content:[{text:'Primeiro pedido'}]}}));
+    };`);
+  for (const engine of ['claude', 'codex']) {
+    h.put('/' + engine + '.jsonl', '');
+    const msgs = await h.call('sessions:history', {engine, file: '/' + engine + '.jsonl'});
+    assert.equal(msgs[0].text, 'Primeiro pedido');
+  }
+  assert.deepEqual(Array.from(h.evaluate('__visitados')), ['/claude.jsonl', '/codex.jsonl']);
 });
 
 // ---------------------------------------------------------------------------

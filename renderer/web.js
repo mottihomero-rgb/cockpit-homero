@@ -59,7 +59,11 @@
 
   const chamar = (nome, arg) => new Promise((res, rej) => {
     const id = ++seq;
-    const timer = setTimeout(() => encerrarPedido(id, 'O Mac não respondeu.'), 120000);
+    const detalhe = nome === 'detalhe:perguntar';
+    const timer = setTimeout(() => {
+      encerrarPedido(id, 'O Mac não respondeu.');
+      if (detalhe && ws && ws.readyState === 1) chamar('detalhe:cancelar', { requestId: arg && arg.requestId }).catch(() => {});
+    }, detalhe ? 185000 : 120000);
     pend.set(id, { res, rej, timer });
     try {
       const txt = JSON.stringify({ tipo: 'chamada', id, nome, arg });
@@ -356,6 +360,7 @@
     // o nome simples dos agentes vem do Haiku do Mac: no iPhone o cartao do time fala igual
     agentesNomes: (o) => chamar('agentes:nomes', o),
     detalhePerguntar: (o) => chamar('detalhe:perguntar', o),
+    detalheCancelar: (o) => chamar('detalhe:cancelar', o),
     /* Apagar conversa manda arquivo do Mac para a Lixeira: o main nem expoe o canal ao Wi-Fi, e
        aqui a resposta sai na hora, com o tipo certo, para o toque nao ficar 2 minutos esperando.
        Sem esta linha o app.js (o MESMO arquivo nos dois) morreria num TypeError. */

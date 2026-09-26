@@ -204,7 +204,6 @@ const TIPO_GENERICO = /^(alterações|alteração|ajustes?|mudanças?|melhorias?
 /* O mesmo generico com o nome de duas palavras ("Alteracoes Excelencia Prev", que esta no nomes.json
    dele). So os tipos que nao dizem nada sozinhos: "Campanha Black Friday" e "Relatorio Meta Ads"
    dizem o assunto e passam. Com preposicao no meio tambem passa ("Criacao de Video"). */
-const TIPO_VAGO_3 = /^(alterações|alteração|ajustes?|mudanças?|melhorias?|consertos?|correções?|dúvidas?|suporte|trabalho|tarefas?|demanda|projeto|criação|análise|organização) (\S+) (\S+)$/i;
 /* Cara de conversa em vez de titulo: a IA respondeu a mensagem dele, pediu desculpa, explicou.
    Cada palavra fecha no fim (FIM): sem isso "parece" pegava "Parecer do Processo", "entendi" pegava
    "Entendimento do Contrato" e "nome do" pegava "Nome do Produto Novo" — titulo de verdade recusado

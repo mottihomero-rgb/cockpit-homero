@@ -242,6 +242,11 @@ function saveConfig(cfg, origem) {
 // app GUI nao herda o PATH do shell: monta um PATH completo (ver plataforma.js)
 const buildEnv = plataforma.buildEnv;
 
+const somConclusao = require('./som-conclusao').criarSomConclusao({
+  spawn,
+  arquivo: app.isPackaged ? path.join(process.resourcesPath, 'codex-notification.wav') : path.join(__dirname, 'assets', 'codex-notification.wav'),
+  registrarErro: e => anota('Não consegui tocar o som de conclusão:', e && e.message),
+});
 const ouvintesWeb = new Set();
 function emit(paneId, kind, data) {
   // qualquer evento que nao seja pedaco de texto tem de sair DEPOIS do texto que ja estava
@@ -250,12 +255,14 @@ function emit(paneId, kind, data) {
   // Pedido de permissao de um turno que acabou nao pode continuar respondivel: alem de sobrar
   // chave velha guardada a sessao inteira, responder "sim" ali escrevia num processo morto e
   // fazia aparecer "a conexao caiu" num chat que estava vivo.
+  if (kind === 'engine-down') ultimoContexto.delete(paneId);
   if (kind === 'turn-end' || kind === 'engine-down') {
     for (const [k, a] of pendingApprovals) {
       const continua = a && (a.kind === 'async' || a.kind === 'elicitation' || a.kind === 'input' && a.isBlocking === false);
       if (a && a.paneId === paneId && (kind === 'engine-down' || !continua)) pendingApprovals.delete(k);
     }
   }
+  somConclusao.evento(paneId, kind, data);
   const msg = { paneId, kind, ...data };
   if (win && !win.isDestroyed()) win.webContents.send('pane:event', msg);
   /* PRINT NAO TRAFEGA PELO WI-FI. O send acima ja serializou a mensagem inteira (com as
@@ -663,7 +670,7 @@ function codexNotification(method, params, destino = 'local') {
       codexTurnRevision.set(pane, (codexTurnRevision.get(pane) || 0) + 1);
       codexApiCortado.delete(pane);
       codex.paneTurn.set(pane, params.turnId || (params.turn && params.turn.id));
-      emit(pane, 'busy', {});
+      emit(pane, 'busy', { turnId: codex.paneTurn.get(pane) });
       break;
 
     case 'item/agentMessage/delta':
@@ -749,16 +756,19 @@ function codexNotification(method, params, destino = 'local') {
     }
 
     case 'turn/completed': {
+      const turnId = params.turnId || params.turn && params.turn.id || codex.paneTurn.get(pane);
+      const sucesso = params.turn && params.turn.status === 'completed' && !params.turn.error;
       codexTurnRevision.set(pane, (codexTurnRevision.get(pane) || 0) + 1);
       codex.paneTurn.delete(pane);
       emit(pane, 'waiting', { status: 'completed', message: '' });
       if (params.turn && params.turn.error) emit(pane, 'note', { text: params.turn.error.message || shortJson(params.turn.error), error: true });
-      emit(pane, 'turn-end', {});
+      emit(pane, 'turn-end', { turnId, resultado: sucesso ? 'sucesso' : 'erro' });
       break;
     }
 
     case 'turn/failed':
     case 'error': {
+      const turnId = params.turnId || params.turn && params.turn.id || codex.paneTurn.get(pane);
       codexTurnRevision.set(pane, (codexTurnRevision.get(pane) || 0) + 1);
       codex.paneTurn.delete(pane);
       // o erro pode vir como texto ou como objeto {message, codexErrorInfo}
@@ -773,7 +783,7 @@ function codexNotification(method, params, destino = 'local') {
         text: texto + (precisaEntrar && remoto ? ' — use o menu / → Conta → trocar conta para entrar de novo na VPS.' : ''),
         error: true,
       });
-      emit(pane, 'turn-end', {});
+      emit(pane, 'turn-end', { turnId, resultado: 'erro' });
       break;
     }
 
@@ -855,7 +865,6 @@ function codexGlobalProcess(destino, data) {
   if (win && !win.isDestroyed()) win.webContents.send('codex:event', payload);
   avisarWeb('codex:event', payload);
 }
-function decodeChunk(c, encoded = false) { return codexProtocol.decodeOutput(c, encoded); }
 function mcpName(it) { return (it.server ? it.server + ' · ' : '') + (it.tool || 'MCP'); }
 function shortJson(v) { if (v == null) return ''; try { return typeof v === 'string' ? v : JSON.stringify(v); } catch { return String(v); } }
 function fileChangeArg(it) {
@@ -976,7 +985,8 @@ function marcarDonoDoFio(paneId, fio, engine) {
 
 /* ======================= motor CLAUDE ======================= */
 /* um processo `claude` por painel, protocolo stream-json */
-const claudePanes = new Map();  // paneId -> {proc, buf, blocks}
+const claudePanes = new Map();
+let claudeGeracao = 0;  // paneId -> {proc, buf, blocks}
 const avisoSinteticoAnterior = new Map();  // R3-013: paneId -> ultimo texto de erro sintetico avisado, evita nota repetida
 
 const claudeCwd = new Map();
@@ -1099,7 +1109,7 @@ function claudeStart(paneId, opts) {
   } else {
     proc = spawnBin(CLAUDE_BIN, args, { cwd: opts.cwd || HOME, env: buildEnv(), stdio: ['pipe', 'pipe', 'pipe'], detached: !EH_WIN });
   }
-  const st = { proc, buf: '' };
+  const st = { proc, buf: '', geracao: ++claudeGeracao };
   const decoder = new StringDecoder('utf8');
   claudePanes.set(paneId, st);
 
@@ -1165,7 +1175,17 @@ function claudeStart(paneId, opts) {
   return true;
 }
 
+function descartarPendenciasClaude(paneId) {
+  for (const [key, a] of pendingApprovals) {
+    if (a.paneId === paneId && /^claude(?:-|$)/.test(a.kind)) pendingApprovals.delete(key);
+  }
+}
+function pedidoClaudeAtual(a) {
+  return !!(a && a.processo && claudePanes.get(a.paneId) === a.processo && !a.processo.parandoDeProposito);
+}
+
 function claudeStop(paneId) {
+  somConclusao.cancelar(paneId);
   const st = claudePanes.get(paneId);
   let matando = Promise.resolve();
   if (st) {
@@ -1177,7 +1197,8 @@ function claudeStop(paneId) {
   }
   const delta = filaDelta.get(paneId);
   if (delta) { clearTimeout(delta.timer); filaDelta.delete(paneId); }
-  for (const [key, pending] of pendingApprovals) if (pending.paneId === paneId && pending.kind === 'claude') pendingApprovals.delete(key);
+  descartarPendenciasClaude(paneId);
+  ultimoContexto.delete(paneId);
   claudeCwd.delete(paneId);   // R2-036: senao fica crescendo pra sempre, um chat fechado atras do outro
   avisoSinteticoAnterior.delete(paneId);   // R3-013: mesma razao, senao cresce pra sempre
   return matando;   // R2-034: shutdown() espera este SIGKILL de garantia antes de fechar o app
@@ -1244,20 +1265,21 @@ function claudeMessage(paneId, m) {
 
   if (m.type === 'control_response') return;
   if (m.type === 'control_request' && m.request && m.request.subtype === 'can_use_tool') {
-    const key = 'cl_' + paneId + '_' + m.request_id;
+    const atual = claudePanes.get(paneId);
+    const key = 'cl_' + paneId + '_' + (atual ? atual.geracao : 'encerrado') + '_' + m.request_id;
     /* 26/09 — como no VS Code: pergunta da IA vira a janelinha de opções, e o plano pronto do
        modo Plano vira o cartão "Executar". Os dois não são pedido de permissão: a resposta
        volta por pane:perguntas / pane:plano (as respostas vão em updatedInput.answers). */
     if (m.request.tool_name === 'AskUserQuestion' && m.request.input && Array.isArray(m.request.input.questions)) {
       const dados = { key, questions: m.request.input.questions };
-      pendingApprovals.set(key, { kind: 'claude-perguntas', paneId, reqId: m.request_id, input: m.request.input, evento: { tipo: 'perguntas', dados } });
+      pendingApprovals.set(key, { kind: 'claude-perguntas', paneId, processo: claudePanes.get(paneId), reqId: m.request_id, input: m.request.input, evento: { tipo: 'perguntas', dados } });
       emit(paneId, 'perguntas', dados);
       return;
     }
     if (m.request.tool_name === 'ExitPlanMode') {
       const inp = m.request.input || {};
       const dados = { key, plano: String(inp.plan || ''), arquivo: String(inp.planFilePath || '') };
-      pendingApprovals.set(key, { kind: 'claude-plano', paneId, reqId: m.request_id, input: inp, evento: { tipo: 'plano-pronto', dados } });
+      pendingApprovals.set(key, { kind: 'claude-plano', paneId, processo: claudePanes.get(paneId), reqId: m.request_id, input: inp, evento: { tipo: 'plano-pronto', dados } });
       emit(paneId, 'plano-pronto', dados);
       return;
     }
@@ -1286,12 +1308,13 @@ function claudeMessage(paneId, m) {
     const modoDaTela = trocaModo && Object.keys(CLAUDE_MODE).find(k => CLAUDE_MODE[k] === trocaModo.mode);
     if (modoDaTela) dadosEvento.sempreModo = modoDaTela;
     // evento guardado igual ao emit: e o que 'pane:estado' devolve pro celular reconectar sem perder a tarja
-    pendingApprovals.set(key, { kind: 'claude', paneId, reqId: m.request_id, input: m.request.input, sugestoes: podeSempre ? sugestoes : null, evento: { tipo: 'approval', dados: dadosEvento } });
+    pendingApprovals.set(key, { kind: 'claude', paneId, processo: claudePanes.get(paneId), reqId: m.request_id, input: m.request.input, sugestoes: podeSempre ? sugestoes : null, evento: { tipo: 'approval', dados: dadosEvento } });
     emit(paneId, 'approval', dadosEvento);
     return;
   }
   if (m.type === 'stream_event' && m.event) {
     const ev = m.event;
+    if (ev.type === 'message_start' && !m.parent_tool_use_id) somConclusao.evento(paneId, 'turn-activity');
     if (ev.type === 'content_block_delta') {
       const d = ev.delta || {};
       if (d.type === 'text_delta') emitDelta(paneId, 'b' + ev.index, d.text || '');
@@ -1427,8 +1450,10 @@ function claudeMessage(paneId, m) {
     const entradaDoTurno = (u.input_tokens || 0) + (u.cache_creation_input_tokens || 0);
     const saidaDoTurno = u.output_tokens || 0;
     if (entradaDoTurno || saidaDoTurno) emit(paneId, 'turno-uso', { entrada: entradaDoTurno, saida: saidaDoTurno });
-    { const st = claudePanes.get(paneId); if (st) st.rodando = false; }   // acabou: some do aviso de fechar
-    emit(paneId, 'turn-end', {});
+    const st = claudePanes.get(paneId);
+    if (st) st.rodando = false;   // acabou: some do aviso de fechar
+    emit(paneId, 'turn-end', { turnId: st && st.somTurno,
+      resultado: !m.is_error && (m.is_error === false || m.subtype === 'success') ? 'sucesso' : 'erro' });
   }
 }
 
@@ -1986,7 +2011,7 @@ handle('fs:buscarArquivos', async (_e, d) => {
 const CLAUDE_PROJ = path.join(HOME, '.claude/projects');
 const NOMES_PATH = () => path.join(app.getPath('userData'), 'nomes.json');
 function lerNomes() { try { return JSON.parse(fs.readFileSync(NOMES_PATH(), 'utf8')); } catch { return {}; } }
-function salvarNomes(o) { gravarSeguro(NOMES_PATH(), JSON.stringify(o)); }
+function salvarNomes(o) { return gravarSeguro(NOMES_PATH(), JSON.stringify(o)); }
 
 /* ======================= ligacoes entre conversas (troca de IA) =======================
    Trocar de IA no meio de um chat faz o motor novo abrir OUTRA conversa, no armazenamento
@@ -2144,28 +2169,39 @@ function lerContextoColado(texto) {
    aparece escrita no arquivo (escapada como JSON). Corta por letra, nao por byte, para um
    emoji partido nao virar um \ud83d que nunca bate. */
 function provasDaTroca(ctx) {
-  const linha = (t) => Array.from(String(t || '').split('\n').map(x => x.trim()).find(x => x.length >= 12) || '').slice(0, 80).join('');
-  return [linha(ctx.fala), linha(ctx.resposta)].filter(Boolean).map(t => JSON.stringify(t).slice(1, -1));
+  const limpar = (t) => semAcento(String(t || '')).toLowerCase().replace(/\s+/g, ' ').trim();
+  return { fala: limpar(ctx.fala).slice(0, 600), resposta: limpar(ctx.resposta).slice(0, 600) };
 }
-/* A conversa de antes: da IA que o contexto diz, na mesma pasta, que parou antes de a nova
-   nascer (2 min de folga: o motor velho ainda grava ao ser desligado), da mais recente para a
-   mais velha — e so a que tem a prova dentro. */
+/* Evidência humana específica é obrigatória. Recência não desempata duas conversas com o
+   mesmo pedido; uma resposta suficientemente específica pode confirmar, nunca substituir. */
 function acharParteAntiga(nova, ctx, lista, lerTexto) {
   const provas = provasDaTroca(ctx);
-  if (!ctx.motor || !provas.length) return null;
+  if (!ctx.motor || provas.fala.length < 20 || provas.fala.split(' ').length < 4) return null;
   const pasta = (c) => String(c || '').replace(/\/+$/, '');
   const limite = (nova.nasceu || nova.when || 0) + 120000;
   const candidatas = lista.filter(s => s && s.file && s.engine === ctx.motor && !(s.engine === nova.engine && s.id === nova.id)
       && (!nova.cwd || !s.cwd || pasta(s.cwd) === pasta(nova.cwd)) && (s.when || 0) <= limite)
     .sort((a, b) => (b.when || 0) - (a.when || 0)).slice(0, 6);
+  const bateu = [];
   for (const s of candidatas) {
-    const texto = lerTexto(s);
-    if (texto && provas.some(p => texto.includes(p))) return s;
+    const bruto = String(lerTexto(s) || '');
+    // Decodifica só strings JSON de conteúdo: aspas, quebras e acentos não mudam a prova.
+    const textos = [];
+    for (const m of bruto.matchAll(/"(?:text|content)"\s*:\s*("(?:[^"\\]|\\.)*")/g)) {
+      try { textos.push(JSON.parse(m[1])); } catch {}
+    }
+    const texto = semAcento(textos.join(' ')).toLowerCase().replace(/\s+/g, ' ').trim();
+    if (!texto.includes(provas.fala)) continue;
+    const score = 1 + (provas.resposta.length >= 80 && texto.includes(provas.resposta) ? 1 : 0);
+    bateu.push({ s, score });
   }
-  return null;
+  bateu.sort((a, b) => b.score - a.score);
+  if (!bateu.length || bateu[1] && bateu[1].score === bateu[0].score) return null;
+  return bateu[0].s;
 }
 async function costurarConversasAntigas() {
-  if (fs.existsSync(COSTURA_ANTIGA_PATH())) return { feito: true, novas: 0 };
+  try { if (JSON.parse(fs.readFileSync(COSTURA_ANTIGA_PATH(), 'utf8')).v === 2) return { feito: true, novas: 0 }; } catch {}
+  // Versão 2 reexamina apenas conversas ainda sem ligação; nunca reescreve costuras existentes.
   const lista = [];
   try { lista.push(...claudeSessions(5000, false)); } catch {}
   try { lista.push(...codexSessions(false, {})); } catch {}
@@ -2204,7 +2240,7 @@ async function costurarConversasAntigas() {
     if (nova && !todas[nova.engine + ':' + nova.id] && !juntarLigacao(todas, nova, anterior)) novas++;
   }
   if (novas && !salvarLigacoes(todas)) return { error: 'Não consegui gravar a costura das conversas antigas.' };
-  gravarSeguro(COSTURA_ANTIGA_PATH(), JSON.stringify({ feito: Date.now(), vistas, novas }));
+  gravarSeguro(COSTURA_ANTIGA_PATH(), JSON.stringify({ v: 2, feito: Date.now(), vistas, novas }));
   return { feito: true, novas };
 }
 let costurandoAntigas = null;
@@ -2222,7 +2258,7 @@ handle('sessao:renomear', async (_e, { engine, id, nome, origem }) => {
   if (nome && nome.trim()) { todos[id] = nome.trim(); marcas[id] = origem === 'auto' ? 'auto' : 'manual'; }
   else { delete todos[id]; delete marcas[id]; }
   todos._origem = marcas;
-  salvarNomes(todos);
+  if (!salvarNomes(todos)) return { error: 'Não consegui salvar o nome da conversa.' };
   if (engine === 'codex' && id) {
     try { await codexStart(); await codexReq('local', 'thread/name/set', { threadId: id, name: nome || null }); } catch {}
   }
@@ -2266,15 +2302,40 @@ handle('sessao:nomeCurto', async (_e, o) => {
    {}: o cartao fica com o nome local e ninguem tenta de novo. 45 s de prazo: o Haiku sem raciocinio
    responde em uns 5 s para 6 agentes (medido em 26/09). */
 /* "Mais detalhes" de um trecho (26/09): pergunta avulsa ao Claude, em paralelo ao chat (mais-detalhes.js) */
+const detalhesAtivos = new Map();
+const origemDetalhe = (e) => e && e.remoto ? 'web:' + e.conexaoId : 'app:' + (e && e.sender && e.sender.id || 'local');
+handle('detalhe:cancelar', async (e, { requestId } = {}) => {
+  const d = detalhesAtivos.get(requestId);
+  if (!d || d.origem !== origemDetalhe(e)) return { ok: true };
+  d.cancelado = true;
+  if (d.cancelar) await d.cancelar();
+  return { ok: true };
+});
 handle('detalhe:perguntar', async (_e, o) => {
   const d = (o && typeof o === 'object') ? o : {};
+  if (saindoDoApp) return { cancelado: true };
+  if (typeof d.requestId !== 'string' || !/^[A-Za-z0-9_-]{1,120}$/.test(d.requestId)) return { error: 'O pedido de detalhes não tem um identificador válido.' };
+  if (detalhesAtivos.has(d.requestId)) return { error: 'Este pedido de detalhes já está em andamento.' };
+  if (detalhesAtivos.size >= 4) return { error: 'Já existem quatro pedidos de detalhes em andamento. Aguarde ou feche um deles.' };
+  const invalido = maisDetalhes.validarEntrada(d);
+  if (invalido) return { error: invalido };
   const pedido = maisDetalhes.montarPedido(d);
   if (!pedido) return { error: 'Sem trecho.' };
   if (!fs.existsSync(CLAUDE_BIN)) return { error: 'O Claude não está instalado neste Mac.' };
-  const r = await rodar(CLAUDE_BIN, maisDetalhes.argsDoDetalhe(pedido), 180000);
-  const texto = String(r.out || '').trim();
-  if (r.err || !texto) return { error: texto || String(r.errout || '').trim().split('\n').pop() || 'Não veio resposta.' };
-  return { texto };
+  const controle = { origem: origemDetalhe(_e), cancelado: false };
+  detalhesAtivos.set(d.requestId, controle);
+  try {
+    const env = maisDetalhes.ambienteDoDetalhe(buildEnv());
+    const auth = await rodar(CLAUDE_BIN, ['auth', 'status'], 25000, { env, cwd: HOME, controle });
+    if (controle.cancelado) return { cancelado: true };
+    let conta; try { conta = JSON.parse(auth.out); } catch {}
+    if (auth.err || !maisDetalhes.contaDeAssinatura(conta)) return { error: 'Entre no Claude com sua assinatura para usar Mais detalhes. Esta função não usa créditos de API.' };
+    const r = await rodar(CLAUDE_BIN, maisDetalhes.argsDoDetalhe(), 150000, { env, cwd: HOME, entrada: pedido, controle });
+    if (controle.cancelado) return { cancelado: true };
+    const texto = String(r.out || '').trim();
+    if (r.err || !texto) return { error: String(r.errout || '').trim().split('\n').pop() || (r.err && r.err.message) || 'Não veio resposta.' };
+    return { texto };
+  } finally { if (detalhesAtivos.get(d.requestId) === controle) detalhesAtivos.delete(d.requestId); }
 });
 
 handle('agentes:nomes', async (_e, o) => {
@@ -2319,6 +2380,7 @@ const IND_TEXTO = path.join(HOME, '.cockpit', 'indice-texto.ndjson');
 const IND_VELHO = path.join(HOME, '.cockpit', 'indice-busca.json');   // formato antigo, so para converter
 /* Teto de texto guardado por conversa. Era 40 mil e, com 2769 conversas, isso dava 110 MB de
    indice. Continua valendo: guardar a conversa inteira nao paga, o comeco dela ja acha. */
+const IND_VERSAO = 2;              // somente conversa, sem instruções de system/developer
 const IND_MAX = 12000;              // caracteres de texto guardados por conversa
 const IND_PEDACO = 256 * 1024;      // quanto do arquivo de texto e lido por vez
 let indCarimbos = null, carimbosSujos = false, carimbosTimer = null;
@@ -2346,9 +2408,9 @@ function gravarCarimbosDepois() {
   }, 4000);
 }
 /* uma conversa por linha; o texto ja entra cortado no teto */
-function montarLinha(f, m, t, x) {
+function montarLinha(f, m, t, x, v = IND_VERSAO) {
   const texto = typeof x === 'string' ? (x.length > IND_MAX ? x.slice(0, IND_MAX) : x) : '';
-  return JSON.stringify({ f, m, t, x: texto }) + '\n';
+  return JSON.stringify({ f, m, t, v, x: texto }) + '\n';
 }
 
 /* Mudanca de casa, uma vez na vida: pega o indice antigo (aquele JSON unico) e espalha cada
@@ -2361,7 +2423,7 @@ function converterIndiceVelho() {
   for (const f of Object.keys(velho)) {
     const e = velho[f];
     if (!e || typeof e.x !== 'string') continue;
-    const linha = montarLinha(f, e.m, e.t, e.x);
+    const linha = montarLinha(f, e.m, e.t, e.x, 0);
     indCarimbos[f] = { m: e.m, t: e.t, b: Buffer.byteLength(linha) };
     linhas.push(linha);
   }
@@ -2387,7 +2449,7 @@ function guardarTexto(file, m, t, texto) {
     fs.mkdirSync(path.dirname(IND_TEXTO), { recursive: true });
     fs.appendFileSync(IND_TEXTO, linha);
   } catch { return null; }
-  const c = { m, t, b: Buffer.byteLength(linha) };
+  const c = { m, t, v: IND_VERSAO, b: Buffer.byteLength(linha) };
   carim[file] = c;
   gravarCarimbosDepois();
   return c;
@@ -2399,7 +2461,7 @@ function indexarSePreciso(file) {
   let st;
   try { st = fs.statSync(file); } catch { return null; }
   const e = carim[file];
-  if (e && e.m === st.mtimeMs && e.t === st.size) return e;
+  if (e && e.v === IND_VERSAO && e.m === st.mtimeMs && e.t === st.size) return e;
   return guardarTexto(file, st.mtimeMs, st.size, textoLegivel(file));
 }
 
@@ -2456,7 +2518,7 @@ async function compactarTexto() {
     let d;
     try { d = JSON.parse(linha); } catch { return; }
     const c = d && d.f ? carim[d.f] : null;
-    if (!c || c.m !== d.m || c.t !== d.t || feitos.has(d.f)) return;   // apagada, velha ou repetida
+    if (!c || c.v !== IND_VERSAO || d.v !== c.v || c.m !== d.m || c.t !== d.t || feitos.has(d.f)) return;   // apagada, velha ou repetida
     feitos.add(d.f);
     balde.push(linha + '\n'); baldeTam += linha.length + 1;
     if (baldeTam >= IND_PEDACO && !despejar()) return false;
@@ -2490,8 +2552,13 @@ function textoLegivel(file) {
       /* 3a alternativa (leva 12.5): a transcrição do ACP é {role, text} solto. Sem esta linha
          a conversa do ACP indexava VAZIA — e o índice guarda o vazio em cache, então ela nunca
          mais seria achada pela busca, mesmo depois de arrumar. */
-      t = pega(d.message && d.message.content) || pega(d.payload && d.payload.content)
-        || (d.role && typeof d.text === 'string' ? d.text : '') || '';
+      const msg = d.message || d.payload || d;
+      const role = msg.role || d.role || d.type;
+      if (!['user', 'assistant', 'bot'].includes(role) || d.isMeta || d.isSidechain || d.isCompactSummary) continue;
+      t = pega(msg.content) || (typeof msg.text === 'string' ? msg.text : '');
+      t = tiraBlocos(t);
+      if (ehTecnico(t)) continue;
+      if (role === 'user') t = semContexto(t) || t;
     } catch { continue; }
     t = String(t).replace(/\s+/g, ' ').trim();
     if (!t) continue;
@@ -2546,7 +2613,7 @@ handle('sessions:buscar', async (_e, { engine, termo, itens }) => {
     const id = d && d.f ? querido.get(d.f) : undefined;
     if (id === undefined || achou.has(id)) return;
     const c = carim[d.f];
-    if (!c || c.m !== d.m || c.t !== d.t) return;   // linha velha da mesma conversa nao vale
+    if (!c || c.v !== IND_VERSAO || d.v !== c.v || c.m !== d.m || c.t !== d.t) return;   // linha velha da mesma conversa nao vale
     const t = trechoDoIndice(d.x || '', alvo);
     if (t) achou.set(id, t);
   });
@@ -2723,25 +2790,45 @@ function cortarHistorico(msgs, maxFalas, maxTools) {
   return trecho.filter(m => !(m.role === 'tool' && sobra-- > 0));
 }
 
-/* teto da leitura do histórico ao reabrir: 64 MB cobre as conversas longas do Claude (a maior tem
-   59 MB) e lê em menos de 1 s; acima disso (Codex de 100 MB) só o final, para não travar a janela. */
-const HIST_TETO = 64 * 1024 * 1024;
-function claudeHistory(file, maxFalas, maxTools) {
-  const msgs = [];
-  let data = '';
+/* Leitura em blocos: nenhuma sessão vira uma string gigante no processo principal.
+   Devolve o controle entre blocos e durante lotes de linhas; uma linha dividida em blocos
+   é juntada uma única vez (concatenação repetida de base64 grande era quadrática). */
+async function varrerLinhasSessao(file, visitar) {
+  let fd;
   try {
-    const st = fs.statSync(file);
-    // 26/09 (pedido dele): reabrir traz a conversa INTEIRA. O corte de 6 MB mostrava só o fim das
-    // conversas longas (esta tinha 25 MB). Só arquivo acima de HIST_TETO ainda lê pelo final.
-    data = st.size > HIST_TETO ? tailRead(file, HIST_TETO) : fs.readFileSync(file, 'utf8');
-  } catch { return msgs; }
-  for (const line of data.split('\n')) {
-    if (!line.startsWith('{')) continue;
-    let d; try { d = JSON.parse(line); } catch { continue; }
+    fd = fs.openSync(file, 'r');
+    const tamanho = fs.fstatSync(fd).size;
+    let pos = 0, partes = [], desdeYield = Date.now();
+    while (pos < tamanho) {
+      const buf = Buffer.allocUnsafe(Math.min(256 * 1024, tamanho - pos));
+      const n = fs.readSync(fd, buf, 0, buf.length, pos);
+      if (!n) break;
+      pos += n;
+      let ini = 0, fim;
+      while ((fim = buf.indexOf(10, ini)) >= 0 && fim < n) {
+        const pedaco = buf.subarray(ini, fim);
+        const linha = partes.length ? Buffer.concat([...partes, pedaco]).toString('utf8') : pedaco.toString('utf8');
+        partes = []; ini = fim + 1;
+        visitar(linha);
+        if (Date.now() - desdeYield >= 8) { await new Promise(r => setImmediate(r)); desdeYield = Date.now(); }
+      }
+      if (ini < n) partes.push(buf.subarray(ini, n));
+      await new Promise(r => setImmediate(r)); desdeYield = Date.now();
+    }
+    if (partes.length) visitar(Buffer.concat(partes).toString('utf8'));
+    return true;
+  } catch (e) { anota('leitura da conversa:', e && e.message); return false; }
+  finally { if (fd !== undefined) { try { fs.closeSync(fd); } catch {} } }
+}
+async function claudeHistory(file, maxFalas, maxTools) {
+  const msgs = [];
+  await varrerLinhasSessao(file, (line) => {
+    if (!line.startsWith('{')) return;
+    let d; try { d = JSON.parse(line); } catch { return; }
     // isMeta marca o que o proprio Claude Code escreveu se passando por usuario: prompt de
     // subagente, texto de skill, aviso de imagem colada. Nada disso e conversa.
-    if (d.isMeta) continue;
-    if (d.isCompactSummary) { msgs.push({ role: 'compactou' }); continue; }
+    if (d.isMeta) return;
+    if (d.isCompactSummary) { msgs.push({ role: 'compactou' }); return; }
     if (d.type === 'user' && d.message) {
       const c = d.message.content;
       let t = typeof c === 'string' ? c : Array.isArray(c) ? c.filter(x => x && x.type === 'text').map(x => x.text).join('\n') : '';
@@ -2754,31 +2841,24 @@ function claudeHistory(file, maxFalas, maxTools) {
         else if (x.type === 'tool_use') msgs.push({ role: 'tool', name: x.name, arg: claudeToolArg(x.name, x.input) });
       }
     }
-  }
+  });
   return cortarHistorico(msgs, maxFalas || 600, maxTools);
 }
 
-function codexHistory(file, maxFalas, maxTools) {
+async function codexHistory(file, maxFalas, maxTools) {
   const msgs = [];
   const calls = new Map();
-  let data = '';
-  try {
-    const st = fs.statSync(file);
-    // R2-035: mesmo teto do claudeHistory. Sem isso, arquivo .jsonl grande do Codex
-    // trava o processo principal (e todos os paineis) numa leitura sincrona.
-    data = st.size > HIST_TETO ? tailRead(file, HIST_TETO) : fs.readFileSync(file, 'utf8');
-  } catch { return msgs; }
-  for (const line of data.split('\n')) {
-    if (!line.startsWith('{')) continue;
-    let d; try { d = JSON.parse(line); } catch { continue; }
-    if (d.type !== 'response_item') continue;
+  await varrerLinhasSessao(file, (line) => {
+    if (!line.startsWith('{')) return;
+    let d; try { d = JSON.parse(line); } catch { return; }
+    if (d.type !== 'response_item') return;
     const p = d.payload || {};
     if (p.type === 'message') {
-      if (p.role === 'developer' || p.role === 'system') continue;
+      if (p.role === 'developer' || p.role === 'system') return;
       const t = tiraBlocos((p.content || []).map(c => c.text || '').join('\n'));
       const attachments = (p.content || []).filter(c => ['input_image', 'image'].includes(c.type)).map(c => ({ url: c.image_url || c.url || '', nome: 'Imagem anexada' }));
-      if (!t && !attachments.length) continue;
-      if (t && (ehTecnico(t) || t.includes('<workspace_roots>'))) continue;
+      if (!t && !attachments.length) return;
+      if (t && (ehTecnico(t) || t.includes('<workspace_roots>'))) return;
       msgs.push({ role: p.role === 'user' ? 'user' : 'bot', text: p.role === 'user' ? (semContexto(t) || t) : t, attachments, anexos: attachments });
     } else if (['function_call', 'local_shell_call', 'custom_tool_call'].includes(p.type)) {
       let arg = '';
@@ -2800,7 +2880,7 @@ function codexHistory(file, maxFalas, maxTools) {
       const msg = codexProtocol.historyItem(p);
       if (msg) msgs.push(msg);
     }
-  }
+  });
   return cortarHistorico(msgs, maxFalas || 600, maxTools);
 }
 
@@ -3026,28 +3106,29 @@ function falaDeGenteClaude(o) {
   if (typeof c === 'string') return !!c.trim() && !/^<(command-|local-command)/.test(c.trim());
   return Array.isArray(c) && c.some(x => x && x.type === 'text' && String(x.text || '').trim()) && !c.some(x => x && x.type === 'tool_result');
 }
-function tempoDeTrabalho(engine, file) {
+async function tempoDeTrabalho(engine, file) {
   let st; try { st = fs.statSync(file); } catch { return 0; }
   const chave = engine + '|' + file;
   const c = tempoCache.get(chave);
   if (c && c.size === st.size && c.mtime === st.mtimeMs) return c.total;
   let total = 0, ultimo = 0, emTurno = false;
-  let texto = ''; try { texto = fs.readFileSync(file, 'utf8'); } catch { return 0; }
-  for (const linha of texto.split('\n')) {
-    if (!linha || linha.indexOf('"timestamp"') < 0) continue;
-    let o; try { o = JSON.parse(linha); } catch { continue; }
+  const lido = await varrerLinhasSessao(file, (linha) => {
+    if (!linha || linha.indexOf('"timestamp"') < 0) return;
+    let o; try { o = JSON.parse(linha); } catch { return; }
     const ts = Date.parse(o.timestamp || '');
-    if (!ts) continue;
+    if (!ts) return;
     // Codex: cada resposta vem marcada (task_started … task_complete); Claude: a fala dele abre
     const tipoCodex = engine === 'codex' && o.type === 'event_msg' && o.payload ? o.payload.type : '';
     const deGente = engine === 'codex' ? (tipoCodex === 'task_started' || tipoCodex === 'user_message') : falaDeGenteClaude(o);
-    if (deGente) { if (!(emTurno && tipoCodex === 'user_message')) ultimo = ts; emTurno = true; continue; }
-    if (!emTurno) continue;
+    if (deGente) { if (!(emTurno && tipoCodex === 'user_message')) ultimo = ts; emTurno = true; return; }
+    if (!emTurno) return;
     const passo = ts - ultimo;
     if (passo > 0 && passo < TEMPO_PAUSA_MAX) total += passo;
     if (passo > 0) ultimo = ts;
     if (tipoCodex === 'task_complete' || tipoCodex === 'turn_aborted') emTurno = false;
-  }
+  });
+  if (!lido) return 0;
+  if (tempoCache.size >= 256) tempoCache.delete(tempoCache.keys().next().value);
   tempoCache.set(chave, { size: st.size, mtime: st.mtimeMs, total });
   return total;
 }
@@ -3438,18 +3519,42 @@ handle('skills:list', (_e, engine) => {
 });
 
 /* ---------- conectores (MCP) ---------- */
-function rodar(bin, args, timeout) {
-  // spawnBin em vez de execFile porque no Windows o binario pode ser um .cmd,
-  // que o Node se recusa a chamar direto desde a correcao de seguranca do Node 20
+function rodar(bin, args, timeout, opcoes = {}) {
   return new Promise((res) => {
-    let out = '', errout = '', acabou = false;
-    const p = spawnBin(bin, args, { env: buildEnv(), stdio: ['ignore', 'pipe', 'pipe'] });
-    const t = setTimeout(() => { try { p.kill(); } catch {} }, timeout || 60000);
-    const fim = (err) => { if (acabou) return; acabou = true; clearTimeout(t); res({ err, out, errout }); };
-    p.stdout.on('data', (d) => { if (out.length < 4 * 1024 * 1024) out += d.toString('utf8'); });
-    p.stderr.on('data', (d) => { if (errout.length < 4 * 1024 * 1024) errout += d.toString('utf8'); });
+    let out = '', errout = '', acabou = false, t;
+    let p;
+    if (opcoes.controle && opcoes.controle.cancelado) { res({ err: new Error('Pedido cancelado.'), out, errout }); return; }
+    try { p = spawnBin(bin, args, { env: opcoes.env || buildEnv(), ...(opcoes.cwd ? { cwd: opcoes.cwd } : {}), stdio: [opcoes.entrada !== undefined ? 'pipe' : 'ignore', 'pipe', 'pipe'], detached: !EH_WIN }); }
+    catch (err) { res({ err, out, errout }); return; }
+    const saida = new StringDecoder('utf8'), erroSaida = new StringDecoder('utf8');
+    const dados = (d) => { if (!acabou && out.length < 4 * 1024 * 1024) out += saida.write(d); };
+    const erros = (d) => { if (!acabou && errout.length < 4 * 1024 * 1024) errout += erroSaida.write(d); };
+    const fim = (err) => {
+      if (acabou) return;
+      acabou = true; clearTimeout(t);
+      out += saida.end(); errout += erroSaida.end();
+      p.stdout.removeListener('data', dados); p.stderr.removeListener('data', erros);
+      res({ err, out, errout });
+    };
+    if (opcoes.controle) opcoes.controle.cancelar = () => {
+      opcoes.controle.cancelado = true;
+      if (acabou) return Promise.resolve();
+      fim(new Error('Pedido cancelado.'));
+      return matarGrupoExtra(p);
+    };
+    t = setTimeout(() => {
+      const err = new Error('O comando excedeu o prazo de ' + (timeout || 60000) + ' ms.');
+      err.code = 'ETIMEDOUT'; fim(err);
+      // Mantém o ouvinte de error: uma falha tardia do filho não derruba o Electron.
+      matarGrupoExtra(p);
+    }, timeout || 60000);
+    p.stdout.on('data', dados); p.stderr.on('data', erros);
     p.on('error', (e) => fim(e));
     p.on('close', (code) => fim(code === 0 ? null : new Error('saiu com código ' + code)));
+    if (opcoes.entrada !== undefined) {
+      p.stdin.on('error', (e) => { fim(e); matarGrupoExtra(p); });
+      try { p.stdin.end(opcoes.entrada); } catch (e) { fim(e); matarGrupoExtra(p); }
+    }
   });
 }
 
@@ -4202,16 +4307,15 @@ handle('codex:api-test', async (_e) => {
 });
 handle('codex:api-config:set', async (_e, dados) => {
   if (souRemoto(_e)) return { error: 'O uso por créditos só pode ser alterado no Mac.' };
+  const mudaEnabled = dados && Object.prototype.hasOwnProperty.call(dados, 'enabled');
+  if (mudaEnabled && dados.enabled && !(await temChaveAstra(false))) return { error: 'Guarde a chave da OpenAI antes de ligar os créditos.' };
   const c = loadConfig();
   const cap = Number(dados && dados.capUsd);
   c.codexApiCapUsd = Number.isFinite(cap) && cap > 0 ? Math.min(10000, cap) : 10;
-  if (dados && Object.prototype.hasOwnProperty.call(dados, 'enabled')) {
-    if (dados.enabled && !(await temChaveAstra(false))) return { error: 'Guarde a chave da OpenAI antes de ligar os créditos.' };
-    c.codexApiEnabled = !!dados.enabled;
-  }
+  if (mudaEnabled) c.codexApiEnabled = !!dados.enabled;
+  if (saveConfig(c) < 0) return { error: 'Não consegui salvar a configuração dos créditos.' };
   anotarChaveDoMain('codexApiCapUsd', c.codexApiCapUsd);
   anotarChaveDoMain('codexApiEnabled', !!c.codexApiEnabled);
-  saveConfig(c);
   // Desligar significa parar também um trabalho pago que já esteja rodando, não só o próximo.
   if (!c.codexApiEnabled) {
     for (const [paneId, origem] of codexPaneBilling) {
@@ -4814,6 +4918,7 @@ function fundoDaJanela() {
 
 /* ======================= janela ======================= */
 function createWindow() {
+  if (!saindoDoApp) somConclusao.reabrir();
   // antes da janela nascer: assim o prefers-color-scheme da pagina ja chega certo no 1o quadro
   try { aplicarAparenciaNativa(loadConfig().tema); } catch {}
   win = new BrowserWindow({
@@ -4931,7 +5036,7 @@ function createWindow() {
    recebeu uma mensagem e ainda nao devolveu o fim do turno. Painel aberto e parado nao conta,
    senao o aviso apareceria toda vez que a janela fecha. */
 function agentesTrabalhando() {
-  let n = 0;
+  let n = detalhesAtivos.size;
   try { n += codex.paneTurn.size; } catch {}
   try { for (const st of claudePanes.values()) if (st && st.rodando) n++; } catch {}
   try { n += cli.trabalhando(); } catch {}
@@ -4942,7 +5047,8 @@ let saindoDoApp = false;
 
 async function shutdown() {
   paneStarts.clear();
-  const espera = [];   // R2-034: promessas do SIGKILL de garantia de cada processo filho
+  const espera = [somConclusao.fechar()];   // R2-034: promessas do SIGKILL de garantia de cada processo filho
+  for (const d of detalhesAtivos.values()) { d.cancelado = true; if (d.cancelar) espera.push(d.cancelar()); }
   espera.push(cli.fechar());   // R3-009: antes rodava solto (fire-and-forget), sem esperar Gemini morrer
   espera.push(acp.fechar());   // R3-009: idem para ACP/Grok
   fecharMestresSsh();   // o mestre do ControlPersist nao fica pendurado depois do app
@@ -4965,7 +5071,7 @@ async function shutdown() {
   }
   // so' agora, com tudo desligado: espera o SIGTERM/SIGKILL de cada processo terminar (ou o
   // teto de 1,5s de cada um) antes do 'before-quit' deixar o Electron fechar o app de vez.
-  await Promise.all(espera);
+  await Promise.all([...espera, ...gruposEncerrando]);
 }
 
 /* ======================= IPC ======================= */
@@ -4980,9 +5086,9 @@ handle('config:get', () => {
   corrigirPastasSumidas(d);
   return d;
 });
-/* 26/09: abas e chats salvos com pasta que mudou de lugar (~/Desktop/Projetos-claude → ~/Projetos)
-   ou sumiu: ao abrir o app, todo "cwd" que não existe mais vira a pasta certa (pastaQueExiste).
-   Sem isto a aba "Adsure" continuava na pasta velha e TODO chat novo nela morria com ENOENT. */
+/* 26/09: recupera somente a mudança conhecida de ~/Desktop/Projetos-claude para ~/Projetos.
+   Outras pastas ausentes continuam salvas com o caminho escolhido: subir para um ancestral
+   aqui faria o próximo pedido trabalhar silenciosamente em outro projeto. */
 function corrigirPastasSumidas(o, fundo = 0) {
   if (!o || typeof o !== 'object' || fundo > 6) return;
   for (const k of Object.keys(o)) {
@@ -5294,7 +5400,7 @@ handle('aviso:pronto', (_e, { paneId, titulo, texto }) => {
     const n = new Notification({
       title: titulo || 'Terminou',
       body: (texto || '').slice(0, 220),
-      silent: false,
+      silent: process.platform === 'darwin',
     });
     n.on('click', () => {
       if (!win) return;
@@ -5511,27 +5617,39 @@ function attachCodexThread(paneId, threadId, response, settings) {
    nem opencode). O motor entra pronto; quando um deles for instalado, ele roda sem mais nada. */
 const acpMod = require('./acp.js');
 function motorAcp(engine) { return engine === 'acp' || engine === 'grok'; }
+const gruposEncerrando = new Set();
+const encerramentoPorProcesso = new WeakMap();
 function matarGrupoExtra(proc) {
+  if (proc && encerramentoPorProcesso.has(proc)) return encerramentoPorProcesso.get(proc);
   if (!proc) return Promise.resolve();
   if (!EH_WIN && Number.isInteger(proc.pid) && proc.pid > 1) {
     try { process.kill(-proc.pid, 'SIGTERM'); } catch { try { proc.kill('SIGTERM'); } catch {} }
-    /* R2-034: o timer nasce unref'd de proposito (nao pode travar o fechar de UM painel), mas
-       isso deixava o SIGKILL de garantia correndo o risco de nunca disparar no fechamento
-       TOTAL do app — o Electron podia sumir com o processo antes dos 1500ms. Agora devolve
-       uma Promise que resolve no 'exit' (caminho feliz, rapido) OU no proprio SIGKILL (o que
-       vier primeiro); shutdown() espera essa promessa antes do app.exit(). */
-    return new Promise((resolve) => {
-      let feito = false;
-      const acabar = () => { if (feito) return; feito = true; resolve(); };
-      try { proc.once('exit', acabar); } catch {}
-      const timer = setTimeout(() => { try { process.kill(-proc.pid, 'SIGKILL'); } catch {} acabar(); }, 1500);
+    // Exit do pai não prova fim dos MCPs/filhos. Só libera cedo se o grupo sumiu.
+    const encerrando = new Promise((resolve) => {
+      let feito = false, timer;
+      const acabar = () => {
+        if (feito) return;
+        feito = true; clearTimeout(timer);
+        if (proc.removeListener) proc.removeListener('exit', conferirGrupo);
+        resolve();
+      };
+      const conferirGrupo = () => {
+        try { process.kill(-proc.pid, 0); }
+        catch (e) { if (e && e.code === 'ESRCH') acabar(); }
+      };
+      try { proc.once('exit', conferirGrupo); } catch {}
+      timer = setTimeout(() => { try { process.kill(-proc.pid, 'SIGKILL'); } catch {} acabar(); }, 1500);
       if (timer.unref) timer.unref();
+      if (proc.exitCode !== null && proc.exitCode !== undefined) conferirGrupo();
     });
+    gruposEncerrando.add(encerrando); encerramentoPorProcesso.set(proc, encerrando);
+    encerrando.finally(() => gruposEncerrando.delete(encerrando));
+    return encerrando;
   }
   matarProcesso(proc);
   return Promise.resolve();
 }
-const { horaDaUltimaFala, horaNoTexto } = require('./hora-da-fala');
+const { horaDaUltimaFala } = require('./hora-da-fala');
 const cli = require('./cli-motors').criarCli({ HOME, emit: (paneId, kind, data) => {
   if (kind === 'sessao' && data && data.id) marcarDonoDoFio(paneId, data.id, 'gemini');
   emit(paneId, kind, data);
@@ -5667,30 +5785,36 @@ handle('sessions:acp', () => {
   catch (e) { return { error: String(e && e.message || e) }; }
 });
 
-/* 26/09: chat salvo numa pasta que não existe mais. A mudança de pastas de 26/09 levou
-   ~/Desktop/Projetos-claude para ~/Projetos, e o chat aberto lá morria com "spawn …/claude ENOENT"
-   (o Mac diz ENOENT quando a PASTA do processo não existe, não o programa). Agora: caminho velho
-   vira o novo; sem novo, vale a pasta mais próxima que ainda existe (no fim, a pessoal). */
+/* 26/09: o cwd antigo causava "spawn …/claude ENOENT". Só migra quando o destino EXATO da
+   mudança conhecida existe como diretório. Sem isso, preserva o caminho para o pane:start
+   explicar o problema e deixar o usuário escolher a pasta, sem trabalhar no lugar errado. */
 function pastaQueExiste(cwd) {
   if (!cwd || typeof cwd !== 'string' || /^vps:/.test(cwd)) return cwd;
   try { if (fs.existsSync(cwd)) return cwd; } catch {}
   // só mexe no que é da pasta pessoal (disco externo desplugado ou caminho de outra máquina fica como está)
   if (!cwd.startsWith(HOME + path.sep)) return cwd;
   const velha = path.join(HOME, 'Desktop', 'Projetos-claude');
-  if (cwd === velha || cwd.startsWith(velha + '/')) {
+  if (cwd === velha || cwd.startsWith(velha + path.sep)) {
     const nova = path.join(PASTA_PROJETOS, cwd.slice(velha.length));
-    if (fs.existsSync(nova)) return nova;
-    return PASTA_PROJETOS;   // o cliente não veio junto na mudança: fica na pasta dos projetos
+    try { if (fs.statSync(nova).isDirectory()) return nova; } catch {}
   }
-  let p = cwd;
-  while (p && p !== path.dirname(p) && !fs.existsSync(p)) p = path.dirname(p);
-  return p && p !== '/' && fs.existsSync(p) ? p : HOME;
+  return cwd;
 }
 
 handle('pane:start', async (_e, data) => {
   const { paneId, engine, model, approval, resumeId, effort, billing } = data;
   let { cwd } = data;
   { const certa = pastaQueExiste(cwd);
+    const alvo = certa == null || certa === '' ? HOME : certa;
+    if (!ehRemoto(alvo)) {
+      try {
+        if (typeof alvo !== 'string' || !fs.statSync(alvo).isDirectory()) {
+          return { error: 'O caminho deste chat não é uma pasta: ' + String(alvo) + '. Escolha a pasta pelo ícone de pasta do chat.' };
+        }
+      } catch {
+        return { error: 'Não consegui abrir a pasta deste chat: ' + alvo + '. Ela pode ter sido movida ou removida. Escolha a pasta pelo ícone de pasta do chat.' };
+      }
+    }
     if (certa !== cwd) { data.cwd = cwd = certa; emit(paneId, 'pasta-movida', { cwd: certa }); } }
   /* Esta conversa ja esta aberta em outra tela (ou em outro chat)? Entao NAO sobe um segundo
      agente nela de cara: seriam dois mexendo no mesmo historico e na mesma pasta ao mesmo
@@ -5843,17 +5967,23 @@ handle('pane:settings', async (_e, data) => {
 handle('pane:send', async (_e, data) => {
   const { paneId, engine, text, attachments = data.anexos || [] } = data;
   if (engine === 'gemini') return cli.enviar(paneId, text, attachments);
-  /* leva 12.3 — o acp.enviar espera uma lista de CAMINHOS (string); aqui o anexo é objeto.
+  /* O ACP aceita objetos de anexo para preservar nome, miniatura e tamanho ao reabrir.
      A imagem vai como bloco do protocolo quando o agente anuncia que aceita; o resto vira
      lista de caminhos no fim do texto, feito pelo próprio acp.js. */
-  if (motorAcp(engine)) return acp.enviar(paneId, text, (attachments || []).map(a => a && a.path).filter(Boolean));
+  if (motorAcp(engine)) return acp.enviar(paneId, text, attachments || []);
   if (engine === 'claude') {
     // No Mac a interface continua usando o texto com a lista de caminhos; na VPS a foto vai
     // embutida em base64 (R2-013), porque o processo remoto nao enxerga o disco do Mac.
     const content = claudeAttachmentContent(text, attachments, ehRemoto(claudeCwd.get(paneId)));
     const foi = escreverClaude(paneId, { type: 'user', message: { role: 'user', content } });
     // marca que este painel esta no meio de um turno: e isso que o aviso de fechar a janela le
-    if (foi) { const st = claudePanes.get(paneId); if (st) st.rodando = true; }
+    if (foi) {
+      const st = claudePanes.get(paneId);
+      if (st) {
+        st.rodando = true; st.somTurno = crypto.randomUUID();
+        somConclusao.iniciar(paneId, st.somTurno);
+      }
+    }
     return foi;
   }
   const tid = codex.paneToThread.get(paneId);
@@ -5899,13 +6029,17 @@ handle('pane:send', async (_e, data) => {
     codexPendingSettings.delete(paneId);
     emit(paneId, 'settings', { ...(codexPaneSettings.get(paneId) || {}), effective: true, pending: false });
   }
-  if (response && response.turn && response.turn.id && !['completed', 'failed', 'interrupted'].includes(response.turn.status) && (codexTurnRevision.get(paneId) || 0) === turnRevision) codex.paneTurn.set(paneId, response.turn.id);
+  if (response && response.turn && response.turn.id && !['completed', 'failed', 'interrupted'].includes(response.turn.status) && (codexTurnRevision.get(paneId) || 0) === turnRevision) {
+    codex.paneTurn.set(paneId, response.turn.id);
+    somConclusao.iniciar(paneId, response.turn.id);
+  }
   // Notificações thread/settings/updated são autoritativas; esta emissão confirma
   // que o servidor aceitou o pedido com as escolhas transmitidas.
   return true;
 });
 
 handle('pane:compactar', async (_e, { paneId, engine }) => {
+  somConclusao.cancelar(paneId);
   if (engine === 'gemini') return { error: 'Comece uma conversa nova no Gemini quando ela ficar longa.' };
   if (motorAcp(engine)) return { error: 'O agente ACP não tem "compactar" por aqui. Comece uma conversa nova quando ela ficar longa.' };
   if (engine === 'claude') {
@@ -5940,6 +6074,7 @@ handle('pane:steer', async (_e, data) => {
 });
 
 handle('pane:interrupt', async (_e, { paneId, engine }) => {
+  somConclusao.cancelar(paneId);
   if (engine === 'gemini') { cli.parar(paneId, true); return true; }
   // o ACP tem cancelamento de verdade (session/cancel): o turno termina com stopReason
   if (motorAcp(engine)) { acp.interromper(paneId); return true; }
@@ -5954,6 +6089,7 @@ handle('pane:interrupt', async (_e, { paneId, engine }) => {
 });
 
 handle('pane:stop', async (_e, { paneId, engine }) => {
+  somConclusao.cancelar(paneId);
   paneStarts.delete(paneId);
   const delta = filaDelta.get(paneId);
   if (delta) { clearTimeout(delta.timer); filaDelta.delete(paneId); }
@@ -6023,6 +6159,7 @@ handle('pane:approve', (_e, { key, allow, paneId, sempre }) => {
     return ok;
   }
   if (a.kind === 'claude') {
+    if (!pedidoClaudeAtual(a)) { pendingApprovals.delete(key); return false; }
     // "sempre": devolve as regras que o próprio Claude sugeriu (é assim que o terminal dele faz)
     const permitir = { behavior: 'allow', updatedInput: a.input };
     if (ehSempre && Array.isArray(a.sugestoes) && a.sugestoes.length) permitir.updatedPermissions = a.sugestoes;
@@ -6052,6 +6189,7 @@ function estadoPane(paneId) {
   const busy = !!(st && st.rodando) || codex.paneTurn.has(paneId) || cli.ocupado(paneId) || acp.ocupado(paneId);
   let aprovacao = null;
   for (const a of pendingApprovals.values()) {
+    if (/^claude(?:-|$)/.test(a.kind) && !pedidoClaudeAtual(a)) continue;
     if (a.paneId === paneId && a.evento) { aprovacao = a.evento; break; }
   }
   return { busy, aprovacao };
@@ -6063,7 +6201,7 @@ handle('pane:estado', (_e, { paneId }) => estadoPane(paneId));
    terminal dele faz). pular = ele fechou sem responder: o Claude segue sem as respostas. */
 handle('pane:perguntas', (_e, { key, paneId, answers, pular } = {}) => {
   const a = pendingApprovals.get(key);
-  if (!a || a.kind !== 'claude-perguntas' || (paneId !== undefined && a.paneId !== paneId)) return { error: 'Esta pergunta já foi encerrada.' };
+  if (!a || a.kind !== 'claude-perguntas' || !pedidoClaudeAtual(a) || (paneId !== undefined && a.paneId !== paneId)) return { error: 'Esta pergunta já foi encerrada.' };
   let resposta;
   if (pular) resposta = { behavior: 'deny', message: 'O usuário fechou as perguntas sem responder. Siga com a melhor escolha e diga qual foi, ou pergunte de outro jeito.' };
   else {
@@ -6085,7 +6223,7 @@ handle('pane:perguntas', (_e, { key, paneId, answers, pular } = {}) => {
    escreveu vai como ajuste e o Claude continua planejando. */
 handle('pane:plano', (_e, { key, paneId, aprovar, modo, texto } = {}) => {
   const a = pendingApprovals.get(key);
-  if (!a || a.kind !== 'claude-plano' || (paneId !== undefined && a.paneId !== paneId)) return { error: 'Este plano já foi respondido.' };
+  if (!a || a.kind !== 'claude-plano' || !pedidoClaudeAtual(a) || (paneId !== undefined && a.paneId !== paneId)) return { error: 'Este plano já foi respondido.' };
   let resposta;
   if (aprovar) {
     resposta = { behavior: 'allow', updatedInput: a.input };
@@ -6883,43 +7021,67 @@ handle('web:estado', () => ({
   endereco: web ? web.endereco : '',
   senha: senhaDoTelefone(),
 }));
-handle('web:ligar', async (_e, ligar) => {
-  const cfg = loadConfig();
-  if (ligar && !web) {
+let webDesejado = false;
+let webTransicao = null;
+let webPendente = null, webGeracao = 0;
+function fecharWeb(instancia) {
+  if (!instancia) return;
+  try { if (instancia.fechar) instancia.fechar(); else instancia.servidor.close(); } catch {}
+}
+function salvarEstadoWeb(ligado) {
+  const fresco = loadConfig();
+  fresco.webLigado = ligado;
+  if (ligado) fresco.webSeguroConfirmado = true;
+  if (saveConfig(fresco) < 0) return false;
+  anotarChaveDoMain('webLigado', ligado);
+  if (ligado) anotarChaveDoMain('webSeguroConfirmado', true);
+  return true;
+}
+async function reconciliarWeb() {
+  while (webDesejado && !web) {
+    let tentativa = null, geracao = webGeracao;
     try {
-      const sw = require('./servidor-web.js');
-      web = sw.criar({
-        pastaRenderer: path.join(__dirname, 'renderer'),
-        handlers: HANDLERS, ouvintes: ouvintesWeb,
-        porta: 7788, senha: senhaDoTelefone(), somenteTailscale: true, endereco: await enderecoTailscale(),
+      const endereco = await enderecoTailscale();
+      if (!webDesejado) break;
+      geracao = webGeracao;
+      tentativa = require('./servidor-web.js').criar({
+        pastaRenderer: path.join(__dirname, 'renderer'), handlers: HANDLERS, ouvintes: ouvintesWeb,
+        porta: 7788, senha: senhaDoTelefone(), somenteTailscale: true, endereco,
       });
-      // espera o servidor ESCUTAR de verdade antes de dizer que ligou: com a porta ocupada
-      // a tela mostrava endereco e senha e o telefone nunca conectava
-      if (web && web.pronto) await web.pronto;
+      webPendente = tentativa;
+      if (tentativa.pronto) await tentativa.pronto;
+      if (!webDesejado || geracao !== webGeracao) { fecharWeb(tentativa); continue; }
+      web = tentativa;
+      if (!salvarEstadoWeb(true)) throw new Error('Não consegui salvar o acesso pelo celular.');
       manterAcordado(true);
-      /* R2-038: 'cfg' foi lido ANTES dos dois awaits acima (endereco do Tailscale, ate 5s; e o
-         servidor subir). Nesse meio-tempo o renderer pode gravar config novo (painel aberto,
-         aba criada) — gravar por cima de 'cfg' aqui apagaria essa gravacao concorrente e o
-         numero de abas nao mudou, entao a rede de seguranca do saveConfig nao pega isso.
-         Reler o disco na hora e mexer so' nos dois campos deste handler evita a corrida. */
-      const fresco = loadConfig();
-      fresco.webLigado = true; fresco.webSeguroConfirmado = true;
-      anotarChaveDoMain('webLigado', true); anotarChaveDoMain('webSeguroConfirmado', true);
-      saveConfig(fresco);
     } catch (e) {
-      try { if (web) web.fechar(); } catch {}
-      web = null; manterAcordado(false);
-      anota('web:', e); return { error: e.message };
-    }
-  } else if (!ligar && web) {
-    // fechar() derruba tambem os telefones ja conectados; o close() sozinho so impedia
-    // conexao nova e quem estava dentro seguia com poder total sobre o Mac
-    try { (web.fechar || web.servidor.close.bind(web.servidor))(); } catch {}
-    web = null; manterAcordado(false); cfg.webLigado = false;
-    anotarChaveDoMain('webLigado', false);
-    saveConfig(cfg);
+      fecharWeb(tentativa);
+      if (web === tentativa) web = null;
+      if (geracao !== webGeracao) continue;
+      manterAcordado(!!web);
+      anota('web:', e);
+      return { ...HANDLERS['web:estado'](), error: e.message };
+    } finally { if (webPendente === tentativa) webPendente = null; }
   }
-  return { ligado: !!web, endereco: web ? web.endereco : '', senha: senhaDoTelefone() };
+  return HANDLERS['web:estado']();
+}
+handle('web:ligar', async (_e, ligar) => {
+  if (saindoDoApp && ligar) return { ...HANDLERS['web:estado'](), error: 'O Cockpit está fechando.' };
+  webDesejado = !!ligar;
+  if (!webDesejado) {
+    webGeracao++; fecharWeb(webPendente);
+    fecharWeb(web); web = null; manterAcordado(false);
+    const salvo = salvarEstadoWeb(false);
+    return { ...HANDLERS['web:estado'](), ...(!salvo ? { error: 'O acesso foi fechado, mas não consegui salvar a preferência.' } : {}) };
+  }
+  if (web) return HANDLERS['web:estado']();
+  // Uma única tentativa pode criar servidor. Os cliques durante os awaits mudam só o destino.
+  if (!webTransicao) webTransicao = reconciliarWeb().finally(() => { webTransicao = null; });
+  const resultado = await webTransicao;
+  // Um novo ON pode chegar entre o cancelamento encerrar o laço e o finally limpar a
+  // transição. Reavaliar depois do await cobre essa janela; erro real exige novo clique.
+  if (webDesejado && !web && !resultado.error) return HANDLERS['web:ligar'](null, true);
+  return resultado;
 });
 
 /* Todo print colado no chat vira arquivo em userData/colados e ficava la para sempre: 107
@@ -7087,21 +7249,10 @@ app.whenReady().then(() => { anota('app iniciou'); usarClaudeDeCaminhoFixo(); me
       saveConfig(cfgInicial);
     }
     if (cfgInicial.webLigado && cfgInicial.webSeguroConfirmado) {
-      const sw = require('./servidor-web.js');
-      // R1-013/R1-047: o boot nao pode virar `await` (atrasaria janela/menu/tudo que vem
-      // depois neste mesmo bloco), entao sobe com um endereco provisorio e troca sozinho
-      // quando o tailscale responder; a tela de Ajustes busca o estado de novo toda vez
-      // que abre (web:estado), entao o valor certo aparece assim que ele olhar.
-      web = sw.criar({ pastaRenderer: path.join(__dirname, 'renderer'), handlers: HANDLERS,
-        ouvintes: ouvintesWeb, porta: 7788, senha: senhaDoTelefone(), somenteTailscale: true, endereco: 'Endereço: carregando…' });
-      enderecoTailscale().then((end) => { if (web) web.endereco = end; }).catch((e) => anota('tailscale:', (e && e.message) || e));
-      manterAcordado(true);
-      // no boot nao da pra esperar; mas o erro tem de aparecer no log e o estado tem de ficar
-      // honesto, senao o app acha que o telefone esta ligado e ele nunca conecta
-      if (web && web.pronto) web.pronto
-        .then(() => anota('telefone ligado em', web.endereco))
-        .catch((e) => { anota('NAO consegui abrir para o telefone:', (e && e.message) || e); web = null; manterAcordado(false); });
-      else anota('telefone ligado em', web.endereco);
+      HANDLERS['web:ligar'](null, true).then((r) => {
+        if (r.error) anota('NAO consegui abrir para o telefone:', r.error);
+        else if (r.ligado) anota('telefone ligado em', r.endereco);
+      }).catch((e) => anota('NAO consegui abrir para o telefone:', e && e.message));
     }
   } catch (e) { anota('NAO ABRIU para o telefone:', e); } setTimeout(() => codexStart().catch(() => {}), 1500); app.on('activate', () => { if (!BrowserWindow.getAllWindows().length) createWindow(); }); });
 app.on('window-all-closed', () => { shutdown(); if (process.platform !== 'darwin') app.quit(); });
@@ -7114,9 +7265,10 @@ app.on('window-all-closed', () => { shutdown(); if (process.platform !== 'darwin
 app.on('before-quit', (event) => {
   if (saindoDoApp) return;   // ja' estamos no meio da saida (app.exit chamando de novo)
   saindoDoApp = true;
+  webDesejado = false;
   event.preventDefault();
   shutdown().finally(() => {
-    if (web) { try { (web.fechar || web.servidor.close.bind(web.servidor))(); } catch {} }
+    fecharWeb(webPendente); fecharWeb(web);
     app.exit();
   });
 });

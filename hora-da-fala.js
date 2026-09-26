@@ -1,45 +1,75 @@
-/* A hora da ÚLTIMA fala de uma conversa, lida de dentro do arquivo (26/09, pedido dele).
-   A lista de conversas usava a hora em que o ARQUIVO foi gravado pela última vez. Qualquer coisa que
-   regrava o arquivo sem conversa nova (a mudança de pastas de 26/09 reescreveu os caminhos dentro de
-   vários às 12:54) jogava a conversa para "Hoje", e ele via no topo conversas em que não mexeu.
-   Vale para os 4 formatos: Claude e Codex ("timestamp" ISO), Grok/ACP ("t" em ms), Gemini pelo CLI
-   ("timestamp") e o Gemini do Cockpit (linhas novas ganham "t"; as antigas só têm o "criado").
-   Sem hora nenhuma lá dentro, fica a da gravação, como antes. Nunca passa da hora da gravação. */
+/* A data da conversa vem dos registros, nunca de datas citadas no texto.
+   Leituras de cauda crescem até encontrar um registro completo. Se a última
+   linha superar o teto, usamos o mtime explicitamente, sem fingir que a data
+   do cabeçalho antigo é a data da última fala. */
 const fs = require('fs');
-
-const LER = 64 * 1024;
-const HORA = /"(?:timestamp|t)":\s*(?:"(\d{4}-\d\d-\d\dT[^"]+)"|(\d{13})\b)/g;
-const INICIO = /"(?:criado|startTime)":\s*(?:"(\d{4}-\d\d-\d\dT[^"]+)"|(\d{13})\b)/;
-
-function horaNoTexto(texto) {
-  let maior = 0;
-  for (const m of String(texto || '').matchAll(HORA)) {
-    const v = m[1] ? Date.parse(m[1]) : Number(m[2]);
-    if (v > maior) maior = v;
+const BLOCO = 64 * 1024;
+const TETO_CAUDA = 16 * 1024 * 1024;
+const cache = new Map();
+const instante = v => {
+  const n = typeof v === 'number' ? v : typeof v === 'string' ? Date.parse(v) : 0;
+  return Number.isFinite(n) && n > 0 ? n : 0;
+};
+function horaDoRegistro(registro) {
+  if (!registro || typeof registro !== 'object' || Array.isArray(registro)) return 0;
+  let h = Math.max(instante(registro.timestamp), instante(registro.t));
+  // Gemini nativo é um objeto com messages, ou um registro $set de metadados.
+  if (Array.isArray(registro.messages)) {
+    for (const m of registro.messages) h = Math.max(h, horaDoRegistro(m));
   }
-  if (maior) return maior;
-  const c = INICIO.exec(String(texto || ''));
-  return c ? (c[1] ? Date.parse(c[1]) : Number(c[2])) || 0 : 0;
+  if (registro.$set && typeof registro.$set === 'object') h = Math.max(h, horaDoRegistro(registro.$set));
+  return h || Math.max(instante(registro.criado), instante(registro.startTime));
 }
-function lerFim(arquivo, bytes) {
+function horaNoTexto(texto) {
+  const s = String(texto || '');
+  try { return horaDoRegistro(JSON.parse(s)); } catch {}
+  let h = 0;
+  for (const linha of s.split('\n')) {
+    try { h = Math.max(h, horaDoRegistro(JSON.parse(linha))); } catch {}
+  }
+  return h;
+}
+function horaDoArquivo(arquivo, stat) {
   let fd;
   try {
     fd = fs.openSync(arquivo, 'r');
-    const tam = fs.fstatSync(fd).size;
-    const n = Math.min(bytes, tam);
-    const buf = Buffer.alloc(n);
-    fs.readSync(fd, buf, 0, n, tam - n);
-    let s = buf.toString('utf8');
-    // arquivo pequeno: o começo (com o "criado") já veio junto; grande: lê o começo também
-    if (tam > n) { const cab = Buffer.alloc(Math.min(4096, tam)); fs.readSync(fd, cab, 0, cab.length, 0); s = cab.toString('utf8') + '\n' + s; }
-    return s;
-  } catch { return ''; } finally { if (fd !== undefined) try { fs.closeSync(fd); } catch {} }
+    const tamanho = stat.size;
+    const teto = Math.min(TETO_CAUDA, tamanho);
+    if (/\.json$/i.test(arquivo)) {
+      // Em JSON formatado, uma linha isolada pode ser apenas um payload interno.
+      if (tamanho > TETO_CAUDA) return 0;
+      const buf = Buffer.alloc(tamanho);
+      const n = fs.readSync(fd, buf, 0, tamanho, 0);
+      try { return horaDoRegistro(JSON.parse(buf.subarray(0, n).toString('utf8'))); } catch { return 0; }
+    }
+    for (let bytes = Math.min(BLOCO, teto); bytes > 0; bytes = Math.min(bytes * 2, teto)) {
+      const buf = Buffer.alloc(bytes);
+      const n = fs.readSync(fd, buf, 0, bytes, tamanho - bytes);
+      let s = buf.subarray(0, n).toString('utf8');
+      if (bytes < tamanho) {
+        const inicio = s.indexOf('\n');
+        s = inicio < 0 ? '' : s.slice(inicio + 1); // a primeira linha é incompleta
+      }
+      const h = horaNoTexto(s);
+      if (h) return h;
+      if (bytes === teto) break;
+    }
+    return 0;
+  } catch { return 0; } finally { if (fd !== undefined) try { fs.closeSync(fd); } catch {} }
 }
-/* hora da última fala do arquivo; `gravado` = mtime (o teto e a reserva) */
 function horaDaUltimaFala(arquivo, gravado, texto) {
-  const h = horaNoTexto(texto != null ? texto : lerFim(arquivo, LER));
-  if (!h || !Number.isFinite(h)) return gravado || 0;
+  let h = 0;
+  try {
+    const stat = fs.statSync(arquivo);
+    const antiga = cache.get(arquivo);
+    if (antiga && antiga.mtime === stat.mtimeMs && antiga.size === stat.size && antiga.ctime === stat.ctimeMs) h = antiga.h;
+    else {
+      h = horaDoArquivo(arquivo, stat);
+      if (cache.size >= 2000) cache.clear();
+      cache.set(arquivo, { mtime: stat.mtimeMs, size: stat.size, ctime: stat.ctimeMs, h });
+    }
+  } catch { h = texto != null ? horaNoTexto(texto) : 0; }
+  if (!h) return gravado || 0;
   return gravado ? Math.min(h, gravado) : h;
 }
-
-module.exports = { horaDaUltimaFala, horaNoTexto };
+module.exports = { horaDaUltimaFala, horaNoTexto, horaDoRegistro };

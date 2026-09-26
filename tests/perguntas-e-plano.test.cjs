@@ -146,6 +146,7 @@ test('torre: três grupos, janelinha de responder e o número no ícone de Conve
   assert.match(t, /else if \(P\.nova\) grupos\.pronta\.push/, 'pronta = resposta nova que ele ainda não viu');
   const r = pegar('responderPelaTorre');
   assert.match(r, /P\.perguntasAtual/); assert.match(r, /P\.planoPendente/); assert.match(r, /\.pane-perm/);
-  assert.match(r, /if \(b && orig\) b\.onclick = \(\) => orig\.click\(\);/, 'a cópia do pedido de autorização aperta os botões de verdade');
+  assert.match(r, /await orig\.onclick\(\)/, 'a cópia aguarda o mesmo handler de autorização');
+  assert.match(r, /P\.aprovacaoAtual !== pedido/, 'pedido trocado não pode autorizar outra operação');
   assert.match(pegar('pintarPonto'), /pintarSeloTorre\(\);/);
 });

@@ -162,7 +162,7 @@ function classes() {
     contains: x => set.has(x), toggle: (x, sim) => sim ? set.add(x) : set.delete(x) };
 }
 function el(extra = {}) {
-  return { style: {}, classList: classes(), dataset: {}, value: '', innerHTML: '', textContent: '', nodes: {},
+  return { isConnected: true, contains(x) { return this.children.includes(x) || Object.values(this.nodes).includes(x); }, style: {}, classList: classes(), dataset: {}, value: '', innerHTML: '', textContent: '', nodes: {},
     children: [], appendChild(x) { this.children.push(x); return x; }, remove() {}, focus() {},
     getBoundingClientRect() { return { width: 660, height: 340 }; }, ...extra };
 }

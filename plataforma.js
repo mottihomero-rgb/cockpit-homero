@@ -122,15 +122,9 @@ function spawnBin(bin, args, opts = {}) {
   return spawn(alvo, args, opts);
 }
 
-/* Encerra um processo filho.
-   No Windows um bin instalado pelo npm e' um .cmd, entao spawnBin sobe cmd.exe e
-   o programa de verdade e' neto -- da' pra achar que matar o pai deixaria o neto
-   vivo. Medido nesta maquina com o codex app-server: nao deixa. O kill derruba a
-   dupla e o evento 'close' chega em ~55ms, com zero processo orfao.
-   Ja tentei reforcar com "taskkill /T /F" e foi pior: o /T so' enxerga os filhos
-   enquanto o pai esta' vivo, entao disparado depois do kill ele nao acha ninguem
-   -- e, se o Windows tiver reaproveitado aquele numero de processo, mata a arvore
-   de um programa inocente. Kill puro e' o certo aqui. */
+/* Encerra um processo filho. No Windows, taskkill alcança a árvore enquanto
+   o cmd.exe pai ainda existe. Processos POSIX com grupo próprio são encerrados
+   pelo matarGrupoExtra do chamador. */
 function matarProcesso(p) {
   if (!p || p.exitCode !== null || p.signalCode !== null) return;
   /* No Windows um bin instalado pelo npm e' um .cmd: o que seguramos e' o
@@ -227,14 +221,15 @@ function ptyMac({ linha, cols, rows, cwd, env, ptyBridge }) {
       // ficava orfao pra sempre. Fechar a entrada faz o proprio laco do
       // Python perceber o EOF e chamar encerrar_filho (SIGHUP no grupo,
       // depois SIGKILL) -- caminho que ja existe e ja funciona.
+      if (p.exitCode !== null || p.signalCode !== null) return Promise.resolve();
       try { p.stdin.end(); } catch {}
       // R3-009: devolve Promise que so' resolve no 'close' de verdade (ou no teto de 2s),
       // igual ao matarGrupoExtra do main.js — sem isto shutdown() nao espera o terminal morrer.
       return new Promise((resolve) => {
-        let feito = false;
-        const acabar = () => { if (feito) return; feito = true; resolve(); };
+        let feito = false, t;
+        const acabar = () => { if (feito) return; feito = true; if (t) clearTimeout(t); resolve(); };
         try { p.once('close', acabar); } catch {}
-        const t = setTimeout(() => { try { p.kill('SIGKILL'); } catch {} acabar(); }, 2000);
+        t = setTimeout(() => { try { p.kill('SIGKILL'); } catch {} acabar(); }, 2000);
         if (t.unref) t.unref();
       });
     },

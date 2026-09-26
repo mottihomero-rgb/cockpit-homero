@@ -1695,6 +1695,12 @@
     // desenho gravado pela versao antiga podia ter texto escondido dentro da forma;
     // ao voltar, a forma cresce ate caber (o que ele escreveu nao pode sumir)
     for (const f of c.formas) ajustarAltura(f);
+    if (JSON.stringify(limparCena(c)) === JSON.stringify(limparCena(Q.cena))) {
+      // A geometria já está na tela, mas este carimbo também foi recebido. Sem reconhecê-lo,
+      // Limpar poderia ser desfeito pela próxima leitura antes de salvar a cena vazia.
+      if (doClaude) { Q.claude.visto = doClaude; Q.claude.cena = JSON.stringify(limparCena(Q.cena)); }
+      return false;
+    }
     const cenaEstavaVazia = cenaVazia();   // R3-043: so pra escolher o texto do toast
     Q.cena = c;
     Q.rascunho.ultimo = JSON.stringify(limparCena(Q.cena));

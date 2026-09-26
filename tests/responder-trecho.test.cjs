@@ -26,7 +26,7 @@ test('o trecho vai na frente da mensagem e o balão separa de volta', () => {
 });
 
 test('o envio usa o trecho e limpa depois; o balão mostra a citação', () => {
-  assert.match(app, /if \(P\.citacao && text\) \{ text = comCitacao\(P\.citacao, text\); limparCitacao\(P\); \}/);
+  assert.match(app, /if \(!programatico && P\.citacao && text\) \{ text = comCitacao\(P\.citacao, text\); limparCitacao\(P\); \}/);
   assert.match(pegar('userMsg'), /separarCitacao\(text\)/);
 });
 

@@ -40,7 +40,7 @@ function prepararFalso(h) {
 
 // uma conversa de mentira no formato .jsonl que o Claude grava
 function porConversa(h, nome, ...falas) {
-  const texto = falas.map((t) => JSON.stringify({ message: { content: t } })).join('\n') + '\n';
+  const texto = falas.map((t) => JSON.stringify({ type: 'user', message: { role: 'user', content: t } })).join('\n') + '\n';
   h.put(nome, texto);
   return nome;
 }
@@ -66,7 +66,8 @@ test('o JSON unico antigo e convertido para uma conversa por linha e depois apag
   assert.equal(r.achados.length, 1, 'a conversa convertida tem de continuar sendo achada');
   assert.match(r.achados[0].trecho, /cenoura/);
   assert.equal(h.files.has(VELHO), false, 'o arquivo velho tem de sumir depois de convertido');
-  assert.equal(linhasDoTexto(h).length, 1, 'uma conversa, uma linha');
+  assert.equal(linhasDoTexto(h).length, 2, 'a linha legada é preservada até a faxina, e a conversa é reindexada pelo parser novo');
+  assert.equal(linhasDoTexto(h).map(JSON.parse).filter(x => x.v === 2).length, 1, 'só uma linha atual vale para a conversa');
 });
 
 /* ---- 2. a busca NUNCA le o arquivo de texto inteiro ---- */
@@ -165,10 +166,10 @@ test('a faxina so roda com o arquivo grande e deixa so as linhas que valem', asy
   const linhas = [];
   // 400 linhas orfas (ninguem tem carimbo delas) = uns 4,8 MB de lixo
   for (let i = 0; i < 400; i++) linhas.push(JSON.stringify({ f: '/foi/embora-' + i, m: 1, t: 2, x: encher }));
-  const vivo = JSON.stringify({ f: h.HOME + '/vivo.jsonl', m: 1, t: 7, x: 'contrato do pedro' });
+  const vivo = JSON.stringify({ f: h.HOME + '/vivo.jsonl', v: 2, m: 1, t: 7, x: 'contrato do pedro' });
   linhas.push(vivo);
   h.put(TEXTO, linhas.join('\n') + '\n');
-  h.put(CARIMBOS, JSON.stringify({ [h.HOME + '/vivo.jsonl']: { m: 1, t: 7, b: vivo.length + 1 } }));
+  h.put(CARIMBOS, JSON.stringify({ [h.HOME + '/vivo.jsonl']: { v: 2, m: 1, t: 7, b: vivo.length + 1 } }));
 
   const faxinou = await h.evaluate('compactarTexto()');
 

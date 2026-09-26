@@ -23,21 +23,14 @@ const RESUMO = 'This session is being continued from a previous conversation tha
   + 'Continue the conversation from where it left off without asking the user any further questions. Resume directly — do not acknowledge the summary, do not recap what was happening, do not preface with "I\'ll continue" or similar. Pick up the last task as if the break never happened.';
 
 function ctxMain() {
-  const ctx = { fs, console };
-  vm.createContext(ctx);
-  vm.runInContext([
-    linha(main, 'const TECNICO = '), linha(main, 'const ehTecnico = '),
-    main.slice(main.indexOf('const BLOCOS_TECNICOS = ['), main.indexOf('];', main.indexOf('const BLOCOS_TECNICOS = [')) + 2),
-    pegar(main, 'tiraBlocos'), pegar(main, 'semContexto'),
-    linha(main, 'const RESUMO_DA_SESSAO = '), linha(main, 'const FIM_DO_RESUMO = '), pegar(main, 'semResumoDaSessao'),
-    'function cortarHistorico(m) { return m; }', 'function tailRead() { return ""; }', 'function claudeToolArg() { return ""; }',
-    'const HIST_TETO = 64 * 1024 * 1024;',
-    pegar(main, 'claudeHistory'), 'this.claudeHistory = claudeHistory; this.semResumoDaSessao = semResumoDaSessao;',
-  ].join('\n'), ctx);
-  return ctx;
+  const h = require('./main-harness.cjs').loadMain();
+  return {
+    claudeHistory: async (f) => { h.put(f, fs.readFileSync(f)); return h.call('sessions:history', { engine: 'claude', file: f }); },
+    semResumoDaSessao: (t) => h.evaluate('semResumoDaSessao(' + JSON.stringify(t) + ')'),
+  };
 }
 
-test('o resumo do Claude vira a faixa "Conversa resumida", não balão dele', () => {
+test('o resumo do Claude vira a faixa "Conversa resumida", não balão dele', async () => {
   const ctx = ctxMain();
   const arq = path.join(os.tmpdir(), 'resumo-sessao-' + process.pid + '.jsonl');
   const linhas = [
@@ -50,7 +43,7 @@ test('o resumo do Claude vira a faixa "Conversa resumida", não balão dele', ()
     { type: 'user', message: { role: 'user', content: [{ type: 'text', text: RESUMO + '\n\nPorque que fica dessa forma?' }] } },
   ];
   fs.writeFileSync(arq, linhas.map(l => JSON.stringify(l)).join('\n'));
-  const msgs = ctx.claudeHistory(arq);
+  const msgs = await ctx.claudeHistory(arq);
   fs.unlinkSync(arq);
   assert.deepEqual(JSON.parse(JSON.stringify(msgs.map(m => m.role + ':' + (m.text || '')))),
     ['user:Só testando', 'bot:Oi', 'compactou:', 'bot:Pronto', 'user:Porque que fica dessa forma?']);

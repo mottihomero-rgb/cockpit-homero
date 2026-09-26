@@ -1,3 +1,16 @@
+/* UUID v4 também em HTTP: getRandomValues continua disponível fora de contexto seguro.
+   O layout é carregado antes deste arquivo, mas só chama este helper depois do boot. */
+function novoIdAleatorio() {
+  const fonte = globalThis.crypto;
+  if (typeof fonte?.randomUUID === 'function') return fonte.randomUUID();
+  if (typeof fonte?.getRandomValues !== 'function') throw new Error('Gerador seguro de identificadores indisponível');
+  const bytes = fonte.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+  return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20);
+}
+
 /* ============ estado global ============ */
 let cfg = {}, HOME = '';
 let paneSeq = 0, focusPane = null;
@@ -389,7 +402,7 @@ function marcarEspera(P) {
   avisarQuemEspera();
 }
 
-function pintarTodasAbas() { for (const A of abas.values()) pintarAba(A); }
+
 
 function ativarAbaProjeto(A) {
   if (!A) return;
@@ -456,6 +469,7 @@ async function fecharAba(A) {
     if (window.Quadro && window.Quadro.aberto && window.Quadro.aberto() && window.Quadro.donoEh && window.Quadro.donoEh(P)) { try { window.Quadro.fechar(); } catch (_) {} }
     // idem pro painel "Time de agentes": a aba inteira sai, o painel de agentes dela nao pode sobrar
     if (agPaneAberto === P) { try { fecharPainelAgentes(); } catch (_) {} }
+    P.fecharDetalhes?.();
     P.el.remove(); panes.delete(pid);
   }
   A.ordem = [];
@@ -595,7 +609,7 @@ function moverPane(P, A, indice) {
   if (indice == null || indice >= A.ordem.length) A.ordem.push(P.id);
   else A.ordem.splice(indice, 0, P.id);
   P.aid = A.id;
-  if (antiga !== A) { P.coluna = crypto.randomUUID(); P.larguraColuna = 0; P.pesoAltura = 1; }
+  if (antiga !== A) { P.coluna = novoIdAleatorio(); P.larguraColuna = 0; P.pesoAltura = 1; }
   // mudou de projeto: o chat recomeca na pasta da aba nova
   if (antiga && antiga !== A && P.cwd !== A.cwd) {
     P.trocando = true;
@@ -833,7 +847,7 @@ function newPane(opts = {}) {
   const motorDoPainel = opts.engine || motorVisivel(cfg.lastEngine);
   const P = {
     id, el, aid: A.id,
-    coluna: typeof opts.coluna === 'string' ? opts.coluna : crypto.randomUUID(),
+    coluna: typeof opts.coluna === 'string' ? opts.coluna : novoIdAleatorio(),
     larguraColuna: Math.max(0, Math.min(2400, Number(opts.larguraColuna) || 0)),
     pesoAltura: Math.max(.1, Math.min(10, Number(opts.pesoAltura) || 1)),
     plano: normalizarPlano(opts.plano), planoAberto: opts.planoAberto !== false,
@@ -1214,6 +1228,7 @@ function savePanes(fechou) {
         /* 25/09: trocou de IA e fechou o app antes de mandar a 1a mensagem: sem guardar, a
            conversa nova nasceria solta, sem costura com a de antes */
         parteAnterior: P.parteAnterior || undefined,
+        ligacoesPendentes: P.ligacoesPendentes && P.ligacoesPendentes.length ? P.ligacoesPendentes : undefined,
         /* ramo que ainda nao mandou a 1a mensagem (leva 8.3). Sem guardar, reabrir o app faria
            este chat virar CONTINUACAO da conversa de origem, escrevendo dentro dela. */
         fork: P.forkPendente || undefined,
@@ -1284,6 +1299,7 @@ async function restaurarAbas() {
     remontadas = await restaurarAbasCorpo(salvas);
   } finally {
     restaurando = false;
+    for (const P of panes.values()) if ((P.ligacoesPendentes || []).length || P.parteAnterior && P.resumeId) ligarParteAnterior(P);
   }
   // R2-002: existia aba salva pra tentar restaurar, mas NENHUMA remontou — isso e falha total,
   // nao "0 abas porque nao tinha nada salvo". Sem isto o app abria sem aba nenhuma e sem
@@ -1328,6 +1344,7 @@ async function restaurarAbasCorpo(salvas) {
       if (c.worktree && !NA_VPS(c.cwd || a.cwd)) { P.worktree = c.worktree; mostrarPastaNoPainel(P); }
       /* 25/09: trocou de IA e fechou antes de mandar: a costura pendente volta junto */
       if (c.parteAnterior && c.parteAnterior.id) P.parteAnterior = c.parteAnterior;
+      if (Array.isArray(c.ligacoesPendentes)) P.ligacoesPendentes = c.ligacoesPendentes.filter(x => x && x.nova && x.nova.id && x.anterior && x.anterior.id);
       if (c.sessao) {
         P.carregandoHistorico = true;
         P.resumeId = c.sessao;                       // a proxima mensagem continua a mesma conversa
@@ -1339,7 +1356,10 @@ async function restaurarAbasCorpo(salvas) {
            saem das ligacoes, e o painel continua na parte mais nova. Ramo pendente (c.fork)
            nao: o numero guardado e o da ORIGEM, e o ramo nao herda a costura dela. */
         const ref = { engine: c.engine, id: c.sessao, file: c.arquivo || '', cwd: c.cwd || a.cwd };
-        const partes = c.fork ? [ref] : partesDaCadeia(ref);
+        let partes = c.fork ? [ref] : partesDaCadeia(ref, P.ligacoesPendentes);
+        if (!c.fork && partes.length === 1 && P.parteAnterior && chaveParte(P.parteAnterior) !== chaveParte(ref)) {
+          partes = [...partesDaCadeia(P.parteAnterior, P.ligacoesPendentes), ref];
+        }
         P.partesAnteriores = partes.slice(0, -1);
         paraCarregar.push({ P, arquivo: c.arquivo || '', id: c.sessao, cwd: c.cwd || a.cwd, revisao: P.revisaoConversa || 0, partes,
           // aba gravada antes de existir a marca do nome (ou aberta da lista sem dono): pergunta ao
@@ -1349,7 +1369,7 @@ async function restaurarAbasCorpo(salvas) {
         /* so a parte de antes da troca, ainda sem a conversa do motor novo: a tela volta com o
            que ja foi conversado e a proxima mensagem leva o contexto, como antes de fechar */
         P.carregandoHistorico = true;
-        const partes = partesDaCadeia(P.parteAnterior);
+        const partes = partesDaCadeia(P.parteAnterior, P.ligacoesPendentes);
         P.partesAnteriores = partes.slice(0, -1);
         paraCarregar.push({ P, revisao: P.revisaoConversa || 0, partes, soAntes: true });
       }
@@ -1462,24 +1482,7 @@ function avisarInstalacaoMotor(P) {
 }
 /* Redesenho 26/09: os 4 com o logo oficial na cor de cada um (a cor do assistente fica SÓ no
    logo), sem título. Sem clique por perto (robô, atalho), nasce logo abaixo do nome da conversa. */
-function menuMotores(P) {
-  const m = novoMenu(P, $('.pane-nome:not(.vazio)', P.el) || '.pane-hd');
-  m.classList.add('menu-motor');
-  m.setAttribute('aria-label', 'Escolher assistente');
-  for (const engine of MOTORES_VISIVEIS) {
-    // redesenho 26/09: o motivo de não dar (frase inteira) sai da tela e vai para o balão; o item
-    // fica com cara de desativado, mas o clique continua dando o aviso com o motivo, como antes
-    const motivo = motorIndisponivelNaPasta(engine, P.cwd);
-    const item = elItem({ nome: nomeDoMotor(engine), on: P.engine === engine, dica: motivo },
-      () => trocarMotor(P, engine));
-    if (motivo) { item.classList.add('mi-off'); item.setAttribute('aria-disabled', 'true'); }
-    item.dataset.motor = engine;
-    const logo = $('.mi-ic', item);
-    logo.classList.add('mi-logo');
-    logo.innerHTML = svgMotor(engine);
-    m.appendChild(item);
-  }
-}
+
 
 /* Perguntar ANTES de cortar o que esta em andamento — e SO quando ha o que perder.
    Trocar de motor e trocar de modo matam o processo que esta rodando, igual a fechar o chat.
@@ -1497,6 +1500,7 @@ async function trocarMotor(P, novo) {
   // P.trocando trava o clique repetido: sem ele, clicar rapido nos dois lados fazia o segundo
   // clique ser engolido em silencio, e uma mensagem enviada nesse meio-tempo subia o motor errado.
   if (!MOTORES_VISIVEIS.includes(novo) || novo === P.engine || P.trocando) return;
+  if (P.historicoIncompleto) { avisoTemp(P, 'Falta carregar uma parte da conversa. Use Tentar de novo no aviso do histórico antes de trocar de IA.', true); return; }
   if (motorIndisponivelNaPasta(novo, P.cwd)) {
     avisoTemp(P, motorIndisponivelNaPasta(novo, P.cwd), true);
     return;
@@ -1573,13 +1577,27 @@ async function trocarMotor(P, novo) {
 
 function montarContexto(P, retomada, motivo) {
   const LIM = 14000;
+  const historico = (P.hist || []).map(h => ({ quem: h.quem,
+    texto: montarEnvio((h.texto || '').trim(), h.attachments) })).filter(h => h.texto);
+  const cortar = (t, limite) => {
+    if (t.length <= limite) return t;
+    const aviso = '\n[trecho intermediário omitido por tamanho]\n';
+    const sobra = Math.max(0, limite - aviso.length), inicio = Math.ceil(sobra / 2);
+    return t.slice(0, inicio) + aviso + t.slice(-(sobra - inicio));
+  };
+  const formatar = h => '### ' + h.quem + ':\n' + h.texto;
+  const primeiro = historico.findIndex(h => h.quem === 'Você');
+  const pedido = primeiro >= 0 ? cortar(formatar(historico[primeiro]), 3000) : '';
   const linhas = [];
-  for (let i = P.hist.length - 1; i >= 0; i--) {
-    const h = P.hist[i];
-    const t = '### ' + h.quem + ':\n' + montarEnvio((h.texto || '').trim(), h.attachments);
-    if (linhas.join('\n\n').length + t.length > LIM) break;
-    linhas.unshift(t);
+  let sobra = LIM - (pedido ? pedido.length + 2 : 0);
+  for (let i = historico.length - 1; i >= 0 && sobra > 100; i--) {
+    if (i === primeiro) continue;
+    const t = formatar(historico[i]);
+    const trecho = cortar(t, sobra);
+    linhas.unshift(trecho); sobra -= trecho.length + 2;
+    if (trecho !== t) break;
   }
+  if (pedido) linhas.unshift(pedido);
   // retomada = a conexao caiu e o numero da conversa se perdeu. Aqui o risco nao e recomecar do
   // zero: e pegar carona no resumo de OUTROS chats da mesma pasta, que o arranque injeta sozinho.
   if (retomada) {
@@ -1742,6 +1760,7 @@ async function closePane(id, semPerguntar) {
   // mesma regra do Quadro: o painel "Time de agentes" e' dono de UM painel so; fechar esse
   // painel nao pode deixar a janela de agentes aberta mostrando um chat que ja nem existe mais
   if (agPaneAberto === P) { try { fecharPainelAgentes(); } catch (_) {} }
+  P.fecharDetalhes?.();
   // fechar o chat tem de apagar a luz do microfone: o processo do ditado é dele
   vozSoltar(P, { guardarTexto: true });
   // e a busca do "@" deste chat morre junto: sem isto ela voltava depois e tentava abrir o
@@ -2253,10 +2272,7 @@ function marcarNaFila(P, d, texto) {
   const i = Number(d.dataset.hist);
   (P.filaMsgs = P.filaMsgs || []).push({ el: d, texto, iHist: Number.isFinite(i) ? i : P.hist.length - 1 });
 }
-function desmarcarFila(P) {
-  for (const f of (P.filaMsgs || [])) if (f.el) f.el.classList.remove('esperando');
-  P.filaMsgs = [];
-}
+
 /* tira do histórico o item de índice i e conserta o data-hist das mensagens seguintes
    (o data-hist e o que o "voltar no tempo" usa para achar o pedaco certo da conversa) */
 function tirarDoHist(P, i) {
@@ -2425,10 +2441,10 @@ async function desfazerDaqui(P, feitas) {
   avisoTemp(P, ok + ' mudança(s) desfeita(s)' + (problemas.length ? ' · ' + problemas.length + ' não deu: ' + problemas[0] : ''));
 }
 
-function ramificarDaqui(P, d) {
+function ramificarDaqui(P, d, aba) {
   const ate = Number(d.dataset.hist || 0);
   const pedaco = P.hist.slice(0, ate + 1);
-  const Q = novoChatNaAba(P.engine);
+  const Q = novoChatNaAba(P.engine, aba);
   if (!Q) return;
   Q.cwd = P.cwd;
   pintarPasta(Q, nomePasta(Q.cwd));
@@ -2439,6 +2455,7 @@ function ramificarDaqui(P, d) {
   avisoTemp(Q, 'Este chat continua de onde aquela mensagem estava. O chat de origem segue intacto.');
   $('.p-input', Q.el).focus();
   savePanes();   // sem isto o ramo reabria com o cwd da aba, não o cwd de onde saiu
+  return Q;
 }
 
 /* ---- ramificar de VERDADE (leva 8.3) ----
@@ -2447,25 +2464,33 @@ function ramificarDaqui(P, d) {
    --resume + --fork-session e o Codex tem thread/fork —, então o chat novo lembra da conversa
    INTEIRA e o de origem continua intacto. Quando o motor não consegue, o resumo é a reserva. */
 async function ramificarInteiro(P) {
+  if (!P || panes.get(P.id) !== P) return;
+  const aba = abaDe(P), revisao = P.revisaoConversa || 0, hist = P.hist;
+  if (!aba || abas.get(aba.id) !== aba) return;
+  // O fork pode demorar. A pasta, o motor e o conteúdo de origem são os do clique,
+  // mesmo que ele abra outro chat/aba enquanto espera a resposta do motor.
+  const origem = { ...P, hist: (P.hist || []).map(h => ({ ...h })) };
   const id = P.sessaoId || P.resumeId;
-  if (!id) { ramoDeReserva(P, 'esta conversa ainda não tem número no motor'); return; }
+  if (!id) return ramoDeReserva(origem, 'esta conversa ainda não tem número no motor', aba);
   /* R7: pasta na VPS. O fork de verdade acontece no MAC — no Claude o --fork-session iria por
      ssh para o CLI de lá (que pode ser velho demais e derrubar o painel no start) e no Codex o
      motor local não enxerga a conversa de lá. Cai direto na reserva do resumo, que sempre vale. */
-  if (NA_VPS(P.cwd)) { ramoDeReserva(P, 'a conversa mora na VPS'); return; }
-  if (P.engine === 'claude') { forkClaude(P, id); return; }
+  if (NA_VPS(P.cwd)) return ramoDeReserva(origem, 'a conversa mora na VPS', aba);
+  if (P.engine === 'claude') return forkClaude(origem, id, aba);
   let r = null;
   try { r = await window.api.sessaoFork({ engine: P.engine, id }); }
   catch (e) { r = { error: String(e && e.message || e) }; }
-  if (r && r.id) { abrirRamo(P, r.id); return; }
-  ramoDeReserva(P, (r && r.error) || 'sem resposta');
+  if (!painelAindaAtual(P, revisao) || abas.get(aba.id) !== aba || P.hist !== hist
+    || P.engine !== origem.engine || P.cwd !== origem.cwd || (P.sessaoId || P.resumeId) !== id) return;
+  if (r && r.id) return abrirRamo(origem, r.id, aba);
+  return ramoDeReserva(origem, (r && r.error) || 'sem resposta', aba);
 }
 
 /* Claude: o fork acontece no LIGAR do painel novo (--resume + --fork-session). Até lá o painel
    guarda a intenção em forkPendente — e ela vai para a ficha também, senão fechar o app antes
    da 1ª mensagem faria o ramo virar CONTINUAÇÃO da conversa de origem, escrevendo dentro dela. */
-function forkClaude(P, id) {
-  const Q = novoChatNaAba(P.engine);
+function forkClaude(P, id, aba) {
+  const Q = novoChatNaAba(P.engine, aba);
   if (!Q) return;
   Q.cwd = P.cwd;
   pintarPasta(Q, nomePasta(Q.cwd));
@@ -2474,11 +2499,12 @@ function forkClaude(P, id) {
   pintarNome(Q);
   faixaDeRamo(Q, P);
   savePanes();
+  return Q;
 }
 
 /* Codex: o fork JÁ aconteceu no motor; aqui o painel novo só retoma o número novo */
-function abrirRamo(P, idNovo) {
-  const Q = novoChatNaAba(P.engine);
+function abrirRamo(P, idNovo, aba) {
+  const Q = novoChatNaAba(P.engine, aba);
   if (!Q) return;
   Q.cwd = P.cwd;
   pintarPasta(Q, nomePasta(Q.cwd));
@@ -2487,15 +2513,16 @@ function abrirRamo(P, idNovo) {
   pintarNome(Q);
   faixaDeRamo(Q, P);
   savePanes();
+  return Q;
 }
 
 /* reserva: o caminho antigo, com o resumo colado. Continua existindo de propósito. */
-function ramoDeReserva(P, motivo) {
+function ramoDeReserva(P, motivo, aba) {
   if (!P.hist.length) { note(P, 'Ainda não há conversa para levar adiante.', true); return; }
   note(P, 'Não deu para ramificar de verdade (' + motivo + ') — vou levar só o resumo da conversa.', true);
   /* o ramificarDaqui corta na mensagem clicada; aqui o pedido é a conversa INTEIRA, então o
      ponto de corte é a última fala. Ele lê só o d.dataset.hist. */
-  ramificarDaqui(P, { dataset: { hist: String(P.hist.length - 1) } });
+  return ramificarDaqui(P, { dataset: { hist: String(P.hist.length - 1) } }, aba);
 }
 
 function faixaDeRamo(Q, P) {
@@ -2539,15 +2566,7 @@ function botBlock(P, key) {
   P.blocks.set(key, b); scroll(P);
   return b;
 }
-function thinkBlock(P) {
-  clearEmpty(P);
-  const d = document.createElement('div');
-  d.className = 'think'; d.innerHTML = '<div class="think-in"></div>';
-  P.chat.appendChild(d);
-  const b = { el: $('.think-in', d), raw: '' };
-  P.blocks.set('__think', b); scroll(P);
-  return b;
-}
+
 /* ---- desenhar a resposta enquanto ela chega ----
    Cada pedacinho de texto que chegava fazia o app refazer o markdown do bloco INTEIRO. Como a
    resposta so cresce, cada redesenho custava mais que o anterior: numa resposta de 40 KB o app
@@ -2604,8 +2623,7 @@ function textDelta(P, key, text) {
   const depoisDeComando = P.execEl && P.execEl.isConnected;
   if (!b || P.blocks.get('respKey') !== key || depoisDeComando) {
     // texto que vem depois de comandos entra num bloco novo, abaixo do cartao
-    if (b && !depoisDeComando) { b.raw = ''; b.el.innerHTML = ''; b.corte = 0; b.fixos = 0; }
-    else { b = botBlock(P, 'resp'); }
+    b = botBlock(P, 'resp');
     P.blocks.set('respKey', key);
     P.blocks.set('resp', b);
     P.execEl = null;                                  // proximo comando abre cartao novo
@@ -3471,8 +3489,7 @@ function textFinal(P, key, text) {
   // texto do historico (a 2a chamada sobrescrevia em cima, mesmo os dois ficando na tela).
   const blocoNovo = !b || P.blocks.get('respKey') !== key || depoisDeComando;
   if (blocoNovo) {
-    if (b && !depoisDeComando) { b.raw = ''; b.el.innerHTML = ''; b.corte = 0; b.fixos = 0; }
-    else { b = botBlock(P, 'resp'); }
+    b = botBlock(P, 'resp');
     P.blocks.set('respKey', key); P.blocks.set('resp', b);
     P.execEl = null;
   }
@@ -3483,9 +3500,9 @@ function textFinal(P, key, text) {
   linkarArquivos(P, b.el); marcarLinksWeb(b.el); botoesDeCopia(b); marcarRecibo(b.el);
   if (P.trabEl) P.chat.appendChild(P.trabEl);
   scroll(P);
-  const quem = nomeDoMotor(P.engine);
-  const ult = P.hist[P.hist.length - 1];
-  if (!blocoNovo && ult && ult.quem === quem) ult.texto = text; else P.hist.push({ quem, texto: text });
+  // O delta já abriu este bloco. Só a entrada DELE pode ser atualizada pelo final.
+  if (b.hist && P.hist.includes(b.hist)) b.hist.texto = text;
+  else { b.hist = { quem: nomeDoMotor(P.engine), texto: text }; P.hist.push(b.hist); }
 }
 /* ============ antes e depois de cada edição ============
    O motor mexe no arquivo e a tela mostrava só o nome dele. Aqui a mudança aparece pintada:
@@ -4041,9 +4058,10 @@ function painelAindaAtual(P, revisao) {
   return panes.get(P.id) === P && (P.revisaoConversa || 0) === revisao;
 }
 function invalidarConversa(P) {
+  P.fecharDetalhes?.();
   P.revisaoConversa = (P.revisaoConversa || 0) + 1;
   clearTimeout(P.filaTimer); P.filaTimer = null;
-  P.carregandoHistorico = false; P.settingsSend = null;
+  P.carregandoHistorico = false; P.settingsSend = null; P.historicoIncompleto = null;
   // se a conversa muda no meio de um envio, o pontinho "pendente" nao pode ficar
   // aceso pra sempre: os pontos de guarda de send()/agendarFila saem antes de
   // concluirEscolhasEnvio quando isso acontece, entao centraliza aqui
@@ -4093,10 +4111,16 @@ function agendarFila(P) {
     }
   }, 150);
 }
-async function send(P) {
+async function send(P, textoProgramatico) {
   if (P.trocando || P.carregandoHistorico || motoresTrocandoConta.has(P.engine) || panes.get(P.id) !== P) return;
+  if (P.historicoIncompleto && (!(P.sessaoId || P.resumeId) || P.passarContexto)) {
+    avisoTemp(P, 'Falta carregar uma parte da conversa. Use Tentar de novo no aviso do histórico antes de continuar.', true); return;
+  }
   const revisao = P.revisaoConversa || 0;
-  const inp = $('.p-input', P.el);
+  const programatico = typeof textoProgramatico === 'string';
+  const inp = programatico ? { value: textoProgramatico, style: {} } : $('.p-input', P.el);
+  const anexosDoEnvio = programatico ? [] : (P.anexos || []);
+  const quadroDoEnvio = !programatico && P.quadroColado;
   /* Enter no campo vazio COM o chip "Continuar" na tela = manda "continue". O chip so nasce
      no fim de um turno desta conversa, entao chat recem-aberto nao liga o motor sem querer.
      Nao vale durante o ditado (campo vazio ali e falha de captacao, nao pedido), nem com
@@ -4106,13 +4130,13 @@ async function send(P) {
      (ele aparece, e o próximo Enter continua), como era quando o chip ficava sempre à vista. */
   const chipCont = $('.p-cont', P.el);
   if (!inp.value.trim() && chipCont && podeContinuar(P)
-      && !(P.anexos || []).length && !P.quadroColado
+      && !anexosDoEnvio.length && !quadroDoEnvio
       && VIVO.P !== P && DITADO.P !== P) {
     if (chipNaVista(P, chipCont)) inp.value = 'continue';
     else chipCont.scrollIntoView({ block: 'nearest' });
   }
   let text = inp.value.trim();
-  if (text || (P.anexos || []).length || P.quadroColado) {
+  if (text || anexosDoEnvio.length || quadroDoEnvio) {
     limparSugestoes(P);
     // 26/09: a fala dele vai entrar: o "Continuar" (ou o que ia nascer) sai antes, nunca fica no meio
     if (P.contTimer) { clearTimeout(P.contTimer); P.contTimer = 0; }
@@ -4122,10 +4146,10 @@ async function send(P) {
      Enter e nao acontecia nada — a fichinha ficava presa no campo e ele achava que tinha
      mandado. Agora o anexo (ou o desenho do quadro) ja basta; so o campo totalmente vazio,
      sem nada anexado, e que nao envia. */
-  if (!text && !(P.anexos || []).length && !P.quadroColado) return;
+  if (!text && !anexosDoEnvio.length && !quadroDoEnvio) return;
   /* 26/09: com o plano pronto esperando, o que ele escreve responde o plano ("ok" executa,
      o resto vira ajuste) — como no VS Code. Não vira mensagem nova nem vai para a fila. */
-  if (P.planoPendente && text && !(P.anexos || []).length && !P.quadroColado) {
+  if (P.planoPendente && text && !anexosDoEnvio.length && !quadroDoEnvio) {
     inp.value = ''; inp.style.height = 'auto';
     planoPelaCaixa(P, text);
     return;
@@ -4133,22 +4157,23 @@ async function send(P) {
   /* 26/09: trecho da resposta que ele selecionou e mandou "Responder": a mensagem vai presa a ele.
      O trecho entra no começo do texto (o motor lê; o histórico guarda igual) e o balão dele mostra
      o trecho como citação em cima da fala (userMsg). */
-  if (P.citacao && text) { text = comCitacao(P.citacao, text); limparCitacao(P); }
+  if (!programatico && P.citacao && text) { text = comCitacao(P.citacao, text); limparCitacao(P); }
   /* A mensagem VAI sair: soltar o microfone. Fica DEPOIS da saída acima de propósito — Enter
      no campo vazio no meio do ditado é falha de captação, e ali o ditado tem de continuar.
      `guardarTexto`: o texto já foi lido para `text` e o campo é limpo logo abaixo. */
-  vozSoltar(P, { guardarTexto: true });
+  if (!programatico) vozSoltar(P, { guardarTexto: true });
   /* A mensagem VAI sair: a busca do "@" que ainda estiver em voo morre aqui. Sem isto ela
      seguia viva, porque o campo e limpo NA MAO logo abaixo (inp.value = '') e limpar por
      codigo nao dispara o evento 'input' — o unico lugar de onde o cancelamento saía. Na VPS
      o relogio de 450 ms acordava DEPOIS do envio e abria o menu de arquivos por cima da
      resposta que estava chegando. */
-  pararBuscaDeArquivos(P);
-  soltarNavArquivos(P);   // e o atalho de setas sai junto: sem menu, sem dono
+  if (!programatico) pararBuscaDeArquivos(P);
+  if (!programatico) soltarNavArquivos(P);   // e o atalho de setas sai junto: sem menu, sem dono
 
   if (P.busy || P.queued) {
-    const anx = P.anexos.slice(); P.anexos = []; pintarAnexos(P);
-    P.quadroColado = null;
+    const anx = anexosDoEnvio.slice();
+    if (!programatico) { P.anexos = []; pintarAnexos(P); }
+    if (!programatico) P.quadroColado = null;
     inp.value = ''; inp.style.height = 'auto';
     guardarPrompt(text);            // pra trazer de volta com a seta pra cima
     P.navHist = undefined;
@@ -4178,14 +4203,14 @@ async function send(P) {
   const escolhasDoEnvio = prepararEscolhasEnvio(P);
   const pedidoCodex = escolhasDoEnvio ? escolhasDoEnvio.desired : {};
   const historicoAnterior = P.hist.length;
-  const anexos = P.anexos.slice();
-  P.anexos = []; pintarAnexos(P);
+  const anexos = anexosDoEnvio.slice();
+  if (!programatico) { P.anexos = []; pintarAnexos(P); }
   inp.value = ''; inp.style.height = 'auto';
   guardarPrompt(text);              // pra trazer de volta com a seta pra cima
   P.navHist = undefined;
   const bolha = userMsg(P, text, anexos);
   if (!P.titulo) { P.titulo = nomeDaConversa(P, text, anexos); pintarNome(P); nomearCurto(P, 'comeco'); }
-  P.quadroColado = null;
+  if (!programatico) P.quadroColado = null;
 
   if (!P.started) {
     P.busy = true;
@@ -5110,6 +5135,8 @@ function abrirPerguntas(P, ev, opts = {}) {
   const pronta = (i) => !!respostaDaPergunta(estado.respostas[i]);
   const todas = () => estado.respostas.every((_, i) => pronta(i));
   const pintar = () => {
+    clearTimeout(estado.avancarTimer); estado.avancarTimer = null;
+    estado.i = Math.max(0, Math.min(qs.length - 1, estado.i));
     const q = qs[estado.i], r = estado.respostas[estado.i];
     const ultima = estado.i === qs.length - 1;
     el.innerHTML = '<div class="pq-topo"><div class="pq-fichas"></div><span class="pq-gap"></span>'
@@ -5171,6 +5198,7 @@ function abrirPerguntas(P, ev, opts = {}) {
     }
   };
   function escolher(n) {
+    if (estado.enviando || P.perguntasAtual !== estado) return;
     const q = qs[estado.i], r = estado.respostas[estado.i];
     const op = (q.options || [])[n]; if (!op) return;
     r.outra = '';
@@ -5178,10 +5206,13 @@ function abrirPerguntas(P, ev, opts = {}) {
     r.sel = new Set([op.label]);
     pintar();
     // escolha única: passa sozinho para a próxima pergunta, como no VS Code
-    if (estado.i < qs.length - 1) setTimeout(() => { if (P.perguntasAtual === estado) { estado.i++; pintar(); el.focus(); } }, 160);
+    const indice = estado.i;
+    if (indice < qs.length - 1) estado.avancarTimer = setTimeout(() => {
+      if (P.perguntasAtual === estado && !estado.enviando && estado.i === indice) { estado.i = indice + 1; pintar(); el.focus(); }
+    }, 160);
   }
   function seguir() {
-    if (!pronta(estado.i)) return;
+    if (estado.enviando || P.perguntasAtual !== estado || !pronta(estado.i)) return;
     if (estado.i < qs.length - 1) { estado.i++; pintar(); el.focus(); return; }
     if (todas()) responder(false);
   }
@@ -5220,6 +5251,7 @@ function abrirPerguntas(P, ev, opts = {}) {
 function fecharPerguntas(P) {
   if (!P || !P.perguntasAtual) return;
   const el = P.perguntasAtual.el;
+  clearTimeout(P.perguntasAtual.avancarTimer);
   P.perguntasAtual = null;
   if (el && el.isConnected) el.remove();
   marcarEspera(P);
@@ -5329,10 +5361,7 @@ function planoPelaCaixa(P, text) {
 
 /* manda um texto como se ele tivesse escrito (usado pelo "Executar" do Codex e do Gemini) */
 function enviarComoEle(P, texto) {
-  const inp = $('.p-input', P.el);
-  if (!inp) return;
-  inp.value = texto;
-  send(P);
+  return send(P, texto);
 }
 
 /* Codex no modo Plano: o plano proposto chega inteiro no fim (item 'plan' completo). Vira o mesmo
@@ -5422,11 +5451,15 @@ function selecaoNaResposta() {
   const P = paneEl && [...panes.values()].find(q => q.el === paneEl);
   if (!P) return null;
   const msg = resposta.closest('.msg.bot') || resposta;
-  return { P, texto, caixa: r.getBoundingClientRect(), resposta: (msg.innerText || '').trim() };
+  return { P, texto, caixa: r.getBoundingClientRect(), resposta: (msg.innerText || '').trim(),
+    revisao: P.revisaoConversa || 0, hist: P.hist };
 }
 function mostrarBotaoResponder() {
   const sel = selecaoNaResposta();
-  if (!sel) { esconderBotaoResponder(); return; }
+  if (!sel) {
+    if (!botaoResponder?.contains(document.activeElement)) esconderBotaoResponder();
+    return;
+  }
   if (!botaoResponder) {
     botaoResponder = document.createElement('div');
     botaoResponder.className = 'bt-responder sel-barra hidden';
@@ -5439,12 +5472,20 @@ function mostrarBotaoResponder() {
     for (const [nome, fazer] of acoes) {
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'sb-op'; b.textContent = nome;
-      // mousedown e não click: o clique tiraria a seleção antes de ler o trecho
+      // Preserva a seleção antes do clique, mas só click executa: ele também é emitido
+      // por Enter, Espaço e leitores de tela. Não há segundo disparo no mouse/toque.
       b.addEventListener('mousedown', (e) => {
         e.preventDefault();
-        const agora = selecaoNaResposta() || botaoResponder._sel;
+      });
+      b.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (botaoResponder.classList.contains('hidden')) return;
+        const agora = botaoResponder._sel;
+        botaoResponder._sel = null;
         esconderBotaoResponder();
-        if (agora) { fazer(agora); try { window.getSelection().removeAllRanges(); } catch {} }
+        if (agora && painelAindaAtual(agora.P, agora.revisao) && agora.P.hist === agora.hist) {
+          fazer(agora); try { window.getSelection().removeAllRanges(); } catch {}
+        }
       });
       botaoResponder.appendChild(b);
     }
@@ -5465,9 +5506,24 @@ function mostrarBotaoResponder() {
    No meio: o trecho e as perguntas/respostas. Embaixo: a caixa para perguntar mais. Cada pergunta é
    uma chamada avulsa (detalhe:perguntar) que NÃO entra na conversa do chat nem espera ele terminar. */
 let detalheAberto = null;
-function fecharMaisDetalhes() { if (detalheAberto) { detalheAberto.el.remove(); detalheAberto = null; } }
+function fecharMaisDetalhes() {
+  const D = detalheAberto; if (!D) return;
+  detalheAberto = null;
+  clearTimeout(D.focoTimer);
+  if (D.P.fecharDetalhes === D.fechar) delete D.P.fecharDetalhes;
+  if (D.pedido && window.api.detalheCancelar) {
+    try { Promise.resolve(window.api.detalheCancelar({ requestId: D.pedido })).catch(() => {}); } catch {}
+  }
+  D.pedido = null;
+  D.el.remove();
+}
+function detalheAindaAtual(D) {
+  return detalheAberto === D && painelAindaAtual(D.P, D.revisao) && D.P.el.isConnected
+    && D.P.hist === D.hist && D.P.engine === D.engine && D.P.cwd === D.cwd;
+}
 function posicionarMaisDetalhes() {
   const D = detalheAberto; if (!D) return;
+  if (!detalheAindaAtual(D)) { fecharMaisDetalhes(); return; }
   const r = D.P.el.getBoundingClientRect();
   const w = Math.min(440, Math.max(300, r.width - 48));
   D.el.style.width = w + 'px';
@@ -5476,6 +5532,7 @@ function posicionarMaisDetalhes() {
   D.el.style.height = Math.round(Math.max(260, r.height - 44 - 16)) + 'px';
 }
 function abrirMaisDetalhes(P, trecho, resposta) {
+  if (!P || panes.get(P.id) !== P || !P.el.isConnected) return;
   fecharMaisDetalhes();
   const el = document.createElement('div');
   el.id = 'maisDetalhes';
@@ -5488,8 +5545,11 @@ function abrirMaisDetalhes(P, trecho, resposta) {
     + '<button class="md-ir" type="button" title="Perguntar (Enter)" aria-label="Perguntar">' + ico('arrow-up') + '</button></div>';
   $('.md-trecho', el).textContent = trecho;
   document.body.appendChild(el);
-  const D = { P, el, trecho, resposta, janela: [], ocupado: false };
+  const D = { P, el, trecho, resposta, janela: [], ocupado: false,
+    revisao: P.revisaoConversa || 0, hist: P.hist, engine: P.engine, cwd: P.cwd, pedido: null };
   detalheAberto = D;
+  D.fechar = () => { if (detalheAberto === D) fecharMaisDetalhes(); };
+  P.fecharDetalhes = D.fechar;
   posicionarMaisDetalhes();
   const corpo = $('.md-corpo', el), inp = $('.md-in', el);
   const bolha = (de, texto) => {
@@ -5500,20 +5560,28 @@ function abrirMaisDetalhes(P, trecho, resposta) {
     return b;
   };
   const perguntar = async (pergunta) => {
-    if (D.ocupado || detalheAberto !== D) return;
-    D.ocupado = true; el.classList.add('ocupado');
-    if (pergunta) bolha('eu', pergunta);
-    const espera = document.createElement('div');
-    espera.className = 'md-msg md-ia md-pensando';
-    espera.innerHTML = '<span class="rd-anel"></span><span>Pensando</span>';
-    corpo.appendChild(espera); corpo.scrollTop = corpo.scrollHeight;
-    const conversa = (P.hist || []).slice(-12).map(h => ({ quem: h.quem, texto: h.texto }));
-    let r;
-    try { r = await window.api.detalhePerguntar({ conversa, resposta, trecho, janela: D.janela, pergunta }); }
-    catch (e) { r = { error: String((e && e.message) || e) }; }
-    espera.remove();
-    if (detalheAberto !== D) return;
-    D.ocupado = false; el.classList.remove('ocupado');
+    if (!detalheAindaAtual(D)) { D.fechar(); return; }
+    if (D.ocupado) return;
+    D.ocupado = true;
+    let requestId = null, espera = null, r;
+    try {
+      el.classList.add('ocupado');
+      requestId = novoIdAleatorio(); D.pedido = requestId;
+      if (pergunta) bolha('eu', pergunta);
+      espera = document.createElement('div');
+      espera.className = 'md-msg md-ia md-pensando';
+      espera.innerHTML = '<span class="rd-anel"></span><span>Pensando</span>';
+      corpo.appendChild(espera); corpo.scrollTop = corpo.scrollHeight;
+      const conversa = (P.hist || []).slice(-12).map(h => ({ quem: h.quem, texto: h.texto }));
+      r = await window.api.detalhePerguntar({ requestId, conversa, resposta, trecho, janela: D.janela, pergunta });
+    } catch (e) { r = { error: String((e && e.message) || e) }; }
+    finally {
+      espera?.remove();
+      if (D.pedido === requestId) D.pedido = null;
+      D.ocupado = false; el.classList.remove('ocupado');
+    }
+    if (!detalheAindaAtual(D)) { D.fechar(); return; }
+    if (r && r.cancelado) return;
     if (r && r.texto) {
       if (pergunta) D.janela.push({ de: 'eu', texto: pergunta });
       D.janela.push({ de: 'ia', texto: r.texto });
@@ -5524,7 +5592,15 @@ function abrirMaisDetalhes(P, trecho, resposta) {
     }
     inp.focus();
   };
-  const enviar = () => { const t = inp.value.trim(); if (!t || D.ocupado) return; inp.value = ''; inp.style.height = 'auto'; perguntar(t); };
+  const enviar = () => {
+    const t = inp.value.trim(); if (!t || D.ocupado) return;
+    if (!detalheAindaAtual(D)) { D.fechar(); return; }
+    if (t.length > 12000) {
+      bolha('ia', 'A pergunta passou de 12.000 caracteres. Encurte o texto e tente de novo.').classList.add('md-erro');
+      return;
+    }
+    inp.value = ''; inp.style.height = 'auto'; perguntar(t);
+  };
   inp.addEventListener('input', () => { inp.style.height = 'auto'; inp.style.height = Math.min(120, inp.scrollHeight) + 'px'; });
   inp.addEventListener('keydown', (e) => {
     e.stopPropagation();
@@ -5534,12 +5610,13 @@ function abrirMaisDetalhes(P, trecho, resposta) {
   $('.md-ir', el).onclick = enviar;
   $('.md-x', el).onclick = fecharMaisDetalhes;
   $('.md-levar', el).onclick = () => {
+    if (!detalheAindaAtual(D)) { D.fechar(); return; }
     const ult = [...D.janela].reverse().find(m => m.de === 'ia');
     citarTrecho(P, ult ? ult.texto : trecho);
     fecharMaisDetalhes();
   };
   perguntar('');
-  setTimeout(() => inp.focus(), 30);
+  D.focoTimer = setTimeout(() => { if (detalheAindaAtual(D)) inp.focus(); }, 30);
 }
 window.addEventListener('resize', posicionarMaisDetalhes);
 document.addEventListener('keydown', (e) => {
@@ -5551,11 +5628,10 @@ document.addEventListener('keydown', (e) => {
    inteira": no Claude --fork-session, no Codex thread/fork; sem isso, o resumo colado), com o trecho
    já escrito na caixa. O chat de origem continua trabalhando, intacto. */
 async function perguntarNoChatLateral(P, trecho) {
-  const antes = new Set(panes.keys());
-  await ramificarInteiro(P);
-  const Q = [...panes.values()].find(q => !antes.has(q.id));
-  if (!Q) return;
-  Q.titulo = 'Lateral: ' + (P.titulo || 'conversa'); Q.nomeManual = true;
+  const titulo = P.titulo || 'conversa';
+  const Q = await ramificarInteiro(P);
+  if (!Q || panes.get(Q.id) !== Q) return;
+  Q.titulo = 'Lateral: ' + titulo; Q.nomeManual = true;
   pintarNome(Q); savePanes();
   const inp = $('.p-input', Q.el);
   if (!inp) return;
@@ -5567,7 +5643,10 @@ async function perguntarNoChatLateral(P, trecho) {
 document.addEventListener('mouseup', () => setTimeout(mostrarBotaoResponder, 0));
 document.addEventListener('keyup', (e) => { if (e.shiftKey || e.key === 'Shift') setTimeout(mostrarBotaoResponder, 0); });
 // no celular a seleção vem pelo toque longo: acompanha a seleção mudando
-document.addEventListener('selectionchange', () => { if (window.SEM_ELECTRON) setTimeout(mostrarBotaoResponder, 0); else if (!selecaoNaResposta()) esconderBotaoResponder(); });
+document.addEventListener('selectionchange', () => {
+  if (window.SEM_ELECTRON) setTimeout(mostrarBotaoResponder, 0);
+  else if (!selecaoNaResposta() && !botaoResponder?.contains(document.activeElement)) esconderBotaoResponder();
+});
 document.addEventListener('scroll', esconderBotaoResponder, true);
 
 /* ---- responder pela torre (26/09, pedido do Hugo) ----
@@ -5581,6 +5660,7 @@ function responderPelaTorre(P) {
   if (!P || !panes.has(P.id)) return;
   fecharRespostaDaTorre();
   let mover = null, copia = null;
+  const pedido = P.aprovacaoAtual;
   if (P.perguntasAtual && P.perguntasAtual.el && P.perguntasAtual.el.isConnected) mover = P.perguntasAtual.el;
   else if (P.planoPendente && P.planoPendente.el && P.planoPendente.el.isConnected) mover = P.planoPendente.el;
   else {
@@ -5589,7 +5669,15 @@ function responderPelaTorre(P) {
       copia = bar.cloneNode(true);
       for (const cls of ['pp-yes', 'pp-no', 'pp-sempre']) {
         const b = $('.' + cls, copia), orig = $('.' + cls, bar);
-        if (b && orig) b.onclick = () => orig.click();
+        if (b && orig) b.onclick = async () => {
+          if (P.aprovacaoAtual !== pedido || panes.get(P.id) !== P || orig.disabled || bar.classList.contains('hidden')) { fechar(); return; }
+          const botoes = $$('button', copia);
+          botoes.forEach(x => { x.disabled = true; });
+          try { await orig.onclick(); } finally {
+            if (P.aprovacaoAtual !== pedido) fechar();
+            else botoes.forEach(x => { const atual = $('.' + x.classList[0], bar); x.disabled = !!(atual && atual.disabled); });
+          }
+        };
       }
     } else if (P.questions) {
       for (const q of P.questions.values()) if (q && !q.done && q.el && q.el.isConnected) { mover = q.el; break; }
@@ -5611,14 +5699,14 @@ function responderPelaTorre(P) {
   document.body.appendChild(veu);
   const estado = { P, veu, volta, vigia: 0 };
   torreResposta = estado;
-  const fechar = () => fecharRespostaDaTorre();
+  const fechar = () => { if (torreResposta === estado) fecharRespostaDaTorre(); };
   veu.addEventListener('mousedown', (e) => { if (e.target === veu) fechar(); });
   $('.tr-x', veu).onclick = fechar;
   $('.tr-ir', veu).onclick = () => { fechar(); irAoChat(P); };
   estado.vigia = setInterval(() => {
     if (!panes.has(P.id) || estadoDoPainel(P).cls !== 'espera') return fechar();
     if (mover && !corpo.contains(mover)) return fechar();              // a pergunta foi respondida e saiu
-    if (copia && $('.pane-perm', P.el).classList.contains('hidden')) fechar();
+    if (copia && (P.aprovacaoAtual !== pedido || !$('.pane-perm', P.el) || $('.pane-perm', P.el).classList.contains('hidden'))) fechar();
   }, 250);
   const foco = $('.pane-perguntas', veu) || $('button', corpo);
   if (foco) setTimeout(() => foco.focus(), 30);
@@ -6195,11 +6283,15 @@ function renomearAqui(P) {
     const novo = inp.value.trim();
     inp.remove(); txt.style.display = ''; lapis.style.display = '';
     if (salvar && novo && novo !== P.titulo) {
-      P.titulo = novo; P.nomeManual = true; pintarNome(P); savePanes();
-      const id = P.sessaoId || P.resumeId;
-      if (id) { await window.api.renomear({ engine: P.engine, id, nome: novo, origem: 'manual' });
-        lembrarNomeDaParte({ engine: P.engine, id, file: P.sessaoFile }, novo);   // o título da cadeia acompanha na hora
-        if (lateralAberta()) loadHist(P.engine, true); }
+      const id = P.sessaoId || P.resumeId, engine = P.engine, revisao = P.revisaoConversa || 0;
+      try {
+        if (id) { const r = await window.api.renomear({ engine, id, nome: novo, origem: 'manual' });
+          if (r !== true && !(r && r.ok === true)) throw new Error(r && r.error || 'Não consegui salvar o nome da conversa.'); }
+        if (!painelAindaAtual(P, revisao)) return;
+        P.titulo = novo; P.nomeManual = true; pintarNome(P); savePanes();
+        if (id) { lembrarNomeDaParte({ engine, id, file: P.sessaoFile }, novo);
+          if (lateralAberta()) loadHist(engine, true); }
+      } catch (e) { avisoTemp(P, e.message || 'Não consegui salvar o nome da conversa.', true); }
     }
   };
   inp.addEventListener('keydown', (e) => {
@@ -6354,16 +6446,18 @@ async function lembrarDonoDoNome(P, id, titulo, revisao) {
    Com a lateral aberta, redesenha a lista quando a gravacao termina: o nome chega uns 3 s depois
    do fim do turno, e a lista (relida no fim do turno) ficava com o nome da rodada anterior. */
 function salvarNomeCurto(P) {
-  const id = P.sessaoId || P.resumeId;
-  if (!P.nomeCurto || P.nomeManual || !id || P.nomeCurtoSalvo === id + '|' + P.titulo) return;
-  P.nomeCurtoSalvo = id + '|' + P.titulo;
-  const engine = P.engine;
-  Promise.resolve(window.api.renomear({ engine, id, nome: P.titulo, origem: 'auto' }))
-    .then(() => { if (lateralAberta()) loadHist(engine, true); }).catch(() => {});
-  /* 25/09: numa conversa costurada o titulo da lista sai do nome salvo das partes (NOMES_LIGADOS),
-     que so era lido ao abrir a lateral. Sem avisar aqui, o chat trocava para "Criação de Vídeo
-     com IA" e a lista continuava no nome velho da parte de antes da troca. */
-  lembrarNomeDaParte({ engine, id, file: P.sessaoFile || '' }, P.titulo);
+  const id = P.sessaoId || P.resumeId, nome = P.titulo, selo = id + '|' + nome;
+  if (!P.nomeCurto || P.nomeManual || !id || P.nomeCurtoSalvo === selo || P.nomeSalvando === selo) return;
+  const engine = P.engine, file = P.sessaoFile || '', revisao = P.revisaoConversa || 0;
+  P.nomeSalvando = selo;
+  return Promise.resolve().then(() => window.api.renomear({ engine, id, nome, origem: 'auto' }))
+    .then(r => {
+      if (r !== true && !(r && r.ok === true)) throw new Error(r && r.error || 'Não consegui salvar o nome da conversa.');
+      if (!painelAindaAtual(P, revisao) || P.titulo !== nome) return;
+      P.nomeCurtoSalvo = selo;
+      lembrarNomeDaParte({ engine, id, file }, nome);
+      if (lateralAberta()) loadHist(engine, true);
+    }).catch(() => {}).finally(() => { if (P.nomeSalvando === selo) P.nomeSalvando = ''; });
 }
 
 /* O titulo do proprio Claude e a RESERVA: vale enquanto a IA do Cockpit nao deu um nome valido (ela
@@ -7344,6 +7438,7 @@ function fecharModal(P) {
   if (P && P.fecharTerminal) { const f = P.fecharTerminal; P.fecharTerminal = null; f(); return; }
   const m = $('.p-modal', P.el);
   m.classList.add('hidden'); $('.modal-cx', m).innerHTML = '';
+  m.dataset.codexSurface = ''; delete m.dataset.terminalId;
   /* R9 de novo: a Conta (cx-conta) e a Configuração (cx-config) carimbam o tamanho e escondem o
      × — quem abrisse depois sem carimbar (os conectores) herdaria. Fechou, volta ao normal. */
   $('.modal-cx', m).className = 'modal-cx';
@@ -7385,7 +7480,7 @@ async function janelaConectores(P) {
     encaixarAppsDoChatGpt(cx, appsR);
   };
   const lista = await window.api.mcpList(P.engine);
-  if (!modal || modal.classList.contains('hidden')) return;
+  if (!modal || modal.classList.contains('hidden') || modal.dataset.codexSurface !== 'connectors' || cx.dataset.geracaoApps !== marcaApps) return;
 
   if (lista && lista.error) {
     cx.innerHTML = cabeca() + '<div class="mo-erro">' + lista.error + '</div>';
@@ -7609,6 +7704,9 @@ function janelaTerminal(P, linha, titulo, aoFechar, opcoes) {
   cx.onclick = (e) => e.stopPropagation();
 
   const id = ESTA_TELA + 't' + (++termSeq);
+  modal.dataset.codexSurface = op.vincular ? 'vincular' : 'terminal';
+  modal.dataset.terminalId = id;
+  const donoDaJanela = () => modal.dataset.terminalId === id && tela.isConnected && cx.contains(tela);
   /* Barra de 39: icone + titulo + o comando em mono + parar (manda Ctrl+C) + ×. A frase de
      orientacao saiu da tela (regra dele: so rotulo) e virou o balao do icone e do titulo, sem
      (i) a mais na barra; o "Cancelar" de texto virou o quadradinho de parar, do tamanho do ×
@@ -7707,10 +7805,12 @@ function janelaTerminal(P, linha, titulo, aoFechar, opcoes) {
     /* O ■ de parar so vale enquanto o comando roda. Acabou (ou nem comecou), ele sai da barra e
        fica so o × — no desenho (E5) o terminal que terminou tem so o fechar. */
     acabou(code) {
+      if (!donoDaJanela()) return;
       const b = $('#tmCancela', cx); if (b) b.classList.add('hidden');
       if (vinc && op.aoTerminar) op.aoTerminar(code, estadoVinc);
     },
     viu(d) {
+      if (!donoDaJanela()) return;
       this.buf = (this.buf + d).slice(-8000);
       const achou = semEscapes(this.buf).match(REG_LINK);
       if (!achou) return;
@@ -7757,7 +7857,7 @@ function janelaTerminal(P, linha, titulo, aoFechar, opcoes) {
   /* estado da janela de vincular: 'espera' (login aberto no navegador), 'conferindo',
      'ok' (com a conta que ficou) ou 'falhou'. Cada estado mostra só os botões dele. */
   function estadoVinc(qual, conta) {
-    if (!vinc || !cx.isConnected) return;
+    if (!vinc || !donoDaJanela() || !$('.vc-estado', cx)) return;
     const txt = { espera: op.codigo ? 'Aguardando o código no navegador' : 'Aguardando o login no navegador',
       conferindo: 'Conferindo…', ok: 'Conta vinculada', falhou: 'O login não terminou' }[qual] || '';
     $('.vc-estado', cx).dataset.estado = qual;
@@ -7786,9 +7886,10 @@ function janelaTerminal(P, linha, titulo, aoFechar, opcoes) {
   }
 
   window.api.termRun({ id, linha, cols: tam.cols, rows: tam.rows }).then((r) => {
+    if (!donoDaJanela()) return;
     if (r && r.error) { term.write('\r\n\x1b[31m[não consegui rodar: ' + r.error + ']\x1b[0m\r\n'); reg.acabou(1); }
   });
-  setTimeout(() => term.focus(), 60);
+  setTimeout(() => { if (donoDaJanela()) term.focus(); }, 60);
 }
 
 /* Caixinha de UMA pergunta ("qual o nome?"), na janelinha do proprio painel. Mesmo molde do
@@ -8849,8 +8950,10 @@ async function janelaConta(P, motorPedido) {
   cx.innerHTML = topo + '<div class="mo-carregando">Lendo a conta…</div>';
   pintarTopo();
 
+  const abertura = {}; P.modalConta = abertura;
+  const superficie = modal.dataset.codexSurface;
   const c = await window.api.contaLer(eng);
-  if (modal.classList.contains('hidden')) return;
+  if (P.modalConta !== abertura || modal.classList.contains('hidden') || modal.dataset.codexSurface !== superficie) return;
   if (!c || !c.entrou) {
     cx.innerHTML = topo
       + '<div class="ct-lista"><div class="ct-linha"><span class="ct-radio"></span>'
@@ -8911,7 +9014,7 @@ async function janelaConta(P, motorPedido) {
   };
   acao('key-round', 'Vincular com código…', () => { fecharModal(P); contaAcao(P, 'trocarCodigo', eng); });
   // o cartao acima le a conta DESTE Mac; com o chat na VPS quem responde e o servidor
-  if (NA_VPS(P.cwd)) acao('server', 'Ver a conta da VPS…', () => { fecharModal(P); contaAcao(P, 'status', eng); });
+  if (NA_VPS(P.cwd)) acao('server', 'Ver a conta da VPS…', () => { fecharModal(P); contaAcao(P, 'status', eng, { cwd: P.cwd }); });
   $('#ctTrocar', cx).onclick = () => { fecharModal(P); contaAcao(P, 'trocar', eng); };
   $('#ctSair', cx).onclick = () => { fecharModal(P); contaAcao(P, 'logout', eng); };
   $('#ctOk', cx).onclick = () => fecharModal(P);
@@ -8945,37 +9048,7 @@ async function janelaConta(P, motorPedido) {
    Coisa DIFERENTE do "Trocar de conta" da janela da Conta, que sai e entra pelo CLI abrindo o
    navegador. Aqui e' so' trocar o arquivo da credencial por uma copia ja guardada — dois
    segundos em vez de dois minutos. Por isso o rotulo e' "Contas guardadas". */
-async function menuContas(P, motorPedido) {
-  const eng = motorPedido || P.engine;
-  const nomeEng = eng === 'codex' ? 'Codex' : 'Claude';
-  let guardadas = [], podeGuardar = false, porqueNao = '';
-  // le antes de abrir: no disco isso e instantaneo, e assim o menu nao pisca vazio
-  try { const r = await window.api.contasListar(eng); guardadas = Array.isArray(r) ? r : []; } catch {}
-  try { const d = await window.api.contasDisponivel(eng); podeGuardar = !!(d && d.ok); porqueNao = (d && (d.motivo || d.error)) || ''; } catch {}
 
-  const m = novoMenu(P);
-  m.appendChild(tituloPopup('Contas guardadas', 'Contas do ' + nomeEng + ' já logadas neste Mac. Clicar troca na hora, sem passar pelo navegador.'));
-  // a que está em uso ganha o ✓ à esquerda: "em uso agora"/"trocar para esta" saíram da tela
-  for (const g of guardadas) {
-    m.appendChild(elItem({
-      ic: 'user', nome: g.apelido, on: g.atual,
-      dica: g.atual ? 'em uso agora' : 'trocar para esta',
-    }, () => { if (!g.atual) trocarParaConta(P, eng, g.apelido); }));
-  }
-  if (guardadas.length) m.appendChild(elLinha());
-  if (podeGuardar) {
-    const c = contaCache[eng];
-    m.appendChild(elItem({ ic: 'plus', nome: 'Guardar a conta de agora…', desc: (c && c.email) || '' },
-      () => guardarContaAtual(P, eng)));
-  } else {
-    /* O item continua na lista, DESATIVADO, como o Mac faz: sumir sem explicação parece defeito.
-       O porquê (ex.: "no Mac a conta do Claude fica no Chaveiro…") vai no balão do mouse. */
-    m.appendChild(elItem({ ic: 'lock', nome: 'Guardar a conta de agora…', off: true,
-      dica: porqueNao || 'não dá para guardar a conta de agora' }));
-  }
-  if (guardadas.length) m.appendChild(elItem({ ic: 'eraser', nome: 'Esquecer uma conta guardada…',
-    dica: 'apaga só a cópia guardada aqui; o login continua onde está' }, () => menuEsquecerConta(P, eng)));
-}
 
 async function guardarContaAtual(P, eng) {
   let c = contaCache[eng];
@@ -9289,9 +9362,11 @@ function lerStatusConta(txt) {
 /* O 3o argumento diz de QUAL motor e a conta. Sem ele, com um chat do Codex em foco o
    botao "Entrar" (ou "Sair") do cartao do Claude mexia na conta do CODEX. Quem nao passa
    nada continua caindo no motor do proprio chat, como antes. */
-async function contaAcao(P, acao, motorPedido) {
+async function contaAcao(P, acao, motorPedido, destino) {
   const eng = motorPedido || P.engine;
-  const r = await window.api.auth({ engine: eng, acao, cwd: P.cwd });
+  const cwd = destino && destino.cwd || '';
+  const remoto = NA_VPS(cwd);
+  const r = await window.api.auth({ engine: eng, acao, cwd });
   if (!r) return;
   if (r.error) return note(P, 'Não consegui: ' + r.error, true);
   if (acao === 'status') { avisoTemp(P, (r.texto || 'sem resposta').split('\n').slice(0, 4).join(' · ')); return; }
@@ -9312,7 +9387,7 @@ async function contaAcao(P, acao, motorPedido) {
         const c = await window.api.contaLer(eng);
         dentro = !!(c && c.entrou); quem = (c && (c.email || c.nome)) || '';
       } else {
-        const st = await window.api.auth({ engine: eng, acao: 'status', cwd: P.cwd });
+        const st = await window.api.auth({ engine: eng, acao: 'status', cwd });
         const r2 = lerStatusConta(((st && st.texto) || '').trim());
         dentro = r2.dentro; quem = r2.quem;
       }
@@ -9329,7 +9404,7 @@ async function contaAcao(P, acao, motorPedido) {
       if (c?.entrou === true) {
         // Fechar a entrada não pode interromper um trabalho que já está em andamento.
         for (const q of panes.values()) {
-          if (q.engine !== eng || q.busy) continue;
+          if (q.engine !== eng || NA_VPS(q.cwd) !== remoto || q.busy) continue;
           await desligarMotor(q);
         }
         avisoTemp(P, 'Conta do ' + nomeDoMotor(eng) + ' vinculada' + (c.email ? ': ' + c.email : '.'));
@@ -9343,7 +9418,7 @@ async function contaAcao(P, acao, motorPedido) {
     // estiver ocupado, perguntar antes de cortar (mesmo padrao de trocarParaConta)
     // a conta da VPS e' outra, controlada pelo servidor de la: trocar de conta local nao
     // pode perguntar nem cortar chat que esta rodando na VPS (mesma regra do trocarParaConta)
-    const ocupados = [...panes.values()].filter(q => q.engine === eng && !NA_VPS(q.cwd) && (q.busy || agTrabalhando(q)));
+    const ocupados = [...panes.values()].filter(q => q.engine === eng && NA_VPS(q.cwd) === remoto && (q.busy || agTrabalhando(q)));
     if (ocupados.length) {
       const msg = ocupados.length === 1
         ? 'O ' + nomeDoMotor(eng) + ' está trabalhando em “' + ((ocupados[0].titulo || '').trim().slice(0, 40) || 'um chat') + '”.\n\nTrocar de conta agora joga fora o que ele está fazendo. Continuar mesmo assim?'
@@ -9351,20 +9426,20 @@ async function contaAcao(P, acao, motorPedido) {
       if (!confirm(msg)) { avisoTemp(P, 'Nada foi cortado. Mande uma mensagem quando puder trocar.'); return; }
     }
     for (const q of panes.values()) {
-      if (q.engine !== eng || NA_VPS(q.cwd)) continue; // VPS nao muda de conta aqui, nao interromper
+      if (q.engine !== eng || NA_VPS(q.cwd) !== remoto) continue; // VPS nao muda de conta aqui, nao interromper
       await desligarMotor(q);
       // religa na MESMA conversa: a sessao e' arquivo local, nao pertence a conta
       q.resumeId = q.sessaoId || q.resumeId; q.sessaoId = null;
     }
     if (!r.confereDepois) { avisoTemp(P, 'Pronto. Mande uma mensagem para começar de novo.'); return; }
     avisoTemp(P, 'Conferindo qual conta ficou…');
-    const st = await window.api.auth({ engine: eng, acao: 'status', cwd: P.cwd });
+    const st = await window.api.auth({ engine: eng, acao: 'status', cwd });
     const txt = ((st && st.texto) || '').trim();
     const r2 = lerStatusConta(txt);
     if (r2.dentro) {
       // Codex compartilha UM app-server que so le a conta ao subir: sem reiniciar, a tela diz
       // "conta trocada" mas ele segue respondendo pela conta antiga (mesmo motivo de trocarParaConta)
-      if (eng === 'codex') { try { await window.api.codexReiniciar(); } catch {} }
+      if (eng === 'codex' && !remoto) { try { await window.api.codexReiniciar(); } catch {} }
       avisoTemp(P, 'Conta vinculada' + (r2.quem ? ': ' + r2.quem : '.'));
       USO_FECHADO[eng] = null; lerUso(eng, true);
       // trocou de conta: aqui SIM vale reler o cartao inteiro, pro e-mail e o plano mudarem
@@ -9375,7 +9450,7 @@ async function contaAcao(P, acao, motorPedido) {
     pintarContasAjustes(true);
   }, { abrirSozinho: !!r.esperaLink && !r.naVps, orientacao: r.orientacao,
        vincular, codigo: acao === 'trocarCodigo' || !!r.naVps, aoTerminar: vincular ? aoTerminar : null,
-       deNovo: () => contaAcao(P, acao, eng) });
+       deNovo: () => contaAcao(P, acao, eng, { cwd }) });
 }
 
 /* ehErro: quatro chamadas ja mandavam o terceiro valor ("isto e erro") e ele era jogado fora —
@@ -10192,12 +10267,15 @@ function ligacaoDe(p) {
 
 /* As partes de uma conversa, da mais velha para a mais nova, andando pelas ligacoes a partir
    de uma parte qualquer. Para em ciclo (A→B→A, arquivo editado na mao) e em 50 passos. */
-function partesDaCadeia(ref) {
+function partesDaCadeia(ref, pendentes = []) {
+  // A costura ainda não confirmada também identifica o histórico que já é deste chat.
+  // Usá-la na leitura não a promove a LIGACOES: o ACK continua responsável por persistir.
+  const locais = new Map(pendentes.map(p => [chaveParte(p.nova), p]));
   const partes = [ref];
   const vistos = new Set([chaveParte(ref)]);
   let atual = ref;
   for (let n = 0; n < 50; n++) {
-    const l = ligacaoDe(atual);
+    const l = locais.get(chaveParte(atual)) || ligacaoDe(atual);
     if (!l) break;
     const k = chaveParte(l.anterior);
     if (vistos.has(k)) break;
@@ -10356,7 +10434,7 @@ function esquecerLigacoesLocais(p) {
 /* ---- o painel e a cadeia ----
    P.parteAnterior: a conversa de ANTES da ultima troca de IA, esperando o motor novo abrir a
    dele para costurar. P.partesAnteriores: todas as partes mais velhas desta conversa. */
-function esquecerCadeiaDoPainel(P) { P.parteAnterior = null; P.partesAnteriores = []; }
+function esquecerCadeiaDoPainel(P) { P.parteAnterior = null; P.partesAnteriores = []; P.historicoIncompleto = null; }
 /* Chamado no instante da troca de IA, ANTES de o numero da conversa ser zerado. Chat sem
    conversa (trocou duas vezes sem mandar nada) nao guarda nada: a parte pendente continua a
    mesma, e nao nasce ligacao fantasma. */
@@ -10374,22 +10452,45 @@ function guardarParteAnterior(P) {
   P.parteAnterior = { engine: P.engine, id, file: P.sessaoFile || '', cwd: P.cwd || '' };
 }
 /* O motor novo anunciou a conversa dele (evento 'sessao'): costura nova → anterior no disco. */
-function ligarParteAnterior(P) {
-  const anterior = P.parteAnterior;
-  if (!anterior || !P.sessaoId) return;
-  P.parteAnterior = null;
-  const nova = { engine: P.engine, id: P.sessaoId, file: P.sessaoFile || '', cwd: P.cwd || '' };
-  // retomou a mesma conversa (nada mudou de verdade): nao ha o que costurar
-  if (anterior.engine === nova.engine && anterior.id === nova.id) return;
-  // a cadeia ja passa pela nova: ligar faria um circulo
-  if (partesDaCadeia(anterior).some(p => p.engine === nova.engine && p.id === nova.id)) return;
-  P.partesAnteriores = [...(P.partesAnteriores || []), anterior];
-  // vale na hora nesta tela; o main e quem guarda de verdade (e tambem recusa circulo)
-  LIGACOES[chaveParte(nova)] = Object.assign({}, nova, { anterior, quando: Date.now() });
-  Promise.resolve(window.api.ligacoesGravar ? window.api.ligacoesGravar({ nova, anterior }) : null)
-    .then(r => { if (r && r.error) delete LIGACOES[chaveParte(nova)]; })
-    .catch(() => {});
-  if (lateralAberta()) pintarConversas();
+async function ligarParteAnterior(P) {
+  const anterior = P.parteAnterior, id = P.sessaoId || P.resumeId;
+  const fila = P.ligacoesPendentes || (P.ligacoesPendentes = []);
+  if (anterior && id) {
+    const nova = { engine: P.engine, id, file: P.sessaoFile || '', cwd: P.cwd || '' };
+    if (chaveParte(anterior) === chaveParte(nova) || partesDaCadeia(anterior).some(p => chaveParte(p) === chaveParte(nova))) {
+      P.parteAnterior = null;
+    } else if (!fila.some(x => chaveParte(x.nova) === chaveParte(nova) && chaveParte(x.anterior) === chaveParte(anterior))) {
+      fila.push({ nova, anterior });
+      // A pendência é salva ANTES do IPC. Fechar a janela no meio não perde a ligação.
+      savePanes();
+    }
+  }
+  if (P.ligacaoGravando || !fila.length) return;
+  clearTimeout(P.ligacaoTimer); P.ligacaoTimer = null;
+  P.ligacaoGravando = true;
+  try {
+    while (fila.length) {
+      const pendente = fila[0], { nova, anterior } = pendente;
+      if (!window.api.ligacoesGravar) throw new Error('A ponte ainda não está disponível.');
+      const r = await window.api.ligacoesGravar({ nova, anterior });
+      if (!r || r.error || r.ok !== true) throw new Error(r && r.error || 'A ligação não foi confirmada.');
+      LIGACOES[chaveParte(nova)] = { ...nova, anterior, quando: Date.now() };
+      if (fila[0] === pendente) fila.shift();
+      if (P.parteAnterior && chaveParte(P.parteAnterior) === chaveParte(anterior)) P.parteAnterior = null;
+      if (P.engine === nova.engine && (P.sessaoId || P.resumeId) === nova.id) P.partesAnteriores = partesDaCadeia(nova).slice(0, -1);
+      P.ligacaoFalhas = 0; P.ligacaoAvisada = false;
+      savePanes();
+      if (lateralAberta()) pintarConversas();
+    }
+  } catch (e) {
+    savePanes();
+    if (!P.ligacaoAvisada) { P.ligacaoAvisada = true; note(P, 'A ligação entre as IAs ainda não foi salva. Vou tentar novamente.', true); }
+    P.ligacaoFalhas = (P.ligacaoFalhas || 0) + 1;
+    P.ligacaoTimer = setTimeout(() => {
+      P.ligacaoTimer = null;
+      if (panes.get(P.id) === P) ligarParteAnterior(P);
+    }, Math.min(60000, 5000 * P.ligacaoFalhas));
+  } finally { P.ligacaoGravando = false; }
 }
 
 /* O historico de UMA parte. Conversa do Claude que rodou na VPS mora no disco de la. */
@@ -10407,12 +10508,46 @@ function lerPartes(partes) {
   return Promise.all(partes.map(p => lerHistoricoDaParte(p)
     .then(msgs => ({ parte: p, msgs }), erro => ({ parte: p, msgs: [], erro }))));
 }
+/* Erro de uma parte não se confunde com uma conversa vazia. A leitura parcial nunca
+   substitui uma cadeia já carregada; o botão só redesenha quando TODAS voltarem. */
+function avisarPartesIndisponiveis(P, lidas) {
+  const faltam = lidas.filter(x => x.erro);
+  if (!faltam.length) { P.historicoIncompleto = null; return; }
+  const anterior = P.historicoIncompleto;
+  const estado = { partes: lidas.map(x => x.parte), aviso: anterior && anterior.aviso };
+  P.historicoIncompleto = estado;
+  if (estado.aviso && estado.aviso.isConnected) return;
+  const aviso = document.createElement('div'); aviso.className = 'note err';
+  aviso.textContent = 'Não consegui carregar a parte do ' + [...new Set(faltam.map(x => nomeDoMotor(x.parte.engine)))].join(' e do ') + '. A conversa está incompleta. ';
+  const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'mo-btn'; bt.textContent = 'Tentar de novo';
+  bt.onclick = () => relerPartesDoPainel(P);
+  aviso.appendChild(bt); P.chat.appendChild(aviso); estado.aviso = aviso;
+}
+async function relerPartesDoPainel(P) {
+  const pendente = P.historicoIncompleto;
+  if (!pendente || P.recarregandoPartes) return;
+  if (P.busy || P.queued) { avisoTemp(P, 'Espere a resposta terminar para reler a conversa.', true); return; }
+  const revisao = P.revisaoConversa || 0, hist = P.hist, quantidade = hist.length;
+  P.recarregandoPartes = true;
+  try {
+    const lidas = await lerPartes(pendente.partes);
+    if (!painelAindaAtual(P, revisao) || P.hist !== hist || P.hist.length !== quantidade || P.busy || P.queued) return;
+    if (lidas.some(x => x.erro)) { avisoTemp(P, 'Essa parte ainda está indisponível. O histórico que já abriu foi preservado.', true); return; }
+    P.hist.length = 0; P.blocks.clear(); P.tools.clear(); P.execEl = null;
+    P.chat.replaceChildren();
+    desenharPartes(P, lidas);
+    if (!(P.sessaoId || P.resumeId) && P.hist.length) P.passarContexto = montarContexto(P);
+    scroll(P, true);
+  } finally { P.recarregandoPartes = false; }
+}
+
 /* Desenha as partes da mais velha para a mais nova, com a faixa da troca de IA entre elas.
    Cada resposta sai com o logo e o nome da IA QUE respondeu, e entra no P.hist com esse nome:
    se ele trocar de novo, a proxima IA recebe "### Codex:" e "### Claude:" certos.
    A troca do P.engine durante o desenho e sincrona de proposito: nenhum evento do motor entra
    no meio, e o finally devolve o motor do painel mesmo se uma mensagem estourar. */
 function desenharPartes(P, lidas) {
+  avisarPartesIndisponiveis(P, lidas);
   const motorDoPainel = P.engine;
   let antes = '', desenhou = 0;
   try {
@@ -11025,7 +11160,13 @@ function linhaConversa(s, termo, trecho) {
       const novo = inp.value.trim();
       inp.remove(); alvo.style.display = ''; lapis.style.display = '';
       if (!salvar || !novo || novo === s.title) return;
-      await window.api.renomear({ engine: s.engine, id: s.id, nome: novo, origem: 'manual' });
+      try {
+        const r = await window.api.renomear({ engine: s.engine, id: s.id, nome: novo, origem: 'manual' });
+        if (r !== true && !(r && r.ok === true)) throw new Error(r && r.error || 'Não consegui salvar o nome da conversa.');
+      } catch (e) {
+        if (focusPane) avisoTemp(focusPane, e.message || 'Não consegui salvar o nome da conversa.', true);
+        return;
+      }
       s.title = novo;
       alvo.textContent = novo;
       d.title = novo + '\n' + s.cwd;
@@ -11677,12 +11818,14 @@ function naConfirmar(dois) {
 }
 
 // chat novo dentro da aba que esta aberta (mesma pasta, sem perguntar nada)
-function novoChatNaAba(engine) {
-  if (!abaAtiva) { telaNovaAba(); return; }
+function novoChatNaAba(engine, aba) {
+  const A = aba || abaAtiva;
+  if (!A) { telaNovaAba(); return; }
+  if (abas.get(A.id) !== A) return;
   engine = motorVisivel(engine || (focusPane && focusPane.engine) || cfg.lastEngine);
-  const motivo = motorIndisponivelNaPasta(engine, abaAtiva.cwd);
+  const motivo = motorIndisponivelNaPasta(engine, A.cwd);
   if (motivo) { if (focusPane) avisoTemp(focusPane, motivo, true); return; }
-  const P = newPane({ engine, aba: abaAtiva });
+  const P = newPane({ engine, aba: A });
   avisarInstalacaoMotor(P);
   igualarChats();
   setTimeout(() => $('.p-input', P.el).focus(), 60);

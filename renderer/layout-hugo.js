@@ -4,7 +4,7 @@ function colunasDaAba(A) {
   const grupos = new Map();
   for (const id of A.ordem) {
     const P = panes.get(id); if (!P) continue;
-    if (!P.coluna) P.coluna = crypto.randomUUID();
+    if (!P.coluna) P.coluna = novoIdAleatorio();
     if (!grupos.has(P.coluna)) grupos.set(P.coluna, []);
     grupos.get(P.coluna).push(P);
   }
@@ -125,7 +125,7 @@ function organizarPainel(P, Q, empilhar, antes = false) {
     A.ordem = A.ordem.filter(id => id !== P.id);
     const referencia = empilhar ? Q : (antes ? destino[0] : destino[destino.length - 1]);
     A.ordem.splice(A.ordem.indexOf(referencia.id) + (antes ? 0 : 1), 0, P.id);
-    P.coluna = empilhar ? Q.coluna : crypto.randomUUID();
+    P.coluna = empilhar ? Q.coluna : novoIdAleatorio();
     P.larguraColuna = empilhar ? Q.larguraColuna : 0;
     for (const id of A.ordem) {
       const q = panes.get(id);

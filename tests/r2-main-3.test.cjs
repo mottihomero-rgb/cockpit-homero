@@ -102,7 +102,7 @@ test('R2-034: processo que morre logo com SIGTERM — shutdown() não espera os 
   proc.pid = 4321;   // fakeSpawn nao da' pid nenhum; sem isso o codigo nem entra no ramo do timer
   h.evaluate(`
     globalThis.__kills = [];
-    process.kill = (pid, sinal) => { globalThis.__kills.push(sinal); };
+    process.kill = (pid, sinal) => { if (sinal === 0) throw Object.assign(new Error('grupo encerrado'), { code: 'ESRCH' }); globalThis.__kills.push(sinal); };
   `);
   const p = h.evaluate('shutdown()');
   assert.equal(typeof p.then, 'function', 'shutdown() tem de virar async (devolver Promise) para o R2-034 funcionar');

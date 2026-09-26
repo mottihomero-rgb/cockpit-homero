@@ -381,3 +381,25 @@
   /* no telefone não há teclado: a dica esc / ↩ do pedido de autorização sai */
   .pp-tecla{display:none}
 }
+
+/* Celular em pé (até 480): a regra do painel estreito do desenho (README: "abaixo de 400pt, modo
+   de envio, plano, quadro e time vão para o '…'"). Lá o painel tem a largura da tela e não é
+   container (celular.css), então a regra vem pela largura da tela; e os botões do dedo têm de 32
+   a 44 em vez de 26, então o corte de 400 cresce na mesma conta (~490). Sem isto, com o anel
+   (conversa acima de 20%) e o parar à vista, 11 botões de 32 pediam 402 numa fileira de 356: ela
+   rolava de lado e o anel e o parar, grudados na direita, ficavam POR CIMA do time e do cadeado.
+   Com os quatro no "…" a fileira cabe parada até num iPhone de 375, com anel, parar e Codex. */
+@media (max-width: 480px) {
+  .cmp-bar .p-modoenvio,.cmp-bar .p-plano,.cmp-bar .p-quadro,.cmp-bar .p-agentes{display:none}
+  .cmp-bar .p-mais{display:grid}
+  /* A ponta direita com medida fixa: os "right" do sticky (36/42/84, lá em cima) contavam com
+     botões de 32, mas com a fileira cabendo eles esticam para ~35 e o sticky puxava o anel 3pt
+     para cima do "…". Com 36 cada e só o vão (4) de sombra, o lugar grudado é o mesmo lugar
+     natural: parado, ninguém é empurrado; se um telefone estreito ainda rolar, eles grudam na
+     mesma posição, com o vão cheio por baixo. */
+  .cmp-bar > :is(.p-compactar,.p-stop,.p-send){flex:none;width:36px}
+  .cmp-bar > .p-send{box-shadow:-4px 0 0 0 var(--bg2)}
+  .cmp-bar > .p-stop{right:40px;box-shadow:-4px 0 0 0 var(--bg2)}
+  .cmp-bar > .p-compactar{right:40px}
+  .cmp-bar:has(> .p-stop:not(.hidden)) > .p-compactar{right:80px}
+}

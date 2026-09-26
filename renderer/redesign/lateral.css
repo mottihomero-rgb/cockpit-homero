@@ -468,4 +468,52 @@ html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inse
   body:has(#btnGaveta) .hist-item{height:auto;min-height:40px;padding:10px 9px}
   body:has(#btnGaveta) .sp-item{height:36px}
   body:has(#btnGaveta) .aj{min-height:44px}
+
+  /* Uso do plano no telefone: UMA linha por IA (logo, nome e os números), sem as barras, o
+     plano e o "zera …". Com um bloco de Sessão e Semana para cada IA, o topo da gaveta ia até
+     436 de 659 e sobravam 223 para a lista (umas 4 conversas); no port-hugo, com um cartão só,
+     a lista tinha 392. O plano e a conta continuam na dica e na janela da conta (tocar na linha). */
+  body:has(#btnGaveta) .cv-uso{gap:4px}
+  body:has(#btnGaveta) .cv-uso-motor{flex-direction:row;align-items:center;gap:10px;min-height:24px}
+  body:has(#btnGaveta) .cv-uso-cab{flex:1 1 auto;min-width:0}
+  body:has(#btnGaveta) :is(.cv-uso-plano,.cv-uso-barra,.cv-uso-zera){display:none}
+  body:has(#btnGaveta) .cv-uso-janelas{flex:none;flex-direction:row;gap:10px}
+  body:has(#btnGaveta) .cv-uso-top{gap:4px}
+  body:has(#btnGaveta) .cv-uso-rot{flex:none}
+
+  /* Linha de conversa no telefone: duas linhas. No toque os quatro botões ficam sempre à vista
+     (celular.css, R3-050) e não existe o hover que no Mac tira o tempo e zera a largura deles;
+     com os logos das IAs e o tempo na mesma fileira, o nome ficava com 68 a 102 ("Checkou…",
+     "Página do Man…"), contra 123 a 141 antes da lista única. Agora o nome tem a linha de cima
+     inteira até os botões (~147), logos e tempo descem para a de baixo e os botões ficam no meio
+     das duas: 6 + 16 + 2 + 14 + 6 = 44 de altura, o mínimo do dedo. O :not(.com-onde) deixa a
+     linha da busca com o arranjo dela (logo abaixo). O campo de renomear toma o lugar do nome. */
+  body:has(#btnGaveta) .hist-item:not(.com-trecho):not(.com-onde){display:grid;
+    grid-template-columns:auto auto minmax(0,1fr) repeat(4,20px);grid-template-rows:auto auto;
+    column-gap:8px;row-gap:2px;align-items:center;align-content:center;min-height:44px;padding:6px 9px}
+  body:has(#btnGaveta) .hist-item:not(.com-trecho):not(.com-onde) :is(.hi-t,.pn-input){grid-column:1/4;grid-row:1}
+  body:has(#btnGaveta) .hist-item:not(.com-trecho):not(.com-onde) .hi-motores{grid-column:1;grid-row:2}
+  body:has(#btnGaveta) .hist-item:not(.com-trecho):not(.com-onde) .hi-w{display:block;grid-column:2;grid-row:2}
+  body:has(#btnGaveta) .hist-item:not(.com-trecho):not(.com-onde) :is(.hi-fav,.hi-edit,.hi-grupo,.hi-mais){
+    grid-row:1/3;width:20px;margin:0}
+  body:has(#btnGaveta) .hist-item:not(.com-trecho):not(.com-onde) .hi-fav{grid-column:4}
+  body:has(#btnGaveta) .hist-item:not(.com-trecho):not(.com-onde) .hi-edit{grid-column:5}
+  body:has(#btnGaveta) .hist-item:not(.com-trecho):not(.com-onde) .hi-grupo{grid-column:6}
+  body:has(#btnGaveta) .hist-item:not(.com-trecho):not(.com-onde) .hi-mais{grid-column:7}
+  /* o anel de toque dos quatro (celular.css: -3px, por causa do vão de 7 de antes) agora pega a
+     altura da linha inteira; de lado fica em 4, que cabe no vão de 8 sem um roubar o outro */
+  body:has(#btnGaveta) .hist-item:not(.com-trecho):not(.com-onde) :is(.hi-fav,.hi-edit,.hi-grupo,.hi-mais)::after{inset:-12px -4px}
+
+  /* Resultado da busca no telefone: os logos iam para o canto de cima (float:right) e, sem o
+     hover que no Mac tira eles da frente, ficavam POR CIMA da pasta e do "…". Aqui eles descem
+     para a linha do "IA · cliente", antes dela, e o tempo fecha essa linha à direita. Os quatro
+     botões continuam ancorados no alto (style.css), agora centrados na linha do título. */
+  body:has(#btnGaveta) .hist-item.com-onde{display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+    column-gap:6px;align-items:center}
+  body:has(#btnGaveta) .hist-item.com-onde :is(.hi-t,.pn-input){grid-column:1/-1;grid-row:1}
+  body:has(#btnGaveta) .hist-item.com-onde .hi-motores{grid-column:1;grid-row:2;float:none;margin:1px 0 0}
+  body:has(#btnGaveta) .hist-item.com-onde .hi-onde{grid-column:2;grid-row:2;margin-right:0}
+  body:has(#btnGaveta) .hist-item.com-onde .hi-w{position:static;display:block;grid-column:3;grid-row:2}
+  body:has(#btnGaveta) .hist-item.com-onde .hi-trecho{grid-column:1/-1;grid-row:3;margin-right:0}
+  body:has(#btnGaveta) .hist-item.com-onde :is(.hi-fav,.hi-edit,.hi-grupo,.hi-mais){top:8px}
 }

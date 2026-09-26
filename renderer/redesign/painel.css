@@ -242,6 +242,11 @@ mark.acha{background:var(--highlight);color:inherit;border-radius:3px;padding:0 
   :root:has(.so-celular) .p-close{width:32px;height:32px}
   :root:has(.so-celular) .p-tokens{font-size:10px}
   :root:has(.so-celular) .ch-lado{height:auto;padding:9px 8px;font-size:10.5px}
+  /* só o logo agora (o nome saiu): cada troca de IA caiu de 59-71×34 para 30×32. 44 de largura
+     de verdade e, na altura, o anel invisível de 6 em cima e embaixo (a linha continua com 32 e o
+     cabeçalho não cresce): 44×44, o mínimo do dedo, como o .p-close aqui ao lado */
+  :root:has(.so-celular) .ch-lado{min-width:44px;justify-content:center}
+  :root:has(.so-celular) .ch-lado::after{content:"";position:absolute;inset:-6px 0}
   /* o ponto do telefone vira o MESMO sinal da linha 2 do Mac (README, "Estados"): parado não
      mostra nada, trabalhando é o anel neutro girando, esperando é o círculo âmbar com "!" e o
      erro é o triângulo. Antes era o ponto de 7px antigo, com as cores trocadas: âmbar

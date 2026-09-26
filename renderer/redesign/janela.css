@@ -248,6 +248,15 @@ body:has(> #novaAba:not(.hidden)) .aba.ativa:hover{background:var(--fill-3);colo
   .aba .aba-x{width:28px;height:28px;margin:0 -12px 0 -6px}
   .aba.ativa .aba-x{display:inline-grid}
   .aba:not(.ativa) .aba-x{display:none}
+  /* Alvos de 44 no topo (o mesmo mínimo da barra de ícones aqui em cima). O × da aba aberta fica
+     com 36 e começa 9 depois do contador; o anel invisível estende 8 para a esquerda e 8 para
+     cima e para baixo: 44×44 sem cobrir o contador (tocar nele não pode fechar a aba) e sem
+     passar da borda da aba (a vizinha não pode virar "fechar"). A lista das abas estica na
+     altura da faixa, senão ela cortava o anel nos 28 da aba. O "+" vira 44 de verdade. */
+  #abasLista{align-self:stretch}
+  .aba .aba-x{position:relative;width:36px;margin:0 -12px 0 2px}
+  .aba .aba-x::after{content:"";position:absolute;inset:-8px 0 -8px -8px}
+  #abasTopo .aba-mais{width:44px;height:44px;margin-left:0}   /* o "+ Chat" (.canto) fica com os 80 e a margem dele */
   /* o painel encosta na borda da tela: a linha da barra de ícones não tem o que separar */
   #dragbar.hidden + #panes{border-left:0}
   /* véu atrás da gaveta: o do sistema (--scrim), mais leve no claro que o #00000070 fixo */

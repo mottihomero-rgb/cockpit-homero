@@ -187,3 +187,28 @@ test('recados de envio: poucas palavras na tela, a explicação no title', () =>
   assert.match(source, /avisoEnvio\(P, 'Esforço máximo', 'Liberei os workflows/);
   assert.doesNotMatch(source, /avisoEnvio\(P, 'Esforço máximo: liberei/);
 });
+
+test('logo do rótulo numa cor só: o degradê do Gemini sai e a estrela pega a cor do .av (regra 8)', () => {
+  // o SVG oficial do Gemini: estrela com fill="white" + grupo com máscara das manchas coloridas
+  const app = source.slice(source.indexOf('const LOGOS_MARCA'), source.indexOf('const svgMotor'));
+  assert.match(app, /"gemini"[\s\S]*fill=\\"white\\"[\s\S]*<g mask=/, 'o logo do Gemini mudou: revise esta guarda');
+  // sem as duas regras o rótulo saía colorido (grupo visível) ou com a estrela branca (só o grupo escondido)
+  assert.match(css, /\.msg\.bot \.av \.logo-motor > g\[mask\]\{display:none\}/);
+  assert.match(css, /\.msg\.bot \.av \.logo-motor > path\{fill:currentColor\}/);
+});
+
+test('resposta que abre com título (o relatório): sem logo e nome, o copiar no vão de 22 acima', () => {
+  // a regra dos rótulos continua a mesma (um por resposta); o título é que dispensa o rótulo
+  assert.match(func('botBlock'), /const semNome = falaContinua\(P\);/);
+  const sel = '.msg.bot:has(> .msg-body > :is(h1,h2,h3):first-child) > .msg-role';
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const role = new RegExp(esc(sel) + '\\{([^}]*)\\}').exec(css);
+  assert.ok(role, 'a regra do rótulo na resposta com título sumiu');
+  // sai do fluxo (o H2 fica 22 abaixo dos passos, como nas telas 08 e 10) e esconde o nome
+  assert.match(role[1], /position:absolute;left:-5px;top:-22px/);
+  assert.match(role[1], /font-size:0;color:transparent/);
+  assert.match(css, new RegExp(esc(sel + ' .av') + '\\{display:none\\}'));
+  // o copiar da resposta continua lá (mesmo lugar do copiar da fala sem rótulo)
+  assert.match(css, new RegExp(esc(sel + ' .msg-acoes') + '\\{margin:0\\}'));
+  assert.doesNotMatch(role[1], /display:none/, 'esconder o rótulo inteiro levaria junto o copiar da resposta');
+});

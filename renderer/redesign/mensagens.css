@@ -38,6 +38,24 @@
 .msg-role{display:flex;align-items:center;gap:6px;height:16px;margin:0 0 8px;
   font:600 12px/16px var(--font-sans);color:var(--label-2);text-transform:none;letter-spacing:0}
 .msg.bot .av{width:14px;height:14px;padding:0;border-radius:0;background:none;display:flex}
+/* o logo oficial do Gemini vem com o degradê colorido dele (o grupo com máscara por cima da
+   estrela) e o path da estrela com fill="white" no próprio atributo: a cor do .av não chegava
+   ao desenho e o rótulo saía colorido. Regra 8 do README: o oficial, só recolorido com --logo-*.
+   Fica só a estrela, pintada com a cor do .av, como os outros três (o mesmo par do painel.css,
+   do menus.css e do sheets.css). Só esconder o grupo não basta: a estrela sairia branca. */
+.msg.bot .av .logo-motor > g[mask]{display:none}
+.msg.bot .av .logo-motor > path{fill:currentColor}
+/* Resposta que ABRE com título (o relatório do trabalho, telas 08 e 10) não leva rótulo: o
+   título já abre o bloco, 22 abaixo dos passos. As outras seguem com rótulo, inclusive depois
+   de um passo (telas 05 a 07). É a regra única que bate com todas as telas do design: lá toda
+   fala de texto tem rótulo e o relatório, que é a que começa com H2, nunca tem. Aqui no CSS (e
+   não no botBlock) porque o título só se sabe quando o texto chega. O rótulo fica no DOM (o
+   leitor de tela ainda lê o nome): somem o logo e o nome, e o copiar da resposta vai para o vão
+   de 22 logo acima do texto, o mesmo lugar do copiar da fala sem rótulo (.msg.bot > .msg-acoes). */
+.msg.bot:has(> .msg-body > :is(h1,h2,h3):first-child) > .msg-role{position:absolute;left:-5px;top:-22px;
+  height:22px;margin:0;gap:0;font-size:0;color:transparent}
+.msg.bot:has(> .msg-body > :is(h1,h2,h3):first-child) > .msg-role .av{display:none}
+.msg.bot:has(> .msg-body > :is(h1,h2,h3):first-child) > .msg-role .msg-acoes{margin:0}
 
 /* ---------- mensagem minha ----------
    À direita: linha de 16 com "Você" (11px, --label-3) e, à esquerda dele, as ações do hover;

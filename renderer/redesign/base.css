@@ -51,15 +51,20 @@ hr{border:0;border-top:1px solid var(--separator);margin:12px 0}
 .rd-ic-caixa{width:var(--ic-caixa);height:var(--ic-caixa)}
 .rd-ic-barra{width:var(--ic-barra);height:var(--ic-barra)}
 
-/* ---------- barra de rolagem discreta ----------
-   Antes era um cinza cravado (#4a4a4a), feito para o escuro, com remendo por tema. Agora é o
-   próprio texto do tema bem transparente: some no fundo e aparece no hover, nos quatro temas.
-   A borda transparente de 3px é o respiro em volta do polegar. */
+/* ---------- barra de rolagem como a sobreposta do Mac ----------
+   Parada, o polegar é invisível (o desenho não mostra barra nenhuma, nem com a conversa rolável).
+   Ele aparece enquanto a pessoa rola (o app.js põe .rolando por 900ms a cada rolada feita por
+   ela; a conversa descendo sozinha enquanto o assistente escreve não acende) e com o mouse em
+   cima dele, mais forte ao arrastar. A calha de 10 continua reservada onde a área pede
+   (scrollbar-gutter), então nada pula de lugar quando o polegar aparece. A cor é o próprio texto
+   do tema bem transparente, nos quatro temas; a borda transparente de 3px é o respiro em volta. */
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}
-::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--label-1) 20%,transparent);
+::-webkit-scrollbar-thumb{background:transparent;
   border-radius:999px;border:3px solid transparent;background-clip:content-box}
-::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--label-1) 36%,transparent);
+.rolando::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--label-1) 20%,transparent);
+  background-clip:content-box}
+::-webkit-scrollbar-thumb:hover,::-webkit-scrollbar-thumb:active{background:color-mix(in srgb,var(--label-1) 36%,transparent);
   border:3px solid transparent;background-clip:content-box}
 
 /* ---------- anel de foco de teclado ----------

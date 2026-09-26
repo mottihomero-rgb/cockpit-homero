@@ -5640,12 +5640,30 @@ function menuSaindo(cx, pai) {
     setTimeout(tirar, 400);
   } catch {}
 }
-/* Barra de rolagem do / e do @ como a do Mac: invisível parada, aparece enquanto a lista rola
-   (o menus.css só pinta o polegar com a classe .rolando). Scroll não sobe na árvore: ouvir em captura. */
+/* Barra de rolagem como a sobreposta do Mac: invisível parada, aparece enquanto a área rola (o
+   base.css e o menus.css só pintam o polegar com a classe .rolando, ou com o mouse em cima dele).
+   Vale para toda área que rola, não só o / e o @: antes o polegar da conversa ficava sempre à vista.
+   Só acende a rolada que vem logo depois de um gesto da pessoa (roda do mouse ou trackpad, toque,
+   clique na calha, tecla de rolar fora de campo de texto). A conversa descendo sozinha enquanto o
+   assistente escreve não acende: o Mac também não mostra a barra aí, e ela ficaria acesa a resposta
+   inteira. O / e o @ acendem sempre, como antes (a seta leva o item escolhido para a vista, e a
+   seta é digitada na caixa de escrever). Scroll não sobe na árvore: ouvir em captura. */
+let gestoDeRolarEm = 0;
+const TECLAS_DE_ROLAR = new Set(['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ']);
+const marcarGestoDeRolar = () => { gestoDeRolarEm = Date.now(); };
+for (const tipo of ['wheel', 'touchmove', 'pointerdown']) {
+  document.addEventListener(tipo, marcarGestoDeRolar, { capture: true, passive: true });
+}
+document.addEventListener('keydown', (e) => {
+  const t = e.target;
+  if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || ''))) return;
+  if (TECLAS_DE_ROLAR.has(e.key)) marcarGestoDeRolar();
+}, { capture: true, passive: true });
 document.addEventListener('scroll', (e) => {
   const el = e.target;
-  if (!el || !el.classList || !el.classList.contains('menu-corpo')) return;
-  el.classList.add('rolando');
+  if (!el || !el.classList) return;
+  if (!el.classList.contains('menu-corpo') && Date.now() - gestoDeRolarEm > 300) return;
+  if (!el.classList.contains('rolando')) el.classList.add('rolando');
   clearTimeout(el._rolandoT);
   el._rolandoT = setTimeout(() => el.classList.remove('rolando'), 900);
 }, true);

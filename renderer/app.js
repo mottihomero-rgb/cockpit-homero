@@ -1155,6 +1155,11 @@ function savePanes(fechou) {
         serviceTier: P.serviceTier, experimentalContext: P.experimentalContext,
         collaborationMode: P.collaborationMode,
         titulo: P.titulo, larg: P.larguraColuna ? '0 0 ' + P.larguraColuna + 'px' : '',
+        /* de quem e o nome: sem guardar, reabrir o app esquecia que ele trocou o nome a mao (e a
+           IA voltava a mexer) e parava de acompanhar a conversa que o Cockpit estava nomeando */
+        nomeManual: P.nomeManual || undefined,
+        nomeAuto: (!P.nomeManual && P.nomeDono && P.nomeDono === P.hist)
+          ? { marco: P.nomeMarco || 0, curto: !!P.nomeCurto } : undefined,
         coluna: P.coluna, larguraColuna: P.larguraColuna, pesoAltura: P.pesoAltura,
         plano: P.plano || [], planoAberto: P.planoAberto,
         // guarda a conversa para ela voltar cheia, e nao uma caixa vazia
@@ -1261,6 +1266,11 @@ async function restaurarAbasCorpo(salvas) {
         coluna: c.coluna, pesoAltura: c.pesoAltura, plano: c.plano, planoAberto: c.planoAberto,
         larguraColuna: c.larguraColuna || Number((String(c.larg || '').match(/([\d.]+)px$/) || [])[1]) || 0,
       });
+      // o nome volta com o dono: dado por ele fica intocado; o da IA continua acompanhando
+      if (c.nomeManual) P.nomeManual = true;
+      else if (c.nomeAuto && typeof c.nomeAuto === 'object' && c.titulo) {
+        P.nomeDono = P.hist; P.nomeMarco = Number(c.nomeAuto.marco) || 0; P.nomeCurto = !!c.nomeAuto.curto;
+      }
       // A largura antiga migrou para a coluna; a altura usa proporção.
       // ramo que fechou o app antes da 1a mensagem: continua sendo ramo (leva 8.3)
       if (c.fork) P.forkPendente = true;
@@ -3660,8 +3670,7 @@ async function send(P) {
   guardarPrompt(text);              // pra trazer de volta com a seta pra cima
   P.navHist = undefined;
   const bolha = userMsg(P, text, anexos);
-  if (!P.titulo) { P.titulo = nomeDaConversa(P, text, anexos); pintarNome(P); nomearCurto(P); }
-  else if (P.nomeCurto && !P.nomeManual && [2, 4, 8].includes(mensagensDele(P).length)) nomearCurto(P);
+  if (!P.titulo) { P.titulo = nomeDaConversa(P, text, anexos); pintarNome(P); nomearCurto(P, 'comeco'); }
   P.quadroColado = null;
 
   if (!P.started) {
@@ -3932,6 +3941,7 @@ function receberEventoPane(ev) {
       // busca, filtro e favorito ate a releitura terminar. O loadHist ja sobrescreve o cache.
       setTimeout(() => lerUsoAposResposta(P.engine), 1500);
       salvarNomeCurto(P);
+      nomearNoFimDoTurno(P);
       setTimeout(() => buscarNome(P), 1200);
       if (lateralAberta(P.engine)) loadHist(P.engine, true);
       agendarFila(P);
@@ -4781,19 +4791,65 @@ function renomearAqui(P) {
 function mensagensDele(P) {
   return (P.hist || []).filter(h => h.quem === 'Você' && h.texto).map(h => String(h.texto));
 }
-/* O nome provisorio (comeco da frase) aparece na hora; a IA troca por ate 3 palavras sobre o
-   assunto. Na 2a, 4a e 8a mensagem ela olha a conversa toda de novo: quem pede varias
-   alteracoes no mesmo projeto quer "Alteracoes Cockpit", nao o nome do 1o pedido.
-   So troca se ninguem mexeu no nome enquanto ela pensava. */
-async function nomearCurto(P) {
-  const msgs = mensagensDele(P);
-  if (P.nomeManual || !msgs.length || !window.api.nomeCurto) return;
-  const antes = P.titulo;
+/* ---- nome da conversa ----
+   O nome provisorio (comeco da frase) aparece na hora e a IA ja troca por um titulo da DEMANDA
+   so com a 1a mensagem. Depois ela rele a conversa no FIM dos turnos 1, 2, 4, 7 e 12 (e dali em
+   diante a cada 10). No fim, e nao no envio como antes, para ver tambem a resposta do assistente:
+   "como eles fizeram?" so vira "Trend do COLORS Fake" depois que ele abriu o link. Com a conversa
+   mudando de rumo, o nome acompanha o trabalho principal; a IA recebe o nome atual e o repete se
+   ele ainda vale, para o nome nao ficar pulando a cada rodada.
+   A instrucao e a validacao moram no nomes-conversa.js (lado do main). */
+const MARCOS_NOME = [1, 2, 4, 7, 12];
+function proximoMarcoNome(feito) {
+  for (const m of MARCOS_NOME) if (m > feito) return m;
+  let m = 22; while (m <= feito) m += 10;
+  return m;
+}
+/* O material: as mensagens dele (a 1a e as 9 mais recentes) e a PRIMEIRA e a ULTIMA resposta do
+   assistente (medido com 25 conversas reais: com as duas ultimas, um pedido lateral do fim, tipo
+   "reativa meu login", roubava o nome de uma conversa inteira sobre outra coisa). Sem a pasta:
+   com ela a IA chamava tudo de "Adsure". */
+function materialDoNome(P) {
+  const dele = mensagensDele(P).map(t => t.slice(0, 3000));
+  const bots = (P.hist || []).filter(h => h.quem !== 'Você' && h.texto).map(h => String(h.texto).slice(0, 4000));
+  return {
+    mensagens: dele.length > 10 ? [dele[0], ...dele.slice(-9)] : dele,
+    respostas: bots.length > 2 ? [bots[0], bots[bots.length - 1]] : bots,
+    atual: P.nomeCurto ? P.titulo : '',
+  };
+}
+/* Quem e dono do nome: a conversa marcada em P.nomeDono, que e o PROPRIO P.hist. Toda troca de
+   conversa no painel (nova, aberta da lista, outra pasta) cria um P.hist novo, entao a resposta
+   atrasada da conversa anterior nunca cai na nova e conversa reaberta da lista (que pode ter nome
+   dado por ele em outro dia) nao e renomeada. Nome que ele trocou a mao (nomeManual) nunca e mexido.
+   Uma chamada por vez por chat: pedido que chega com outra no ar espera e sai uma vez so, quando
+   ela voltar — com o material mais novo. Se a IA falhar ou devolver lixo, fica o nome que estava. */
+async function nomearCurto(P, comeco) {
+  // 1a mensagem de conversa sem nome: nome vazio nunca e nome dado por ele
+  if (comeco === 'comeco') { P.nomeManual = false; P.nomeCurto = false; P.nomeDono = P.hist; P.nomeMarco = 0; }
+  if (P.nomeManual || P.nomeDono !== P.hist || !window.api.nomeCurto || !mensagensDele(P).length) return;
+  if (P.nomeando) { P.nomeDeNovo = true; return; }
+  P.nomeando = true;
+  const hist = P.hist;
   let nome = '';
-  try { nome = await window.api.nomeCurto({ mensagens: msgs.slice(-10), pasta: nomePasta(P.cwd) }); } catch {}
-  if (!nome || P.nomeManual || P.titulo !== antes) return;
-  P.titulo = nome; P.nomeCurto = true; pintarNome(P); savePanes();
-  salvarNomeCurto(P);
+  try { nome = await window.api.nomeCurto(materialDoNome(P)); } catch {}
+  P.nomeando = false;
+  if (nome && !P.nomeManual && P.hist === hist && P.nomeDono === hist) {
+    if (nome !== P.titulo) { P.titulo = nome; pintarNome(P); savePanes(); }
+    P.nomeCurto = true;
+    salvarNomeCurto(P);
+  }
+  if (P.nomeDeNovo) { P.nomeDeNovo = false; nomearCurto(P); }
+}
+/* Fim do turno: passou de um marco desde a ultima olhada? Conta as mensagens dele, e nao os
+   turnos, porque mensagem que esperou na fila junta dois pedidos num turno so; "passou de" (e nao
+   "e igual a") pelo mesmo motivo: de 3 para 5 mensagens tambem cruzou o marco 4. */
+function nomearNoFimDoTurno(P) {
+  if (P.nomeManual || P.nomeDono !== P.hist) return;
+  const n = mensagensDele(P).length;
+  if (n < proximoMarcoNome(P.nomeMarco || 0)) return;
+  P.nomeMarco = n;
+  nomearCurto(P);
 }
 /* Grava no nomes.json para a lista lateral e a reabertura mostrarem o mesmo nome. Na 1a
    mensagem o id da conversa ainda nao existe: o fim do turno chama de novo. */
@@ -4805,7 +4861,8 @@ function salvarNomeCurto(P) {
 }
 
 async function buscarNome(P) {
-  if (P.engine !== 'claude' || !P.sessaoId || P.nomeManual || P.nomeCurto) return;
+  // conversa que a IA do Cockpit esta nomeando: o titulo do proprio Claude nao passa por cima
+  if (P.engine !== 'claude' || !P.sessaoId || P.nomeManual || P.nomeCurto || P.nomeDono === P.hist) return;
   const t = await window.api.sessionTitulo({ engine: 'claude', file: P.sessaoFile, id: P.sessaoId });
   if (t && t !== P.titulo) { P.titulo = t; pintarNome(P); savePanes(); }
 }

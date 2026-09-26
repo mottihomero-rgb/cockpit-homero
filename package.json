@@ -40,6 +40,7 @@
       "preload.js",
       "preload-recorte.js",
       "plataforma.js",
+      "nomes-conversa.js",
       "servidor-web.js",
       "package.json",
       "renderer/**/*",

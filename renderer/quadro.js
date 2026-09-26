@@ -47,7 +47,7 @@
     nota: 'note', seta: 'arrow', linha: 'line', texto: 'text', caneta: 'scribble', borracha: 'eraser',
     desfazer: 'rewind', refazer: 'redo', x: 'xmark', mandar: 'arrow-up', preencher: 'fill',
     frente: 'bring-front', tras: 'send-back', apagar: 'trash', imagem: 'download', copiar: 'copy',
-    ajustar: 'fit',
+    ajustar: 'fit', menos: 'minus', mais: 'plus',
   };
   const qico = (n) => '<svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" '
     + 'stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
@@ -2106,17 +2106,20 @@
 
     const zoom = document.createElement('div');
     zoom.className = 'qd-zoom';
-    const zMenos = bt('qd-zoom-bt', 'Menos zoom', '−');
+    const zMenos = bt('qd-zoom-bt', 'Menos zoom', qico('menos'));
     zMenos.onclick = () => zoomPara(Q.cam.z / 1.2, Q.larg / 2, Q.alt / 2);
     const zNum = document.createElement('span');
     zNum.className = 'qd-zoom-n'; zNum.textContent = '100%';
     zNum.style.cursor = 'pointer'; zNum.title = 'Voltar para 100%';
     zNum.onclick = () => zoomPara(1, Q.larg / 2, Q.alt / 2);
-    const zMais = bt('qd-zoom-bt', 'Mais zoom', '+');
+    const zMais = bt('qd-zoom-bt', 'Mais zoom', qico('mais'));
     zMais.onclick = () => zoomPara(Q.cam.z * 1.2, Q.larg / 2, Q.alt / 2);
     zoom.append(zMenos, zNum, zMais);
+    /* redesenho (25/09): o zoom mora na barra de cima, entre os botoes pequenos e o X
+       ("Quadro … − 100% + ×"), e nao mais boiando no canto do palco */
+    top.insertBefore(zoom, bX);
 
-    palco.append(canvas, dica, editor, zoom);
+    palco.append(canvas, dica, editor);
     meio.append(barra, palco);
 
     /* rodape */

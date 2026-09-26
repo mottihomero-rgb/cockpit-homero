@@ -176,7 +176,7 @@ test('sessões de motores diferentes com mesmo número continuam separadas', asy
   await c.openSession(session); assert.equal(c.panes.size, 2);
 });
 test('visor conserva o arquivo mais recente quando a leitura anterior chega depois', async () => {
-  const c = context(['verArquivo']), P = pane(c), v = element(), body = element(), pre = element();
+  const c = context(['verArquivo', 'posicionarVisor', 'cabecaVisor']), P = pane(c), v = element(), body = element(), pre = element();
   v.nodes = Object.fromEntries(['.visor-corpo', '.visor-nome', '.visor-x', '.visor-abrir'].map(s => [s, s === '.visor-corpo' ? body : element()]));
   body.nodes = { pre }; P.el.nodes['.p-visor'] = v;
   c.fecharVisor = () => {}; c.NA_VPS = () => false; c.tamanhoBonito = () => '1 B';

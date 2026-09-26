@@ -531,8 +531,8 @@ function pedirCaminhoVpsDaAba(A) {
   modal.classList.remove('hidden');
   cx.className = 'modal-cx cx-vps';
   cx.onclick = (e) => e.stopPropagation();
-  cx.innerHTML = '<div class="mo-top"><span class="mo-tit">Pasta na VPS</span><button class="mo-x">' + ico('x') + '</button></div>'
-    + '<div class="mo-sub">Digite o caminho de lá. Todos os chats desta aba vão pra essa pasta.</div>'
+  // a explicacao fica no balao do titulo: na tela, so o rotulo (redesenho 25/09)
+  cx.innerHTML = '<div class="mo-top"><span class="mo-tit" title="Digite o caminho de lá. Todos os chats desta aba vão pra essa pasta.">Pasta na VPS</span><button class="mo-x">' + ico('x') + '</button></div>'
     + '<input class="na-caminho" id="vpsCaminho" spellcheck="false">'
     + '<div class="na-atalhos" id="vpsAtalhos"></div>'
     + '<div class="mo-rodape"><button class="mo-btn destaque" id="vpsOk">Ir</button></div>';
@@ -621,8 +621,8 @@ function pedirCaminhoVps(P) {
   modal.classList.remove('hidden');
   cx.className = 'modal-cx cx-vps';
   cx.onclick = (e) => e.stopPropagation();
-  cx.innerHTML = '<div class="mo-top"><span class="mo-tit">Pasta na VPS</span><button class="mo-x">' + ico('x') + '</button></div>'
-    + '<div class="mo-sub">Digite o caminho de lá. O chat vai para a aba dessa pasta.</div>'
+  // a explicacao fica no balao do titulo: na tela, so o rotulo (redesenho 25/09)
+  cx.innerHTML = '<div class="mo-top"><span class="mo-tit" title="Digite o caminho de lá. O chat vai para a aba dessa pasta.">Pasta na VPS</span><button class="mo-x">' + ico('x') + '</button></div>'
     + '<input class="na-caminho" id="vpsCaminho" spellcheck="false">'
     + '<div class="na-atalhos" id="vpsAtalhos"></div>'
     + '<div class="mo-rodape"><button class="mo-btn destaque" id="vpsOk">Ir</button></div>';
@@ -3481,9 +3481,11 @@ function mostrarPrintsDoTurno(P, lista) {
 function verImagemGrande(P, src) {
   const v = $('.p-visor', P.el);
   const corpo = $('.visor-corpo', v);
+  posicionarVisor(v);
   v.classList.remove('hidden');
   v.onclick = (e) => { if (e.target === v) fecharVisor(P); };
   $('.visor-nome', v).textContent = 'Print do agente';
+  cabecaVisor(v, 'Print do agente', '', 'image');
   $('.visor-x', v).innerHTML = ico('x');
   $('.visor-x', v).onclick = () => fecharVisor(P);
   // este print nao e' um arquivo no disco: nao ha o que abrir no Mac
@@ -5279,43 +5281,125 @@ async function puxarAbaDoNavegador(P) {
   inserirNoInput(P, r.titulo ? r.titulo + ' — ' + r.url : r.url);
 }
 
-/* ---- o que manda no comportamento do Claude, numa tela só ---- */
+/* ---- o que manda no comportamento do Claude, numa tela só ----
+   Redesenho (25/09): sheet de 680 com as quatro partes em abas (Memória, Agentes, Hooks,
+   Permissões), a lista à esquerda (220) e a prévia em mono à direita. Continua só LENDO:
+   mexer nesses arquivos muda o Claude em todos os projetos, então a edição é dele — o
+   "Abrir no Mac…" abre o arquivo do item escolhido. A prévia usa a mesma leitura do visor. */
 async function janelaConfiguracao(P) {
   fecharMenus();
   const modal = $('.p-modal', P.el), cx = $('.modal-cx', modal);
   modal.classList.remove('hidden');
+  // R9: sem estas duas linhas, um painel que já mostrou a Conta do Codex repintaria a conta aqui por cima
+  modal.classList.remove('como-menu');
+  modal.dataset.codexSurface = '';
   modal.onclick = (e) => { if (e.target === modal) fecharModal(P); };
   cx.onclick = (e) => e.stopPropagation();
-  const topo = '<div class="mo-top"><span class="mo-tit">Configurar o Claude</span>'
-    + '<button class="mo-x">' + ico('x') + '</button></div>';
-  cx.innerHTML = topo + '<div class="mo-carregando">Lendo os arquivos de configuração…</div>';
-  $('.mo-x', cx).onclick = () => fecharModal(P);
+  cx.className = 'modal-cx cx-config';
+  const topo = '<div class="mo-top"><span class="mo-logo" data-motor="claude"></span>'
+    + '<span class="mo-tit" title="O que está valendo hoje. Mexer nestes arquivos muda o Claude em todos os projetos, então a edição é por sua conta: clique em Abrir no Mac.">Configuração do Claude</span>'
+    + '<span class="mo-gap"></span><span class="cf-pasta"></span>'
+    + '<button class="mo-x" title="Fechar">' + ico('x') + '</button></div>';
+  const pintarTopo = () => {
+    const l = $('.mo-logo', cx); if (l) l.innerHTML = svgMotor('claude');
+    const pa = $('.cf-pasta', cx); if (pa) { pa.textContent = shortPath(P.cwd || ''); pa.title = P.cwd || ''; }
+    $('.mo-x', cx).onclick = () => fecharModal(P);
+  };
+  cx.innerHTML = topo + '<div class="mo-carregando">Lendo a configuração…</div>';
+  pintarTopo();
 
   const c = await window.api.configClaude();
   if (modal.classList.contains('hidden')) return;
-  if (!c || c.error) { cx.innerHTML = topo + '<div class="mo-sub">Não consegui ler: ' + ((c && c.error) || 'erro') + '</div>'; $('.mo-x', cx).onclick = () => fecharModal(P); return; }
+  if (!c || c.error) { cx.innerHTML = topo + '<div class="mo-erro">Não consegui ler: ' + escHtml((c && c.error) || 'erro') + '</div>'; pintarTopo(); return; }
 
-  const kb = (n) => n ? Math.max(1, Math.round(n / 1024)) + ' KB' : 'vazio';
-  const linha = (rot, valor, acao) => '<div class="cf-l"><span class="cf-r">' + rot + '</span>'
-    + '<span class="cf-v">' + valor + '</span>'
-    + (acao ? '<button class="cf-bt" data-abrir="' + acao + '">abrir</button>' : '') + '</div>';
+  const kb = (n) => n ? (n / 1024).toFixed(1).replace('.', ',') + ' KB' : 'vazio';
+  // o settings.json e lido uma vez so, na primeira aba que precisar dele (hooks e permissões)
+  let ajustes = null;
+  const lerAjustes = async () => {
+    if (ajustes) return ajustes;
+    const a = await lerParaVisor(c.arquivoAjustes);
+    try { ajustes = JSON.parse((a && a.dados) || '{}'); } catch { ajustes = {}; }
+    return ajustes;
+  };
+  const lerTexto = async (caminho) => {
+    const a = await lerParaVisor(caminho);
+    if (!a || a.erro) return 'Não consegui ler: ' + ((a && a.erro) || 'erro');
+    return a.tipo === 'texto' ? a.dados : 'Este tipo não abre aqui dentro.';
+  };
+  // a memória da PASTA do chat (quando existe) entra na lista, como no desenho
+  const memorias = [];
+  if (P.cwd && !NA_VPS(P.cwd)) {
+    try {
+      const proj = await lerParaVisor(String(P.cwd).replace(/\/+$/, '') + '/CLAUDE.md');
+      if (proj && !proj.erro) memorias.push({ t: 'CLAUDE.md', s: 'Projeto · ' + kb(proj.bytes), caminho: String(P.cwd).replace(/\/+$/, '') + '/CLAUDE.md', mono: true });
+    } catch {}
+  }
+  memorias.push({ t: shortPath(c.memoria.global.caminho), s: 'Todos os projetos · ' + kb(c.memoria.global.tamanho), caminho: c.memoria.global.caminho, mono: true });
+  memorias.push({ t: shortPath(c.memoria.casa.caminho), s: 'Mapa da casa · ' + kb(c.memoria.casa.tamanho), caminho: c.memoria.casa.caminho, mono: true });
+  const pastaAgentes = String(c.arquivoAjustes || '').replace(/\/[^/]*$/, '') + '/agents/';
+  const perm = (k) => async () => { const a = await lerAjustes(); const l = ((a.permissions || {})[k]) || []; return l.length ? l.join('\n') : 'nenhuma'; };
+  const ABAS = {
+    memoria: { nome: 'Memória', itens: memorias.map(m => ({ ...m, previa: () => lerTexto(m.caminho) })) },
+    agentes: { nome: 'Agentes', vazio: 'Nenhum agente',
+      rodape: c.skills + (c.skills === 1 ? ' skill instalada' : ' skills instaladas'),
+      itens: c.agentes.map(n => ({ t: n, s: 'Agente', caminho: pastaAgentes + n + '.md', mono: true, previa: () => lerTexto(pastaAgentes + n + '.md') })) },
+    hooks: { nome: 'Hooks', vazio: 'Nenhum hook ligado',
+      itens: c.hooks.map(h => ({ t: h, s: 'Hook', caminho: c.arquivoAjustes, mono: true,
+        previa: async () => JSON.stringify(((await lerAjustes()).hooks || {})[h], null, 2) || '' })) },
+    permissoes: { nome: 'Permissões', itens: [
+      { t: 'Modo padrão', s: String(c.permissoes.modo), caminho: c.arquivoAjustes, previa: async () => 'defaultMode: ' + c.permissoes.modo },
+      { t: 'Liberadas', s: c.permissoes.liberado + ' regras', caminho: c.arquivoAjustes, previa: perm('allow') },
+      { t: 'Negadas', s: c.permissoes.negado + ' regras', caminho: c.arquivoAjustes, previa: perm('deny') },
+      { t: 'Perguntam', s: c.permissoes.pergunta + ' regras', caminho: c.arquivoAjustes, previa: perm('ask') },
+    ] },
+  };
 
   cx.innerHTML = topo
-    + '<div class="mo-sub">O que está valendo hoje. Mexer nestes arquivos muda o Claude em <b>todos</b> os projetos, então a edição é por sua conta: clique em abrir.</div>'
-    + '<div class="cf">'
-    + '<div class="cf-sec">Memória</div>'
-    + linha('Regras globais', kb(c.memoria.global.tamanho), c.memoria.global.caminho)
-    + linha('Mapa da casa', kb(c.memoria.casa.tamanho), c.memoria.casa.caminho)
-    + '<div class="cf-sec">Agentes e skills</div>'
-    + linha('Agentes', c.agentes.length ? c.agentes.length + ': ' + c.agentes.slice(0, 6).join(', ') + (c.agentes.length > 6 ? '…' : '') : 'nenhum', '')
-    + linha('Skills instaladas', String(c.skills), '')
-    + '<div class="cf-sec">Automação e permissões</div>'
-    + linha('Hooks ligados', c.hooks.length ? c.hooks.join(', ') : 'nenhum', '')
-    + linha('Modo padrão', String(c.permissoes.modo), '')
-    + linha('Regras de permissão', c.permissoes.liberado + ' liberadas · ' + c.permissoes.negado + ' negadas · ' + c.permissoes.pergunta + ' perguntam', c.arquivoAjustes)
-    + '</div>';
-  $('.mo-x', cx).onclick = () => fecharModal(P);
-  $$('.cf-bt', cx).forEach(b => b.onclick = () => window.api.openPath(b.dataset.abrir));
+    + '<div class="cf-seg" role="tablist">'
+    + Object.entries(ABAS).map(([k, a]) => '<button role="tab" data-aba="' + k + '">' + a.nome + '</button>').join('')
+    + '</div>'
+    + '<div class="cf-corpo"><div class="cf-lista"></div><pre class="cf-previa"></pre></div>'
+    + '<div class="mo-rodape"><button class="mo-btn" id="cfAbrir">Abrir no Mac…</button>'
+    + '<button class="mo-btn destaque" id="cfOk">Concluir</button></div>';
+  pintarTopo();
+  const lista = $('.cf-lista', cx), previa = $('.cf-previa', cx), abrir = $('#cfAbrir', cx);
+  let escolhido = null, vez = 0;
+  const escolher = async (it, bt) => {
+    escolhido = it;
+    $$('.cf-item', lista).forEach(b => b.classList.toggle('on', b === bt));
+    abrir.disabled = !it || !it.caminho;
+    if (!it) { previa.textContent = ''; return; }
+    const minha = ++vez;
+    previa.textContent = 'Lendo…';
+    let txt = '';
+    try { txt = await it.previa(); } catch (e) { txt = 'Não consegui ler: ' + (e.message || e); }
+    if (minha !== vez) return;   // clicou em outro item antes desta leitura voltar
+    previa.textContent = String(txt || '').split('\n').slice(0, 400).join('\n');
+    previa.scrollTop = 0;
+  };
+  const mostrarAba = (k) => {
+    const a = ABAS[k];
+    $$('.cf-seg button', cx).forEach(b => b.classList.toggle('on', b.dataset.aba === k));
+    lista.innerHTML = '';
+    for (const it of a.itens) {
+      const b = document.createElement('button');
+      b.className = 'cf-item';
+      b.innerHTML = '<span class="cf-item-t"></span><span class="cf-item-s"></span>';
+      $('.cf-item-t', b).textContent = it.t;
+      $('.cf-item-t', b).classList.toggle('mono', !!it.mono);
+      $('.cf-item-s', b).textContent = it.s;
+      b.title = it.caminho || '';
+      b.onclick = () => escolher(it, b);
+      lista.appendChild(b);
+    }
+    if (!a.itens.length) { const v = document.createElement('div'); v.className = 'cf-vazio'; v.textContent = a.vazio || 'Nada aqui'; lista.appendChild(v); }
+    if (a.rodape) { const r = document.createElement('div'); r.className = 'cf-vazio'; r.textContent = a.rodape; lista.appendChild(r); }
+    escolher(a.itens[0] || null, $('.cf-item', lista));
+  };
+  $$('.cf-seg button', cx).forEach(b => b.onclick = () => mostrarAba(b.dataset.aba));
+  abrir.onclick = () => { if (escolhido && escolhido.caminho) window.api.openPath(escolhido.caminho); };
+  $('#cfOk', cx).onclick = () => fecharModal(P);
+  mostrarAba('memoria');
 }
 
 /* ---- modo foco: só a pergunta e a resposta ----
@@ -5597,8 +5681,8 @@ async function fotografar(P) {
   modal.dataset.codexSurface = '';
   cx.className = 'modal-cx foto-cx';
   cx.onclick = (e) => e.stopPropagation();
-  cx.innerHTML = '<div class="mo-top"><span class="mo-tit">Fotografar</span><button class="mo-x">' + ico('x') + '</button></div>'
-    + '<div class="mo-sub">Enquadre e clique em Tirar. A foto entra como anexo deste painel.</div>'
+  // a explicacao fica no balao do titulo: na tela, so o rotulo (redesenho 25/09)
+  cx.innerHTML = '<div class="mo-top"><span class="mo-tit" title="Enquadre e clique em Tirar. A foto entra como anexo deste painel.">Fotografar</span><button class="mo-x">' + ico('x') + '</button></div>'
     + '<video class="foto-video" autoplay playsinline muted></video>'
     + '<div class="mo-form"><select id="fotoCam" class="menu-search hidden"></select></div>'
     + '<div class="mo-rodape"><button class="mo-btn destaque" id="fotoTirar">Tirar</button>'
@@ -5722,12 +5806,16 @@ function fecharModal(P) {
   if (P && P.fecharTerminal) { const f = P.fecharTerminal; P.fecharTerminal = null; f(); return; }
   const m = $('.p-modal', P.el);
   m.classList.add('hidden'); $('.modal-cx', m).innerHTML = '';
+  /* R9 de novo: a Conta (cx-conta) e a Configuração (cx-config) carimbam o tamanho e escondem o
+     × — quem abrisse depois sem carimbar (os conectores) herdaria. Fechou, volta ao normal. */
+  $('.modal-cx', m).className = 'modal-cx';
 }
 
 async function janelaConectores(P) {
   fecharMenus();
   const modal = $('.p-modal', P.el);
   const cx = $('.modal-cx', modal);
+  cx.className = 'modal-cx';   // R9: aberta por cima da Conta ou da Configuração, não herda o carimbo delas
   modal.classList.remove('hidden');
   modal.dataset.codexSurface = 'connectors';
   modal.onclick = (e) => { if (e.target === modal) fecharModal(P); };
@@ -5735,8 +5823,8 @@ async function janelaConectores(P) {
 
   const motor = nomeDoMotor(P.engine);
   const cabeca = () =>
-    '<div class="mo-top"><span class="mo-tit">Conectores</span><button class="mo-x">' + ico('x') + '</button></div>'
-    + '<div class="mo-sub">Serviços ligados ao ' + motor + ' neste Mac.</div>';
+    // a explicacao fica no balao do titulo: na tela, so o rotulo (redesenho 25/09)
+    '<div class="mo-top"><span class="mo-tit" title="Serviços ligados ao ' + motor + ' neste Mac.">Conectores</span><button class="mo-x">' + ico('x') + '</button></div>';
 
   cx.innerHTML = cabeca() + '<div class="mo-carregando">Verificando conectores…</div>';
   $('.mo-x', cx).onclick = () => fecharModal(P);
@@ -5893,12 +5981,12 @@ function formConector(P) {
   const cx = $('.p-modal .modal-cx', P.el);
   const motor = nomeDoMotor(P.engine);
   cx.innerHTML =
-    '<div class="mo-top"><span class="mo-tit">Adicionar conector</span><button class="mo-x">' + ico('x') + '</button></div>'
-    + '<div class="mo-sub">Cole o endereço que o serviço te deu. Se for um programa que roda aqui no Mac, use o campo de baixo.</div>'
+    // a explicacao fica no balao do titulo: na tela, so o rotulo (redesenho 25/09)
+    '<div class="mo-top"><span class="mo-tit" title="Cole o endereço que o serviço te deu. Se for um programa que roda aqui no Mac, use o campo de baixo.">Adicionar conector</span><button class="mo-x">' + ico('x') + '</button></div>'
     + '<div class="mo-form">'
     + '<input id="cnNome" placeholder="Nome curto, ex: notion">'
     + '<input id="cnUrl" placeholder="Endereço, ex: https://mcp.notion.com/mcp">'
-    + '<div class="mo-dica">ou, se for um programa local:</div>'
+    + '<div class="mo-dica">ou um programa local</div>'
     + '<input id="cnCmd" placeholder="Comando, ex: npx -y @alguem/mcp-server">'
     + '</div>'
     + '<div class="mo-erro" id="cnErro" style="display:none"></div>'
@@ -5976,21 +6064,29 @@ function janelaTerminal(P, linha, titulo, aoFechar, opcoes) {
   fecharMenus();
   const modal = $('.p-modal', P.el), cx = $('.modal-cx', modal);
   modal.classList.remove('hidden');
-  cx.className = 'modal-cx cx-term';
+  /* cx-terminal (alem do cx-term, que a janela larga do diff tambem usa): so o terminal ganha
+     o fundo preto #0B0B0C nos dois temas, 760×460 (redesenho 25/09). */
+  cx.className = 'modal-cx cx-term cx-terminal';
   cx.onclick = (e) => e.stopPropagation();
 
   const id = ESTA_TELA + 't' + (++termSeq);
+  /* Barra de 38: icone + titulo + o comando em mono + Cancelar (manda Ctrl+C) + ×. A frase
+     de orientacao saiu da tela (regra dele: so rotulo) e virou o balao do (i) ao lado do
+     titulo; o "Fechar" do rodape era o mesmo que o ×, e o rodape sumiu junto. */
+  const orienta = op.orientacao || (op.abrirSozinho
+    ? 'A entrada abre no navegador. Mantenha esta janela aberta até terminar lá. Se o navegador não abrir, clique em Abrir link aqui embaixo.'
+    : 'Rodando aqui dentro do Cockpit. Se pedir para escolher ou colar algo, clique na tela preta e digite.');
   cx.innerHTML =
-    '<div class="mo-top"><span class="mo-tit"></span><button class="mo-x">' + ico('x') + '</button></div>'
-    + '<div class="mo-sub">' + (op.abrirSozinho
-        ? 'A entrada abre no navegador. <b>Mantenha esta janela aberta até terminar lá.</b> Se o navegador não abrir, clique em <b>Abrir link</b> aqui embaixo.'
-        : 'Rodando aqui dentro do Cockpit. Se pedir para escolher ou colar algo, clique na tela preta e digite.') + '</div>'
+    '<div class="mo-top"><span class="term-ic">' + ico('terminal') + '</span><span class="mo-tit"></span>'
+    + '<span class="mo-info">' + ico('info') + '</span><span class="term-cmd"></span><span class="mo-gap"></span>'
+    + '<button class="term-cancela" id="tmCancela" title="Cancelar o que está rodando (Ctrl+C)">Cancelar</button>'
+    + '<button class="mo-x" title="Fechar (⌘W)">' + ico('x') + '</button></div>'
     + '<div class="term-wrap"><div class="term-tela"></div></div>'
-    + '<div class="term-link"><span class="mono"></span><button>Abrir link</button></div>'
-    + '<div class="mo-rodape"><button class="mo-btn" id="tmCancela">Cancelar</button>'
-    + '<button class="mo-btn destaque" id="tmFecha">Fechar</button></div>';
+    + '<div class="term-link"><span class="mono"></span><button>Abrir link</button></div>';
   $('.mo-tit', cx).textContent = titulo || 'Terminal';
-  if (op.orientacao) $('.mo-sub', cx).textContent = op.orientacao;
+  const info = $('.mo-info', cx); if (info) info.title = orienta;
+  const cmd = $('.term-cmd', cx);
+  if (cmd) { cmd.textContent = String(linha || ''); cmd.title = String(linha || ''); }
 
   /* ---- o tamanho de verdade da caixa preta ----
      O terminal nascia preso em 92 colunas por 22 linhas escritas no codigo, e o programa la
@@ -5998,13 +6094,15 @@ function janelaTerminal(P, linha, titulo, aoFechar, opcoes) {
      linha quebrava no lugar errado, e barra de progresso e tabela saiam tortas.
      Agora a conta sai do tamanho REAL da caixa. A fonte do terminal e monoespacada (toda
      letra tem a mesma largura), entao basta medir uma regua escondida com a mesma fonte. */
-  const TERM_FONTE = 12, TERM_ENTRELINHA = 1.25;
+  /* 12,5/20 do redesenho (mono dentro do terminal). A entrelinha do xterm multiplica a ALTURA
+     DA LETRA (≈15px nesta fonte), nao o tamanho dela: 20 / 15 ≈ 1,34. */
+  const TERM_FONTE = 12.5, TERM_ENTRELINHA = 1.34;
   const tela = $('.term-tela', cx);
   // 'fixed' e so 10 letras de proposito: a regua nao pode empurrar nada nem criar barra de
   // rolagem na janelinha. Invisivel, mas com caixa — e por isso que da para medir.
   const regua = document.createElement('span');
   regua.style.cssText = 'position:fixed;left:0;top:0;pointer-events:none;visibility:hidden;'
-    + 'white-space:pre;font:' + TERM_FONTE + 'px/1 ui-monospace, SFMono-Regular, Menlo, monospace';
+    + 'white-space:pre;font:' + TERM_FONTE + 'px/normal ui-monospace, SFMono-Regular, Menlo, monospace';
   regua.textContent = 'WWWWWWWWWW';
   cx.appendChild(regua);
   const medirTerminal = () => {
@@ -6013,7 +6111,8 @@ function janelaTerminal(P, linha, titulo, aoFechar, opcoes) {
     // -2 px de folga: melhor sobrar um fio de tela do que o texto ser cortado na direita
     return {
       cols: Math.max(20, Math.min(400, Math.floor(((caixa.width || 660) - 2) / letra))),
-      rows: Math.max(6, Math.min(200, Math.floor((caixa.height || 340) / (TERM_FONTE * TERM_ENTRELINHA)))),
+      // a linha do xterm = altura natural da letra (a regua, com entrelinha normal) × entrelinha
+      rows: Math.max(6, Math.min(200, Math.floor((caixa.height || 340) / (((regua.getBoundingClientRect().height) || TERM_FONTE * 1.2) * TERM_ENTRELINHA)))),
     };
   };
   const tam = medirTerminal();
@@ -6022,7 +6121,8 @@ function janelaTerminal(P, linha, titulo, aoFechar, opcoes) {
     cols: tam.cols, rows: tam.rows, fontSize: TERM_FONTE, lineHeight: TERM_ENTRELINHA,
     cursorBlink: true, scrollback: 4000,
     fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-    theme: { background: '#141416', foreground: '#dcdcdc', cursor: '#d8bd8a', selectionBackground: '#ffffff30' },
+    // o terminal e preto nos dois temas (#0B0B0C), com o texto em branco a 90% (redesenho 25/09)
+    theme: { background: '#0B0B0C', foreground: '#E6E6E6', cursor: '#E6E6E6', cursorAccent: '#0B0B0C', selectionBackground: '#ffffff30' },
   });
   term.open(tela);
 
@@ -6085,7 +6185,6 @@ function janelaTerminal(P, linha, titulo, aoFechar, opcoes) {
   P.fecharTerminal = fechar;
   modal.onclick = (e) => { if (e.target === modal) fechar(); };
   $('.mo-x', cx).onclick = fechar;
-  $('#tmFecha', cx).onclick = fechar;
   $('#tmCancela', cx).onclick = () => { window.api.termInput({ id, data: '\x03' }); term.focus(); };
 
   window.api.termRun({ id, linha, cols: tam.cols, rows: tam.rows }).then((r) => {
@@ -6112,12 +6211,15 @@ function perguntarTexto(P, titulo, dica, inicial) {
     cx.className = 'modal-cx';
     cx.onclick = (e) => e.stopPropagation();
     cx.innerHTML = '<div class="mo-top"><span class="mo-tit"></span><button class="mo-x">' + ico('x') + '</button></div>'
-      + '<div class="mo-sub"></div><div class="mo-form"><input id="pedirTextoInp" maxlength="120"></div>'
+      + '<div class="mo-form"><input id="pedirTextoInp" maxlength="120"></div>'
       + '<div class="mo-rodape"><button class="mo-btn destaque" id="pedirTextoOk">OK</button>'
       + '<button class="mo-btn" id="pedirTextoCancela">Cancelar</button></div>';
     $('.mo-tit', cx).textContent = titulo;
-    $('.mo-sub', cx).textContent = dica || '';
+    /* a dica saiu da tela (redesenho 25/09: so rotulo): fica no balao do titulo e, com o
+       campo vazio, como texto de exemplo dentro dele */
+    $('.mo-tit', cx).title = dica || '';
     const inp = $('#pedirTextoInp', cx);
+    if (dica) inp.placeholder = dica;
     inp.value = inicial || '';
     let feito = false;
     const fim = (v) => {
@@ -6531,10 +6633,11 @@ function agDesenhar() {
 
   if (!tarefas.length) {
     const v = agEl('ag-vazio');
-    v.appendChild(agEl('ag-vazio-tit', 'Ninguém trabalhando aqui ainda'));
-    v.appendChild(agEl('ag-vazio-txt',
-      'Quando você soltar um OS, ligar o ultracode ou pedir um workflow, o time aparece aqui: '
-      + 'cada fase, cada agente e o que ele está fazendo naquele instante.'));
+    // só o rótulo na tela; a explicação de quando o time aparece fica no balão (redesenho 25/09)
+    const tit = agEl('ag-vazio-tit', 'Ninguém trabalhando aqui ainda');
+    tit.title = 'Quando você soltar um OS, ligar o ultracode ou pedir um workflow, o time aparece aqui: '
+      + 'cada fase, cada agente e o que ele está fazendo naquele instante.';
+    v.appendChild(tit);
     corpo.appendChild(v);
     return;
   }
@@ -6727,76 +6830,103 @@ async function janelaConta(P, motorPedido) {
   modal.dataset.codexSurface = eng === 'codex' ? 'account' : 'account-' + eng;
   modal.onclick = (e) => { if (e.target === modal) fecharModal(P); };
   cx.onclick = (e) => e.stopPropagation();
+  /* Redesenho (25/09): sheet de 420 — logo + "Conta do X", a lista das contas em radio (a de
+     agora marcada, as guardadas embaixo), e o rodape "Entrar com outra conta…" · Sair (vermelho,
+     sem moldura) · Concluir. O uso detalhado (as barras, o "zera em") mora na coluna de
+     Conversas; aqui fica o resumo na linha da conta e o resto no balao do mouse. */
+  cx.className = 'modal-cx cx-conta';
   const motor = nomeDoMotor(eng);
-  const topo = '<div class="mo-top"><span class="mo-tit">Conta do ' + motor + '</span>'
-    + '<button class="mo-x">' + ico('x') + '</button></div>';
-  cx.innerHTML = topo + '<div class="mo-carregando">Vendo a conta e o quanto já foi usado…</div>';
-  $('.mo-x', cx).onclick = () => fecharModal(P);
+  const topo = '<div class="mo-top"><span class="mo-logo" data-motor="' + eng + '"></span>'
+    + '<span class="mo-tit">Conta do ' + motor + '</span>'
+    + '<button class="mo-x" title="Fechar">' + ico('x') + '</button></div>';
+  const pintarTopo = () => {
+    const l = $('.mo-logo', cx); if (l) l.innerHTML = svgMotor(eng);
+    $('.mo-x', cx).onclick = () => fecharModal(P);
+  };
+  cx.innerHTML = topo + '<div class="mo-carregando">Lendo a conta…</div>';
+  pintarTopo();
 
   const c = await window.api.contaLer(eng);
   if (modal.classList.contains('hidden')) return;
   if (!c || !c.entrou) {
-    cx.innerHTML = topo + '<div class="mo-sub">Você não está entrado no ' + motor + ' neste Mac.</div>'
-      + '<div class="mo-rodape"><button class="mo-btn" id="ctCodigo">Entrar com código</button>'
-      + '<button class="mo-btn destaque" id="ctEntrar">Entrar</button></div>';
-    $('.mo-x', cx).onclick = () => fecharModal(P);
+    cx.innerHTML = topo
+      + '<div class="ct-lista"><div class="ct-linha"><span class="ct-radio"></span>'
+      + '<span class="ct-txt"><span class="ct-n">Sem conta neste Mac</span></span></div></div>'
+      + '<div class="mo-rodape"><button class="mo-btn" id="ctCodigo">Entrar com código…</button>'
+      + '<span class="mo-gap"></span><button class="mo-btn destaque" id="ctEntrar">Entrar…</button></div>';
+    pintarTopo();
     $('#ctEntrar', cx).onclick = () => { fecharModal(P); contaAcao(P, 'login', eng); };
     $('#ctCodigo', cx).onclick = () => { fecharModal(P); contaAcao(P, 'trocarCodigo', eng); };
     return;
   }
 
-  const barra = (titulo, j) => {
-    if (!j) return '';
-    const pct = Math.min(100, Math.max(0, j.pct || 0));
-    const cor = pct >= 90 ? 'perto' : pct >= 70 ? 'meio' : '';
-    return '<div class="us">'
-      + '<div class="us-top"><span>' + titulo + '</span><b>' + pct + '%</b></div>'
-      + '<div class="us-bar"><span class="us-fill ' + cor + '" style="width:' + pct + '%"></span></div>'
-      + '<div class="us-pe">' + (j.reseta ? 'zera ' + quandoFuturo(j.reseta) : 'sem prazo informado') + '</div>'
-      + '</div>';
-  };
-
-  const extra = c.extra && c.extra.teto
-    ? '<div class="us-extra">' + (c.extra.ligado
-        ? 'Crédito extra ligado: ' + c.extra.usado + ' de ' + c.extra.teto + ' ' + c.extra.moeda
-        : 'Crédito extra desligado') + '</div>'
-    : '';
+  // resumo da linha da conta: plano · sessão · semana (os numeros do limite, sem as barras)
+  const pct = (j) => Math.min(100, Math.max(0, (j && j.pct) || 0)) + '%';
+  const partes = [];
+  if (c.plano) partes.push(String(c.plano).charAt(0).toUpperCase() + String(c.plano).slice(1));   // "max" → "Max"
+  if (c.sessao) partes.push('sessão ' + pct(c.sessao));
+  if (c.semana) partes.push('semana ' + pct(c.semana));
+  if (!c.sessao && !c.semana) partes.push('limite indisponível');
+  // o que antes era frase na tela (quando zera, leitura antiga, crédito extra) vai para o balão
+  const balao = [c.nome && c.nome !== c.email ? c.nome : '', c.via || '',
+    c.sessao && c.sessao.reseta ? 'Sessão zera ' + quandoFuturo(c.sessao.reseta) : (c.semSessao ? 'Sessão: sem limite neste plano' : ''),
+    c.semana && c.semana.reseta ? 'Semana zera ' + quandoFuturo(c.semana.reseta) : '',
+    (!c.sessao && !c.semana) ? (c.limitado
+      ? 'O ' + motor + ' segurou as consultas agora. Tento de novo sozinho ' + (c.voltaEm ? quandoFuturo(c.voltaEm) : 'em alguns minutos') + '.'
+      : 'Não consegui ler o limite agora.') : '',
+    c.velho ? 'Última leitura ' + haQuanto(c.velho) + '.' : '',
+    c.extra && c.extra.teto ? (c.extra.ligado ? 'Crédito extra ligado: ' + c.extra.usado + ' de ' + c.extra.teto + ' ' + c.extra.moeda : 'Crédito extra desligado') : '',
+  ].filter(Boolean).join('\n');
 
   cx.innerHTML = topo
-    + '<div class="ct-cab"><div class="ct-av"></div><div class="ct-txt">'
-    + '<div class="ct-n"></div><div class="ct-e"></div></div>'
-    + (c.plano ? '<span class="ct-plano"></span>' : '') + '</div>'
-    + '<div class="mo-sub" style="margin-top:12px">Limite de uso</div>'
-    + (c.sessao ? barra('Sessão de agora', c.sessao)
-       : c.semSessao
-         ? '<div class="us"><div class="us-top"><span>Sessão de agora</span><b>sem limite</b></div>'
-           + '<div class="us-pe">seu plano hoje só tem o limite da semana</div></div>'
-         : '<div class="us"><div class="us-top"><span>Sessão de agora</span><b>—</b></div>'
-           + '<div class="us-pe">sem uso registrado na janela curta agora</div></div>')
-    + barra('Semana', c.semana)
-    + (!c.sessao && !c.semana
-        ? '<div class="mo-sub">' + (c.limitado
-            ? 'O ' + motor + ' segurou as consultas agora. Tento de novo sozinho ' + (c.voltaEm ? quandoFuturo(c.voltaEm) : 'em alguns minutos') + '.'
-            : 'Não consegui ler o limite agora.') + '</div>'
-        : c.velho ? '<div class="us-pe">Última leitura ' + haQuanto(c.velho) + '. O ' + motor + ' segurou a consulta agora; atualizo sozinho.</div>' : '')
-    + extra
-    // tudo que antes eram cinco linhas soltas no menu "/" mora aqui, junto de quem esta entrado
+    + '<div class="ct-lista">'
+    + '<div class="ct-linha on"><span class="ct-radio"></span><span class="ct-txt"><span class="ct-n"></span>'
+    + '<span class="ct-e"></span></span><span class="ct-uso">Em uso</span></div>'
+    + '</div>'
     + '<div class="mo-rodape">'
-    + (NA_VPS(P.cwd) ? '<button class="mo-btn" id="ctVps">Ver a conta da VPS</button>' : '')
-    + '<button class="mo-btn" id="ctCodigo">Entrar com código</button>'
-    + '<button class="mo-btn" id="ctTrocar">Trocar de conta</button>'
-    + '<button class="mo-btn" id="ctSair">Sair</button></div>';
-
-  $('.mo-x', cx).onclick = () => fecharModal(P);
-  $('.ct-av', cx).innerHTML = svgMotor(eng);
-  $('.ct-n', cx).textContent = c.nome || c.email;
-  $('.ct-e', cx).textContent = c.email + (c.via ? '  ·  ' + c.via : '');
-  if (c.plano) $('.ct-plano', cx).textContent = c.plano;
+    + '<button class="mo-btn" id="ctTrocar">Entrar com outra conta…</button>'
+    + '<span class="mo-gap"></span>'
+    + '<button class="mo-btn perigo" id="ctSair">Sair</button>'
+    + '<button class="mo-btn destaque" id="ctOk">Concluir</button></div>';
+  pintarTopo();
+  const lista = $('.ct-lista', cx);
+  const atual = $('.ct-linha', lista);
+  $('.ct-n', atual).textContent = c.email || c.nome || motor;
+  $('.ct-e', atual).textContent = partes.join(' · ');
+  atual.title = balao;
+  // linhas de ação no fim da lista (o "+" de sempre, sem moldura): código e a conta da VPS
+  const acao = (icone, txt, fn) => {
+    const b = document.createElement('button');
+    b.className = 'ct-linha ct-acao';
+    b.innerHTML = '<span class="ct-radio-ic">' + ico(icone) + '</span><span class="ct-txt"><span class="ct-n"></span></span>';
+    $('.ct-n', b).textContent = txt;
+    b.onclick = fn;
+    lista.appendChild(b);
+  };
+  acao('key-round', 'Entrar com código…', () => { fecharModal(P); contaAcao(P, 'trocarCodigo', eng); });
+  // o cartao acima le a conta DESTE Mac; com o chat na VPS quem responde e o servidor
+  if (NA_VPS(P.cwd)) acao('server', 'Ver a conta da VPS…', () => { fecharModal(P); contaAcao(P, 'status', eng); });
   $('#ctTrocar', cx).onclick = () => { fecharModal(P); contaAcao(P, 'trocar', eng); };
   $('#ctSair', cx).onclick = () => { fecharModal(P); contaAcao(P, 'logout', eng); };
-  $('#ctCodigo', cx).onclick = () => { fecharModal(P); contaAcao(P, 'trocarCodigo', eng); };
-  // o cartao acima le a conta DESTE Mac; com o chat na VPS quem responde e o servidor
-  if ($('#ctVps', cx)) $('#ctVps', cx).onclick = () => { fecharModal(P); contaAcao(P, 'status', eng); };
+  $('#ctOk', cx).onclick = () => fecharModal(P);
+
+  /* as contas GUARDADAS deste motor (as mesmas do menu "Contas guardadas") entram como os
+     outros radios: clicar troca na hora, sem navegador — o mesmo trocarParaConta de la. */
+  if (eng !== 'claude' && eng !== 'codex') return;
+  let guardadas = [];
+  try { const r = await window.api.contasListar(eng); guardadas = Array.isArray(r) ? r : []; } catch {}
+  if (modal.classList.contains('hidden') || !lista.isConnected) return;
+  const primeiraAcao = $('.ct-acao', lista);
+  for (const g of guardadas) {
+    if (g.atual) continue;
+    const b = document.createElement('button');
+    b.className = 'ct-linha';
+    b.innerHTML = '<span class="ct-radio"></span><span class="ct-txt"><span class="ct-n"></span><span class="ct-e">Guardada neste Mac</span></span>';
+    $('.ct-n', b).textContent = g.apelido;
+    b.title = 'Trocar para esta conta';
+    b.onclick = () => { fecharModal(P); trocarParaConta(P, eng, g.apelido); };
+    lista.insertBefore(b, primeiraAcao);
+  }
 }
 
 /* ---------- contas guardadas: alternar sem refazer login ----------
@@ -7604,6 +7734,28 @@ window.abrirQuadroTexto = (P, txt, resumo) => {
 };
 
 /* ============ visualizador de arquivo ============ */
+/* Redesenho (25/09): o visor e um painel por cima de TODOS os chats (inset 16 40 da area dos
+   chats), nao mais uma caixinha presa dentro de um painel. Ele continua morando no .p-visor do
+   painel dono (o Esc e o fecharVisor acham por ali); quem o solta do painel e o CSS, com
+   position:fixed. So a borda esquerda da area dos chats muda com a coluna lateral aberta ou
+   fechada: ela e medida na hora de abrir. Sem DOM de verdade (testes), nao faz nada. */
+function posicionarVisor(v) {
+  try {
+    const area = document.getElementById('panes');
+    if (area && v && v.style && v.style.setProperty) v.style.setProperty('--visor-x', Math.round(area.getBoundingClientRect().left) + 'px');
+  } catch {}
+}
+// cabecalho do visor: icone + nome + pasta (em mono). Guardado: o molde antigo nao tinha os dois
+function cabecaVisor(v, nome, caminho, icone) {
+  const ic = $('.visor-ic', v); if (ic) ic.innerHTML = ico(icone || 'file');
+  const cam = $('.visor-caminho', v);
+  if (cam) {
+    const pasta = caminho ? String(caminho).replace(/\/[^/]*$/, '') : '';
+    cam.textContent = pasta ? shortPath(pasta) : '';
+    cam.title = caminho || '';
+  }
+  const n = $('.visor-nome', v); if (n) n.textContent = nome;
+}
 // escopado ao painel: $$('.p-visor') pegava TODOS os paineis e fechar o visor de um fechava o
 // de outro, mesmo os dois com arquivos diferentes abertos ao mesmo tempo (2 paineis lado a lado)
 function fecharVisor(P) {
@@ -7631,12 +7783,15 @@ async function verArquivo(P, caminho) {
   const v = $('.p-visor', P.el);
   const pedido = {}; v.pedidoArquivo = pedido;
   const corpo = $('.visor-corpo', v);
+  posicionarVisor(v);
   v.classList.remove('hidden');
   v.onclick = (e) => { if (e.target === v) fecharVisor(P); };
   $('.visor-nome', v).textContent = caminho.split('/').pop();
+  cabecaVisor(v, caminho.split('/').pop(), caminho, 'file');
   $('.visor-x', v).innerHTML = ico('x');
   $('.visor-x', v).onclick = () => fecharVisor(P);
-  $('.visor-abrir', v).innerHTML = ico('external');   // no redesenho, "abrir no Mac" é a seta saindo da caixa
+  // no redesenho, "abrir no Mac" é a seta saindo da caixa, com o nome escrito ao lado
+  $('.visor-abrir', v).innerHTML = ico('external') + '<span>Abrir no Mac</span>';
   $('.visor-abrir', v).onclick = () => window.api.openPath(caminho);
   // repoe o rotulo: ver um print do agente deixa aqui "nao e' um arquivo no Mac"
   $('.visor-abrir', v).title = 'Abrir no Mac';
@@ -7651,9 +7806,21 @@ async function verArquivo(P, caminho) {
   catch (e) { a = { erro: e.message || 'Falha ao ler o arquivo.' }; }
   if (v.pedidoArquivo !== pedido || v.classList.contains('hidden')) return;
   if (!a || a.erro) { recadoVisor(corpo, ['Não consegui abrir.', (a && a.erro) || '']); return; }
-  $('.visor-nome', v).textContent = a.nome + '  ·  ' + tamanhoBonito(a.bytes);
+  // o tamanho sai da tela e fica no balao do nome (a tela so tem nome + pasta)
+  $('.visor-nome', v).textContent = a.nome;
+  $('.visor-nome', v).title = a.nome + '  ·  ' + tamanhoBonito(a.bytes);
   if (a.tipo === 'imagem') { corpo.innerHTML = ''; const i = document.createElement('img'); i.src = a.dados; corpo.appendChild(i); }
-  else if (a.tipo === 'texto') { corpo.innerHTML = '<pre></pre>'; $('pre', corpo).textContent = a.dados; }
+  else if (a.tipo === 'texto') {
+    /* codigo com o numero da linha na frente. A coluna dos numeros e um <div> (nao <pre>): o
+       $('pre') continua achando o texto, e so ele e copiado quando ele seleciona. */
+    corpo.innerHTML = '<div class="visor-codigo"><div class="visor-num" aria-hidden="true"></div><pre></pre></div>';
+    $('pre', corpo).textContent = a.dados;
+    const num = $('.visor-num', corpo);
+    if (num) {
+      const n = String(a.dados).split('\n').length - (String(a.dados).endsWith('\n') ? 1 : 0);
+      num.textContent = Array.from({ length: Math.max(1, n) }, (_, i) => i + 1).join('\n');
+    }
+  }
   else recadoVisor(corpo, ['Este tipo não abre aqui dentro.', 'Use o botão do canto para abrir no Mac.']);
 }
 
@@ -8550,8 +8717,8 @@ function pintarAbasGrupo(engine) {
 function abrirModalGrupo(existente) {
   const cx = abrirModalGlobal();
   const editando = !!existente;
-  cx.innerHTML = '<div class="mo-top"><span class="mo-tit"></span><button class="mo-x"></button></div>'
-    + '<div class="mo-sub">Vale pro Claude e pro Codex juntos — o mesmo grupo pode ter conversa dos dois.</div>'
+  // a explicacao fica no balao do titulo: na tela, so o rotulo (redesenho 25/09)
+  cx.innerHTML = '<div class="mo-top"><span class="mo-tit" title="Vale pro Claude e pro Codex juntos — o mesmo grupo pode ter conversa dos dois."></span><button class="mo-x"></button></div>'
     + '<div class="mo-form"><input id="pnNome" maxlength="40" placeholder="Nome do grupo, ex: Pedro"></div>'
     + '<div class="mo-dica" style="margin-top:10px">Cor</div>'
     + '<div class="cor-linha"></div>'
@@ -9243,6 +9410,8 @@ function telaNovaAba(obrigatoria) {
   naPintar();
   naPintarAtalhosMac();
   el.dataset.travada = obrigatoria ? '1' : '';
+  // sem nenhuma aba aberta nao ha para onde voltar: o Cancelar sairia mudo, entao nem aparece
+  const cancela = $('#naCancela'); if (cancela) cancela.classList.toggle('hidden', !!obrigatoria);
   el.classList.remove('hidden');
   setTimeout(() => $('#naOk').focus(), 40);
 }
@@ -9386,6 +9555,7 @@ $('#naPastaX').addEventListener('click', () => { naEstado.pasta = ''; naPintar()
 $('#naOk').addEventListener('click', () => naConfirmar(false));
 $('#naCaminho').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); naConfirmar(false); } });
 $('#naDois').addEventListener('click', () => naConfirmar(true));
+if ($('#naCancela')) $('#naCancela').addEventListener('click', () => fecharNovaAba());
 $('#novaAba').addEventListener('mousedown', (e) => { if (e.target.id === 'novaAba') fecharNovaAba(); });
 
 /* ============ interface geral ============ */
@@ -10306,6 +10476,8 @@ document.addEventListener('keydown', (e) => {
     // abas. Campo de fora nao conta: o cursor costuma ficar no chat de tras, e ai o Enter
     // tem de confirmar a tela que esta na frente.
     if (e.target && e.target.closest && e.target.closest('#novaAba input, #novaAba textarea')) return;
+    // Enter com o foco no Cancelar e do Cancelar (o clique nativo do botao fecha a tela)
+    if (e.target && e.target.id === 'naCancela') return;
     // e o Enter para aqui: sem isto ele descia ate o campo de escrever escondido atras da tela
     e.preventDefault(); e.stopPropagation(); naConfirmar(false);
   }
@@ -10404,12 +10576,38 @@ function alternarTelaAtalhos() {
     for (const [tecla, oque] of linhas) {
       const l = document.createElement('div');
       l.className = 'at-l';
-      const k = document.createElement('span'); k.className = 'at-k'; k.textContent = tecla;
-      const d = document.createElement('span'); d.className = 'at-d'; d.textContent = oque;
-      l.appendChild(k); l.appendChild(d);
+      /* Redesenho (25/09): o que a tecla faz a esquerda, a tecla a direita, uma linha so. A
+         explicacao que vinha junto — entre parenteses, depois do travessao ou do ponto e
+         virgula — sai da tela e fica no balao do mouse (regra dele: so rotulo na tela). */
+      const curto = oque.split(/ \(| — |; /)[0];
+      const d = document.createElement('span'); d.className = 'at-d'; d.textContent = curto;
+      // a tecla no desenho do Mac (↩ ⇥ esc), como nos menus do sistema; o nome por extenso fica no balão
+      const k = document.createElement('span'); k.className = 'at-k';
+      k.textContent = tecla.replace(/Enter/g, '↩').replace(/\bTab\b/g, '⇥').replace(/\bEsc\b/g, 'esc');
+      l.title = tecla + '  ' + oque;
+      l.dataset.busca = (tecla + ' ' + oque + ' ' + grupo).toLowerCase();
+      l.appendChild(d); l.appendChild(k);
       g.appendChild(l);
     }
     lista.appendChild(g);
+  }
+  // busca da lista: esconde a linha que nao casa e o grupo que ficou vazio (so aparencia)
+  const busca = $('#atBusca');
+  if (busca) {
+    const ic = $('.at-busca-ic'); if (ic && !ic.innerHTML) ic.innerHTML = ico('search');
+    busca.value = '';
+    busca.oninput = () => {
+      const q = busca.value.trim().toLowerCase();
+      for (const g of lista.children) {
+        let algum = false;
+        for (const l of g.querySelectorAll('.at-l')) {
+          const casa = !q || l.dataset.busca.includes(q);
+          l.classList.toggle('hidden', !casa);
+          if (casa) algum = true;
+        }
+        g.classList.toggle('hidden', !algum);
+      }
+    };
   }
   tela.classList.remove('hidden');
 }

@@ -895,8 +895,6 @@ textarea.cxq-input{min-height:62px;resize:vertical}
 /* peças que mudam com o tema (os tokens cuidam das cores; aqui so o que nao e cor) */
 /* no fundo claro o antialiased afina demais a letra: o macOS usa o subpixel padrao */
 html[data-theme^="light"] body{-webkit-font-smoothing:auto}
-html[data-theme^="light"] .msg-body pre{background:var(--bg3)}
-html[data-theme^="light"] .msg-body code{background:var(--hover2)}
 /* a barra de icones vive a 55% de opacidade; no claro 55% ficava apagado demais */
 html[data-theme^="light"] .act{opacity:.65}
 /* esta regra de tema e mais especifica que .act.active e estava apagando o destaque do

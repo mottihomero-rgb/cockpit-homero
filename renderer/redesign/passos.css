@@ -10,13 +10,18 @@
    Medidas: "Cockpit Janela.dc.html", telas 03, 08, 09, 10 e E1 (estilo inline de cada bloco) e a
    folha "Passo do trabalho: fechado · aberto · com erro" do "Cockpit Sistema.dc.html".
    A coluna de leitura (700 de largura, centrada, 22 entre um bloco e outro) é da conversa
-   (.pane-chat), não daqui: os blocos desta área não têm margem nem recuo lateral próprios.
+   (.pane-chat, áreas painel e mensagens), não daqui: os blocos desta área não têm margem nem
+   recuo lateral próprios em cima da coluna.
    ============================================================================ */
 
 /* ---------- os blocos desta área na conversa ----------
-   O style.css e o celular.css davam a cada um o recuo antigo de 18 (12 no iPhone) e um pé de
-   8–14: a coluna agora é da conversa, e o espaço entre blocos também. */
-.exec,.think,.trab,.equipe{padding:0}
+   O recuo de cada bloco (.exec, .think, .trab) continua sendo o do style.css (18; 12 no
+   iPhone) até a coluna da conversa chegar: quem o zera é o painel.css, junto com o da .msg.
+   Zerar aqui deixava os passos colados na borda do painel enquanto a coluna não existia.
+   O cartão do time é novo e não tem regra antiga: ganha o mesmo recuo com peso zero
+   (:where), e a coluna (".pane-chat > *", margem automática) passa por cima dele sozinha. */
+:where(.equipe){margin-inline:18px}
+@media (max-width: 820px), (pointer: coarse) and (max-width: 1100px){:where(.equipe){margin-inline:12px}}
 
 /* ---------- abrir e fechar (passo, grupo, pensamento) ----------
    200ms, cubic-bezier(.45,0,.25,1), altura + opacidade (README, "Movimento"). O Chromium do
@@ -30,12 +35,18 @@
    Chevron de 12 em --label-3 ANTES do rótulo (gap 4), rótulo 13/16 em --label-2, tempo em
    --label-3 tabular a 4 do rótulo. Linha de 20. Hover acende o rótulo, sem fundo. */
 .exec{display:flex;flex-direction:column;align-items:stretch;gap:6px}
-.exec-hd,.think-hd{display:inline-flex;align-items:center;gap:4px;align-self:flex-start;max-width:100%;
+.exec-hd,.think-hd{position:relative;display:inline-flex;align-items:center;gap:4px;align-self:flex-start;max-width:100%;
   height:20px;padding:0;border:0;border-radius:4px;background:transparent;
   font:400 13px/16px var(--font-sans);color:var(--label-2);text-align:left;cursor:pointer;user-select:none;
   animation:none;transition:color var(--dur-fast) ease-out}
 .exec-hd:hover,.think-hd:hover{color:var(--label-1)}
-.exec-hd:focus-visible,.think-hd:focus-visible{outline:none;box-shadow:var(--anel-foco)}
+/* "Pensou por 6s" não tem altura fixa no design: a linha é a do texto, 16 */
+.think-hd{height:auto}
+/* anel de foco com folga em volta do rótulo (o botão não tem padding: colado, o anel
+   encostava no "s" final). Desenhado num ::after para não mexer no tamanho da linha. */
+.exec-hd:focus-visible,.think-hd:focus-visible{outline:none;box-shadow:none}
+.exec-hd:focus-visible::after,.think-hd:focus-visible::after{content:"";position:absolute;inset:-2px -6px;
+  border-radius:6px;box-shadow:var(--anel-foco);pointer-events:none}
 .exec-nm2{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .exec-tempo{flex:none;margin-left:4px;color:var(--label-3);font-variant-numeric:tabular-nums}
 .exec-tempo:empty{display:none}
@@ -83,14 +94,19 @@
   font:400 12px/18px var(--font-mono);color:var(--label-1);opacity:0;height:0}
 .exec-it.aberto>.exec-bd{display:flex;opacity:1;height:auto}
 @starting-style{.exec-it.aberto>.exec-bd{opacity:0;height:0}}
-/* o comando: "$" em --label-3 e o texto. Comando comprido quebra a linha em vez de sumir
-   atrás de reticências (é o comando que rodou de verdade no Mac dele). */
-.exec-cmd{display:flex;gap:1px;min-width:0;padding:0;border-radius:0;background:transparent;box-shadow:none;
-  font:inherit;color:var(--label-1);white-space:pre-wrap;overflow-wrap:anywhere;overflow:visible}
+/* o comando: "$" em --label-3, 8 de vão e o texto, numa linha só. Comando comprido corta com
+   reticências, como no design; o inteiro está no title e vai inteiro na cópia (⌘A ⌘C).
+   Passo que não roda comando (link, pesquisa, skill) mostra só o texto, sem o "$". */
+.exec-cmd{display:flex;gap:8px;min-width:0;padding:0;border-radius:0;background:transparent;box-shadow:none;
+  font:inherit;color:var(--label-1);white-space:nowrap;overflow:hidden}
 .exec-cifr{flex:none;color:var(--label-3);user-select:none}
-.exec-arg{min-width:0}
-.exec-out{margin-top:6px;padding-top:6px;border-top:1px solid var(--separator);max-height:400px;overflow-y:auto;
-  font:inherit;color:var(--label-2);white-space:pre-wrap;overflow-wrap:anywhere;user-select:text}
+.exec-it.sem-cifrao .exec-cifr{display:none}
+.exec-arg{min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* a saída: cada linha numa linha só, cortada com reticências (white-space:pre + ellipsis
+   corta linha por linha). Saída comprida rola para baixo, nunca de lado. */
+.exec-out{margin-top:6px;padding-top:6px;border-top:1px solid var(--separator);max-height:400px;
+  overflow-x:hidden;overflow-y:auto;text-overflow:ellipsis;
+  font:inherit;color:var(--label-2);white-space:pre;overflow-wrap:normal;user-select:text}
 .exec-out:empty{display:none}
 .exec-it.erro .exec-out{color:var(--status-error)}
 
@@ -132,15 +148,17 @@
 .dif-abrir:active{background:var(--fill-2)}
 .dif-abrir:focus-visible{outline:none;box-shadow:var(--anel-foco)}
 .dif-abrir .ic{width:12px;height:12px}
-/* linha comprida não some atrás de reticências: o pedaço rola de lado e a faixa de cor vai
-   junto até o fim da linha (min-width:100% + max-content) */
+/* Na janela "O que mudou neste turno" a linha comprida rola de lado e a faixa de cor vai
+   junto até o fim (min-width:100% + max-content): ali é para revisar o código inteiro.
+   Dentro do passo, na conversa, é como no design: uma linha só, cortada com reticências. */
 .dif-bloco{padding:4px 0;border-top:1px solid var(--separator);overflow-x:auto}
 .dif-bloco:first-of-type,.dif-hd+.dif-bloco{border-top:0}
 .dl{display:flex;width:max-content;min-width:100%;box-sizing:border-box;min-height:20px;padding:0;
   font:400 12px/20px var(--font-mono);color:var(--label-1);white-space:pre;word-break:normal}
 .dl-n{flex:none;box-sizing:content-box;width:34px;padding-right:8px;text-align:right;
   color:var(--label-3);font-variant-numeric:tabular-nums;user-select:none}
-.dif.sem-num .dl-n{width:10px;padding:0}
+/* o antes/depois do Claude não traz o número da linha: a coluna fica (vazia) para o sinal e o
+   texto caírem no mesmo lugar do diff numerado, como no design (sinal a 42 da borda) */
 .dl-s{flex:none;width:14px;user-select:none}
 .dl-x{padding-right:10px}
 .dl.igual{color:var(--label-2)}
@@ -151,6 +169,10 @@
 /* linha sem colunas: o "⋯ 3 linhas sem mudança" e o diff agregado que o Codex manda pronto */
 .dl:not(:has(.dl-n)){padding:0 10px}
 .dl.pula{color:var(--label-3);background:var(--fill-4);font-size:11px}
+.exec-it .dif-bloco{overflow:hidden}
+.exec-it .dl{width:auto}
+.exec-it .dl-x{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.exec-it .dl:not(:has(.dl-n)){overflow:hidden;text-overflow:ellipsis}
 .dif-git{padding:4px 0;max-height:60vh;overflow:auto}
 .dif-git .dl.mais{color:var(--diff-add-fg)}
 .dif-git .dl.menos{color:var(--diff-del-fg)}
@@ -197,17 +219,20 @@
 /* ---------- trabalhando: anel de 12 + verbo + objeto em mono + tempo tabular ----------
    "Lendo index.html 22s", "Escrevendo 4s". O anel é o .rd-anel do base.css (1 volta/s,
    parado em Reduzir movimento, o tempo continua contando). Gap de 8, linha de 20. */
-.trab{display:flex;align-items:center;gap:8px;height:20px;min-width:0;
+.trab{display:flex;align-items:center;gap:8px;min-height:20px;min-width:0;
   font:400 13px/16px var(--font-sans);color:var(--label-2)}
 .trab-anel{flex:none}
 .trab-txt{flex:none;min-width:0;overflow:visible;white-space:nowrap;color:var(--label-2)}
 .trab-obj{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   font:400 12px/16px var(--font-mono);color:var(--label-1)}
 .trab-tempo{flex:none;color:var(--label-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+/* esperando ele (autorização ou pergunta na tela): um sinal por chat, e o de espera ganha */
+.trab.espera{display:none}
 
 /* ---------- time de agentes na conversa ----------
    Cartão com contorno de 1pt e raio 10. Cabeçalho de 30 (ícone de 14 + "Time de agentes" 600
-   + "2 de 3" tabular, 12px em --label-2); linhas de 40: sinal + nome (500) + "o que faz · em
+   + "2 de 3" tabular, 12px em --label-2) + a linha de 1 embaixo = 31; linhas de 40 + 4 + 4 = 48
+   (content-box, como o design desenha): sinal + nome (500) + "o que faz · em
    que" (11, --label-2, o "em que" em mono) + tempo (11, --label-3, tabular). O clique abre o
    painel grande do time. */
 .equipe{display:flex;flex-direction:column;border-radius:10px;box-shadow:inset 0 0 0 1px var(--separator);
@@ -215,14 +240,14 @@
   transition:background-color var(--dur-fast) ease-out}
 .equipe:hover{background:var(--fill-4)}
 .equipe:focus-visible{outline:none;box-shadow:inset 0 0 0 1px var(--separator),var(--anel-foco)}
-.equipe-hd{box-sizing:border-box;height:30px;display:flex;align-items:center;gap:6px;padding:0 10px;
+.equipe-hd{box-sizing:content-box;height:30px;display:flex;align-items:center;gap:6px;padding:0 10px;
   border-bottom:1px solid var(--separator);font-size:12px;color:var(--label-2)}
 .equipe-ic{display:flex}
 .equipe-ic .ic{width:14px;height:14px}
 .equipe-tit{font-weight:600}
 .equipe-gap{flex:1}
 .equipe-conta{font-variant-numeric:tabular-nums}
-.equipe-l{box-sizing:border-box;display:flex;align-items:center;gap:8px;min-height:40px;padding:4px 10px}
+.equipe-l{box-sizing:content-box;display:flex;align-items:center;gap:8px;min-height:40px;padding:4px 10px}
 .equipe-l+.equipe-l{border-top:1px solid var(--separator)}
 .equipe-sinal{flex:none;display:flex;align-items:center;justify-content:center;width:12px;height:12px;color:var(--label-2)}
 .equipe-sinal .rd-anel{width:10px;height:10px}

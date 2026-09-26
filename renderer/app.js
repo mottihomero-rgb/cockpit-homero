@@ -371,6 +371,7 @@ function marcarEspera(P) {
   const A = P && abaDe(P);
   if (A) pintarAba(A);
   pintarPonto(P);          // o ponto do próprio chat muda junto com a bolinha da aba
+  if (P && P.trabEl) pintaTrab(P);   // e a linha do trabalhando some/volta na mesma hora
   avisarQuemEspera();
 }
 
@@ -1800,8 +1801,27 @@ function fraseDoPasso(nome, arg) {
   const a = String(arg || '').replace(/\s+/g, ' ').trim();
   const curto = a.length > 70 ? a.slice(0, 70) + '…' : a;
   const f = fraseCrua(nome, a, curto);
-  f.cmd = String(arg || '').trim();          // o comando inteiro, pro bloco que abre
+  f.nome = nome;
+  f.cmd = comandoDoPasso(nome, String(arg || '').trim());   // o bloco "$ ..." que abre
   return f;
+}
+/* O bloco aberto do passo e "$ comando" (redesenho de 26/09). No Terminal e o comando que
+   rodou, letra por letra (nada de trocar o caminho por "~": dentro de aspas o shell nao expande
+   o til, e o comando copiado dali quebraria). Ler e buscar nao rodam comando nenhum: viram o
+   equivalente de terminal que o design mostra ("cat ~/…/index.html", "rg -n checkout"), com a
+   pasta da casa como "~". O resto (link, pesquisa, skill) nao e comando: vai sem o "$"
+   (cmd.semCifrao) em vez de fingir um. */
+const comTil = (p) => (HOME && (p === HOME || p.startsWith(HOME + '/')) ? '~' + p.slice(HOME.length) : p);
+const aspasShell = (s) => (/^[\w@%+=:,./~-]+$/.test(s) ? s : "'" + s.replace(/'/g, "'\\''") + "'");
+function comandoDoPasso(nome, arg) {
+  if (!arg) return { txt: '', semCifrao: true };
+  if (nome === 'Bash' || nome === 'Terminal') return { txt: arg, semCifrao: false };
+  if (nome === 'Read') {
+    const c = comTil(arg);
+    return { txt: 'cat ' + (c.startsWith('~/') ? '~/' + aspasShell(c.slice(2)) : aspasShell(c)), semCifrao: false };
+  }
+  if (nome === 'Grep') return { txt: 'rg -n ' + aspasShell(arg), semCifrao: false };
+  return { txt: comTil(arg), semCifrao: true };
 }
 function fraseCrua(nome, a, curto) {
   switch (nome) {
@@ -1883,17 +1903,21 @@ function passo(P, frase, id) {
   // tela (o flex ignora), mas vai junto quando ele copia a conversa com ⌘A ⌘C.
   d.innerHTML = '<div class="exec-t"><span class="exec-nm"><span class="exec-verbo"></span> <span class="exec-obj"></span></span>'
     + '<span class="exec-cv">' + ico('chevron-right') + '</span></div>'
-    + '<div class="exec-bd"><div class="exec-cmd"><span class="exec-cifr">$&nbsp;</span>'
+    + '<div class="exec-bd"><div class="exec-cmd"><span class="exec-cifr">$</span>'
     + '<span class="exec-arg"></span></div><div class="exec-out"></div></div>';
   $('.exec-verbo', d).textContent = frase.txt;
   $('.exec-obj', d).textContent = frase.det || '';
-  $('.exec-arg', d).textContent = frase.cmd || frase.det || frase.txt;
+  const cmd = frase.cmd && typeof frase.cmd === 'object' ? frase.cmd : { txt: frase.cmd || '', semCifrao: false };
+  $('.exec-arg', d).textContent = cmd.txt || frase.det || frase.txt;
+  // comando comprido corta com reticencias na tela (como no design): o inteiro fica no title
+  $('.exec-cmd', d).title = cmd.txt || '';
+  if (cmd.semCifrao) d.classList.add('sem-cifrao');
   $('.exec-t', d).addEventListener('click', () => { d.classList.toggle('aberto'); scroll(P); });
   card.appendChild(d);
   tituloGrupo(g);
   P.chat.appendChild(g);
   // a linha do "trabalhando" mostra o passo que esta rodando agora (verbo + objeto)
-  (P.trabPassos = P.trabPassos || []).push({ id, verbo: frase.txt, obj: frase.det || '' });
+  (P.trabPassos = P.trabPassos || []).push({ id, verbo: frase.txt, obj: frase.det || '', nome: frase.nome || '' });
   P.trabFazendo = '';               // o texto de antes acabou: quando o passo terminar, e "Pensando"
   if (P.trabEl) { pintaTrab(P); P.chat.appendChild(P.trabEl); }
   scroll(P);
@@ -2011,9 +2035,16 @@ function trabalhando(P, oque) {
 }
 /* O que a linha diz, do mais concreto para o mais vago: o passo que esta rodando (o ultimo que
    comecou e ainda nao terminou), o texto sendo escrito, o recado de quem chamou (resumindo a
-   conversa) e, no silencio entre uma coisa e outra, "Pensando". */
+   conversa) e, no silencio entre uma coisa e outra, "Pensando".
+   Com o time de agentes trabalhando e ele so esperando o time (nenhum passo proprio rodando,
+   ou o passo que rodando e o proprio chamado do time), a linha diz "Coordenando 3 agentes":
+   o "Pensando" ali mentia, parecia que so ele estava parado pensando. */
+const PASSO_DO_TIME = new Set(['Task', 'Agent', 'Agente', 'Workflow']);
 function verboDoTrabalho(P) {
   const rodando = (P.trabPassos || []).at(-1);
+  if (rodando && !PASSO_DO_TIME.has(rodando.nome)) return { verbo: rodando.verbo, obj: rodando.obj };
+  const time = P.agCartao;
+  if (time && time.ativos && time.total) return { verbo: 'Coordenando', obj: time.total + (time.total === 1 ? ' agente' : ' agentes') };
   if (rodando) return { verbo: rodando.verbo, obj: rodando.obj };
   if (P.trabFazendo) return { verbo: P.trabFazendo, obj: '' };
   return { verbo: 'Pensando', obj: '' };
@@ -2028,6 +2059,11 @@ function pintaTrab(P) {
   const o = $('.trab-obj', t); if (o) o.textContent = obj;
   const tp = $('.trab-tempo', t); if (tp) tp.textContent = tempo;
   t.title = P.trabOque || '';
+  /* Um sinal por chat, e esperar por ele ganha de trabalhar (README do design): com o pedido
+     de autorizacao ou a pergunta na tela, o anel girando embaixo da resposta dizia que o chat
+     andava sozinho, quando ele esta parado esperando o clique. A linha so se esconde (o
+     relogio continua contando) e volta sozinha quando ele responde. */
+  t.classList.toggle('espera', estadoDoPainel(P).cls === 'espera');
 }
 function pararTrabalho(P) {
   clearInterval(P.trabTimer); P.trabTimer = null;
@@ -6339,12 +6375,23 @@ function agBonito(s) {
 function agNomeAgente(t) {
   return AG_AGENTE_PT[t] || agBonito(t);
 }
+// "1m 02s", o mesmo jeito do cartao do time na conversa e do resto do app (era "1min 2s")
 function agTempo(ms) {
   if (!ms && ms !== 0) return '';
-  const s = Math.round(ms / 1000);
-  if (s < 60) return s + 's';
-  const m = Math.floor(s / 60);
-  return m + 'min' + (s % 60 ? ' ' + (s % 60) + 's' : '');
+  return tempoCurto(ms);
+}
+/* O que o agente esta fazendo, no MESMO vocabulario dos passos da conversa ("Lendo",
+   "Terminal", "Buscando"), com letra maiuscula: e o "fase" da linha do time no design
+   ("Lendo · sobre.html", "Pronto · 12 imagens"). Ferramenta que os passos nao conhecem (um
+   conector, uma ferramenta nova) cai no dicionario do painel ("Abrindo uma página"). */
+const AG_VERBO_DO_PASSO = new Set(['Bash', 'Read', 'Write', 'Edit', 'Grep', 'Glob', 'WebSearch', 'WebFetch', 'TodoWrite', 'Skill']);
+function agFazendo(est, ferramenta) {
+  if (est === 'pronto') return 'Pronto';
+  if (est === 'erro') return 'Deu erro';
+  if (est === 'espera') return 'Na fila';
+  if (!ferramenta) return 'Pensando';
+  if (AG_VERBO_DO_PASSO.has(ferramenta)) return fraseCrua(ferramenta, '', '').txt;
+  return agBonito(agNomeFerramenta(ferramenta)) || 'Pensando';
 }
 function agTokens(n) {
   if (!n) return '';
@@ -6606,10 +6653,7 @@ function agCartaoAgente(a, agora) {
   topo.appendChild(agEl('ag-bola'));
   topo.appendChild(agEl('ag-nome', agBonito(a.rotulo) || 'Agente ' + a.i));
   c.appendChild(topo);
-  const fazendo = est === 'pronto' ? 'terminou'
-    : est === 'erro' ? 'deu erro'
-    : est === 'espera' ? 'esperando a vez'
-    : (a.ferramenta ? agNomeFerramenta(a.ferramenta) : 'pensando');
+  const fazendo = agFazendo(est, a.ferramenta);
   c.appendChild(agEl('ag-fazendo', fazendo));
   if (a.detalhe && est !== 'espera') c.appendChild(agEl('ag-detalhe', a.detalhe));
   const pe = agEl('ag-pe');
@@ -6675,17 +6719,17 @@ function agDesenhar() {
   if (!tarefas.length) {
     const v = agEl('ag-vazio');
     v.appendChild(agEl('ag-vazio-tit', 'Ninguém trabalhando aqui ainda'));
-    v.appendChild(agEl('ag-vazio-txt',
-      'Quando você soltar um OS, ligar o ultracode ou pedir um workflow, o time aparece aqui: '
-      + 'cada fase, cada agente e o que ele está fazendo naquele instante.'));
+    // sem frase explicativa na tela (regra do design): a explicacao fica no title
+    v.title = 'Quando você soltar um OS, ligar o ultracode ou pedir um workflow, o time aparece aqui: '
+      + 'cada fase, cada agente e o que ele está fazendo naquele instante.';
     corpo.appendChild(v);
     return;
   }
 
   const fluxo = agEl('ag-fluxo');
   const inicio = agEl('ag-no ag-inicio');
-  inicio.appendChild(agEl('ag-no-rot', 'o pedido'));
-  inicio.appendChild(agEl('ag-no-txt', P.titulo || 'esta conversa'));
+  inicio.appendChild(agEl('ag-no-rot', 'O pedido'));
+  inicio.appendChild(agEl('ag-no-txt', P.titulo || 'Esta conversa'));
   fluxo.appendChild(inicio);
 
   let vivo = false;
@@ -6703,7 +6747,7 @@ function agDesenhar() {
     }, agora));
     const rodando = soltos.some(t => t.estado === 'rodando');
     fluxo.appendChild(agEl('ag-liga' + (rodando ? ' viva' : ' feita')));
-    fluxo.appendChild(agGrupo('Agentes lançados direto', 'sem fase', cartoes, rodando ? 'rodando' : 'pronto'));
+    fluxo.appendChild(agGrupo('Agentes lançados direto', 'Sem fase', cartoes, rodando ? 'rodando' : 'pronto'));
   }
   for (const t of tarefas) {
     if (t.estado === 'rodando') vivo = true;
@@ -6717,7 +6761,7 @@ function agDesenhar() {
         porFase.get(k).push(a);
       }
       const cab = agEl('ag-titulo-bloco');
-      cab.appendChild(agEl('ag-bloco-rot', 'workflow'));
+      cab.appendChild(agEl('ag-bloco-rot', 'Workflow'));
       cab.appendChild(agEl('ag-bloco-nome', agBonito(t.workflow) || t.desc || 'Time de agentes'));
       fluxo.appendChild(agEl('ag-liga'));
       fluxo.appendChild(cab);
@@ -6733,12 +6777,12 @@ function agDesenhar() {
         fluxo.appendChild(agEl('ag-liga' + (rodando ? ' viva' : (tudoPronto ? ' feita' : ''))));
         if (!ags.length) {
           const espera = agEl('ag-fase-futura');
-          espera.appendChild(agEl('ag-fase-rot', 'fase ' + n));
+          espera.appendChild(agEl('ag-fase-rot', 'Fase ' + n));
           espera.appendChild(agEl('ag-fase-tit', agBonito(fase)));
-          espera.appendChild(agEl('ag-fase-cont', 'ainda não começou'));
+          espera.appendChild(agEl('ag-fase-cont', 'Ainda não começou'));
           fluxo.appendChild(espera);
         } else {
-          fluxo.appendChild(agGrupo(agBonito(fase), 'fase ' + n, ags.map(a => agCartaoAgente(a, agora)),
+          fluxo.appendChild(agGrupo(agBonito(fase), 'Fase ' + n, ags.map(a => agCartaoAgente(a, agora)),
             rodando ? 'rodando' : (tudoPronto ? 'pronto' : '')));
         }
         n++;
@@ -6749,10 +6793,10 @@ function agDesenhar() {
   fluxo.appendChild(agEl('ag-liga' + (vivo ? '' : ' feita')));
   const fim = agEl('ag-no ag-fim' + (vivo ? ' esperando' : ' ok'));
   const quantos = agAtivos(P);
-  fim.appendChild(agEl('ag-no-rot', vivo ? 'acontecendo agora' : 'fim'));
+  fim.appendChild(agEl('ag-no-rot', vivo ? 'Acontecendo agora' : 'Fim'));
   fim.appendChild(agEl('ag-no-txt', vivo
-    ? (quantos ? quantos + (quantos === 1 ? ' agente trabalhando' : ' agentes trabalhando') : 'começando')
-    : 'todo mundo terminou'));
+    ? (quantos ? quantos + (quantos === 1 ? ' agente trabalhando' : ' agentes trabalhando') : 'Começando')
+    : 'Todo mundo terminou'));
   fluxo.appendChild(fim);
   corpo.appendChild(fluxo);
 }
@@ -6768,8 +6812,7 @@ function agDesenhar() {
 const AG_CARTAO_TETO = 8;           // mais que isso vira "+N agentes" (o resto esta no painel)
 function agLinhasDoCartao(P, ids, agora) {
   const A = P.ag; const linhas = [];
-  const fazendo = (est, ferramenta) => est === 'pronto' ? 'Pronto' : est === 'erro' ? 'Deu erro'
-    : est === 'espera' ? 'Na fila' : agBonito(agNomeFerramenta(ferramenta)) || 'Pensando';
+  const fazendo = (est, ferramenta) => agFazendo(est, ferramenta);
   for (const id of ids) {
     const t = A && A.tarefas.get(id); if (!t) continue;
     if (t.agentes.size) {
@@ -6822,6 +6865,10 @@ function agPintarCartaoConversa(P) {
   }
   const ativos = linhas.filter(l => l.est === 'agora').length;
   const prontos = linhas.filter(l => l.est === 'pronto').length;
+  // a linha do trabalhando le daqui o "Coordenando 3 agentes" (verboDoTrabalho)
+  const mudouTime = c.ativos !== ativos || c.total !== linhas.length;
+  c.ativos = ativos; c.total = linhas.length;
+  if (mudouTime && P.trabEl) pintaTrab(P);
   const cab = document.createElement('div');
   cab.className = 'equipe-hd';
   cab.innerHTML = '<span class="equipe-ic">' + ico('team') + '</span><span class="equipe-tit">Time de agentes</span>'

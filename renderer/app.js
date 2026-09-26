@@ -4420,6 +4420,15 @@ function receberEventoPane(ev) {
       note(P, 'Esta conversa não existe mais no Claude. A próxima mensagem começa uma nova, levando junto o que já foi dito aqui.', true);
       savePanes();
       break;
+    // 26/09: a pasta do chat tinha mudado de lugar (ou sumido): o Mac ligou na pasta certa
+    case 'pasta-movida': {
+      const velha = P.cwd, A = abaDe(P);
+      P.cwd = ev.cwd; pintarPasta(P, nomePasta(P.cwd));
+      if (A && A.cwd === velha) { A.cwd = ev.cwd; try { pintarAba(A); } catch {} }
+      avisoTemp(P, 'A pasta deste chat mudou de lugar: agora é ' + shortPath(ev.cwd) + '.');
+      savePanes();
+      break;
+    }
     case 'text-delta': textDelta(P, ev.id, ev.text); break;
     case 'think-delta': thinkDelta(P, ev.text); break;
     case 'text-final': textFinal(P, ev.id, ev.text); break;

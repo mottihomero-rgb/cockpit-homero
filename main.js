@@ -4977,8 +4977,20 @@ async function shutdown() {
 handle('config:get', () => {
   const d = { ...loadConfig() };
   for (const k of CHAVES_DO_MAIN) delete d[k];
+  corrigirPastasSumidas(d);
   return d;
 });
+/* 26/09: abas e chats salvos com pasta que mudou de lugar (~/Desktop/Projetos-claude → ~/Projetos)
+   ou sumiu: ao abrir o app, todo "cwd" que não existe mais vira a pasta certa (pastaQueExiste).
+   Sem isto a aba "Adsure" continuava na pasta velha e TODO chat novo nela morria com ENOENT. */
+function corrigirPastasSumidas(o, fundo = 0) {
+  if (!o || typeof o !== 'object' || fundo > 6) return;
+  for (const k of Object.keys(o)) {
+    const v = o[k];
+    if (k === 'cwd' && typeof v === 'string' && v && !/^vps:/.test(v)) o[k] = pastaQueExiste(v);
+    else if (v && typeof v === 'object') corrigirPastasSumidas(v, fundo + 1);
+  }
+}
 /* Estas tres chaves quem manda e o main (senha do iPhone e o liga/desliga do Wi-Fi). A tela
    trabalha com uma copia do config lida uma unica vez no boot, entao qualquer gravacao dela
    — e o savePanes() grava a cada chat aberto, fechado ou redimensionado — mandava de volta o
@@ -5655,8 +5667,31 @@ handle('sessions:acp', () => {
   catch (e) { return { error: String(e && e.message || e) }; }
 });
 
+/* 26/09: chat salvo numa pasta que não existe mais. A mudança de pastas de 26/09 levou
+   ~/Desktop/Projetos-claude para ~/Projetos, e o chat aberto lá morria com "spawn …/claude ENOENT"
+   (o Mac diz ENOENT quando a PASTA do processo não existe, não o programa). Agora: caminho velho
+   vira o novo; sem novo, vale a pasta mais próxima que ainda existe (no fim, a pessoal). */
+function pastaQueExiste(cwd) {
+  if (!cwd || typeof cwd !== 'string' || /^vps:/.test(cwd)) return cwd;
+  try { if (fs.existsSync(cwd)) return cwd; } catch {}
+  // só mexe no que é da pasta pessoal (disco externo desplugado ou caminho de outra máquina fica como está)
+  if (!cwd.startsWith(HOME + path.sep)) return cwd;
+  const velha = path.join(HOME, 'Desktop', 'Projetos-claude');
+  if (cwd === velha || cwd.startsWith(velha + '/')) {
+    const nova = path.join(PASTA_PROJETOS, cwd.slice(velha.length));
+    if (fs.existsSync(nova)) return nova;
+    return PASTA_PROJETOS;   // o cliente não veio junto na mudança: fica na pasta dos projetos
+  }
+  let p = cwd;
+  while (p && p !== path.dirname(p) && !fs.existsSync(p)) p = path.dirname(p);
+  return p && p !== '/' && fs.existsSync(p) ? p : HOME;
+}
+
 handle('pane:start', async (_e, data) => {
-  const { paneId, engine, cwd, model, approval, resumeId, effort, billing } = data;
+  const { paneId, engine, model, approval, resumeId, effort, billing } = data;
+  let { cwd } = data;
+  { const certa = pastaQueExiste(cwd);
+    if (certa !== cwd) { data.cwd = cwd = certa; emit(paneId, 'pasta-movida', { cwd: certa }); } }
   /* Esta conversa ja esta aberta em outra tela (ou em outro chat)? Entao NAO sobe um segundo
      agente nela de cara: seriam dois mexendo no mesmo historico e na mesma pasta ao mesmo
      tempo, os dois sem pedir permissao.

@@ -145,12 +145,12 @@ function escolherRespostas(respostas) {
 }
 
 /* A pasta do chat vira pista do cliente/projeto (3a versao, 26/09). So as que dizem algo: a do
-   cliente (Projetos-claude/<Cliente>/<demanda>) e a do sistema (Adsure - Sistemas/<Sistema>). A
+   cliente (Projetos/<Cliente>/<demanda>) e a do sistema (Adsure - Sistemas/<Sistema>). A
    pasta pessoal e a raiz do Mac nao dizem nada e ficam de fora — na 1a versao a pasta ia crua e
    tudo virava "Adsure". */
 function pistaDaPasta(cwd) {
   const p = String(cwd || '');
-  let m = /Projetos-claude\/([^/]+)(?:\/([^/]+))?/.exec(p);
+  let m = /Projetos\/([^/]+)(?:\/([^/]+))?/.exec(p);
   if (m) return m[1] + (m[2] ? ' (' + m[2].replace(/^\d{4}-\d{2}-\d{2}_/, '').replace(/[-_]+/g, ' ') + ')' : '');
   m = /Adsure - Sistemas\/([^/]+)/.exec(p);
   if (m) return m[1];

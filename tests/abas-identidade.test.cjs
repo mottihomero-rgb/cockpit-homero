@@ -22,7 +22,7 @@ function comDisco(...abasDisco) {
 }
 
 test('agrupar por cliente encurta a pasta e a aba NAO duplica', () => {
-  const R = '/Users/homeromotti/Desktop/Projetos-claude';
+  const R = '/Users/homeromotti/Projetos';
   const { h, disco } = comDisco(aba(R + '/Adsure/2026-09-18_x', 's1'), aba(R + '/Adsure/2026-09-17_y', 's2'), aba('/Users/homeromotti', 's3'));
   // a tela agrupou as duas do Adsure numa aba so: 3 abas viram 2, mas nenhuma conversa se perdeu
   h.call('config:set', { abas: [aba(R + '/Adsure', 's1', 's2'), aba('/Users/homeromotti', 's3')], abaAberta: 0 });
@@ -47,7 +47,7 @@ test('trocar a pasta da aba nao cria aba fantasma', () => {
 });
 
 test('nao fica preso avisando: depois de devolver, a gravacao seguinte fica quieta', () => {
-  const R = '/Users/homeromotti/Desktop/Projetos-claude';
+  const R = '/Users/homeromotti/Projetos';
   const { h, disco } = comDisco(aba(R + '/Adsure/2026-09-18_x', 's1'), aba('/Users/homeromotti', 's3'));
   const r1 = h.call('config:set', { abas: [aba(R + '/Adsure', 's1')], abaAberta: 0 });
   assert.equal(r1.abasDevolvidas, 1, 'a aba s3 sumiu e tinha que voltar');

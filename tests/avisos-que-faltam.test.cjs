@@ -39,7 +39,7 @@ test('ponto do chat fica vermelho e parado quando o chat espera ELE', () => {
   const ctx = {};
   vm.createContext(ctx);
   vm.runInContext('function $(sel, el){ return el.achados[sel] || null; }\n'
-    + 'function estadoDoPainel(P){ return { cls: P.finge }; }\n'
+    + 'function estadoDoPainel(P){ return { cls: P.finge }; }\nfunction pintarSeloTorre(){}\n'
     + pegar('pintarPonto') + '\nthis.pintarPonto = pintarPonto;', ctx);
 
   const pt = { className: '' };

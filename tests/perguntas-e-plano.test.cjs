@@ -135,3 +135,16 @@ test('pergunta simples do Codex abre a mesma janelinha; formulário e senha fica
   assert.match(f, /!q\.isSecret/);
   assert.match(app, /case 'question-resolved': encerrarPerguntaCodex\(P, ev\.key\);\s*\n\s*if \(P\.perguntasAtual/);
 });
+
+/* 26/09 (Hugo, por áudio): a torre é a central de avisos — Esperando você (responde numa janelinha
+   sem ir ao chat), Prontas para ler (sai ao clicar) e Trabalhando; sem separar por pasta/VPS. */
+test('torre: três grupos, janelinha de responder e o número no ícone', () => {
+  const t = pegar('pintarTorre');
+  assert.match(t, /const TITULOS = \{ espera: 'Esperando você', pronta: 'Prontas para ler', ocupado: 'Trabalhando' \};/);
+  assert.match(t, /aoClicar: g === 'espera' \? \(\) => responderPelaTorre\(P\) : \(\) => \{ irAoChat\(P\); pintarTorre\(false\); \}/);
+  assert.match(t, /else if \(P\.nova\) grupos\.pronta\.push/, 'pronta = resposta nova que ele ainda não viu');
+  const r = pegar('responderPelaTorre');
+  assert.match(r, /P\.perguntasAtual/); assert.match(r, /P\.planoPendente/); assert.match(r, /\.pane-perm/);
+  assert.match(r, /if \(b && orig\) b\.onclick = \(\) => orig\.click\(\);/, 'a cópia do pedido de autorização aperta os botões de verdade');
+  assert.match(pegar('pintarPonto'), /pintarSeloTorre\(\);/);
+});

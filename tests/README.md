@@ -10,7 +10,7 @@ O boot do aplicativo fica suspenso. Os testes não usam contas, chaveiro ou rede
 
 Os schemas em `fixtures/protocolo` são cópias dos contratos oficiais extraídos
 do Codex CLI 0.153.4, já registrados na auditoria de 07/09/2026, em
-`2026-09-07_revisao-astra-cockpit/evidencias/protocolo`. A validação usa o AJV
+`Revisão do Astra no Cockpit - 07-09-2026/evidencias/protocolo`. A validação usa o AJV
 disponível entre as dependências de desenvolvimento do projeto.
 
 Para guardar a evidência resumida, definir `COCKPIT_TEST_EVIDENCE` com o caminho

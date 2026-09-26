@@ -72,7 +72,7 @@ test('enquanto ele busca, o botao de pasta diz "Mac inteiro" em vez de mentir', 
     + "var botao = { classList: { toggle: function(c, on){ this.aceso = on; }.bind(this) } };\n"
     + "var buscaAtual = { claude: '' };\n"
     + "function $(sel, dentro){ return dentro ? alvo : botao; }\n"
-    + "function pastaDoFiltro(){ return '/Users/h/Desktop/Projetos-claude/Pedro'; }\n"
+    + "function pastaDoFiltro(){ return '/Users/h/Projetos/Pedro'; }\n"
     + "function nomeProjeto(p){ return p.split('/').pop(); }\n"
     + "alvo.rotulo = ''; Object.defineProperty(alvo,'rotulo',{get:()=>this.rotulo,set:(v)=>{this.rotulo=v;}});\n"
     + corpoDaFuncao('pintarBotaoFiltro') + '\nthis.pintarBotaoFiltro = pintarBotaoFiltro;\nthis.buscaAtual = buscaAtual;', ctx);

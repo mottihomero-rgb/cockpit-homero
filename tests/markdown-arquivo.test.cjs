@@ -24,9 +24,9 @@ function markdownDoApp() {
 test('link para arquivo do Mac vira link de arquivo, com o caminho guardado', () => {
   const md = markdownDoApp();
   // a fala exata do Codex no print de 15/09
-  const html = md('Pronto. Separei essa arte do trio para enviar junto:\n\n[Baixar arte para o WhatsApp](/Users/homeromotti/Desktop/Projetos-claude/Excelencia/2026-09-15_api-oficial-curso-claude/arte-whatsapp-curso-claude-trio.png)');
+  const html = md('Pronto. Separei essa arte do trio para enviar junto:\n\n[Baixar arte para o WhatsApp](/Users/homeromotti/Projetos/Excelência/API Oficial do Curso de Claude - 15-09-2026/arte-whatsapp-curso-claude-trio.png)');
   assert.match(html, /class="arquivo"/);
-  assert.match(html, /data-caminho="\/Users\/homeromotti\/Desktop\/Projetos-claude\/Excelencia\/2026-09-15_api-oficial-curso-claude\/arte-whatsapp-curso-claude-trio.png"/);
+  assert.match(html, /data-caminho="\/Users\/homeromotti\/Desktop\/Projetos\/Excelencia\/API Oficial do Curso de Claude - 15-09-2026\/arte-whatsapp-curso-claude-trio.png"/);
   assert.match(html, />Baixar arte para o WhatsApp</);
 });
 

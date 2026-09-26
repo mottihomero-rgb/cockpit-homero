@@ -619,3 +619,28 @@ html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inse
 /* o vidro Tonalizado: as camadas de vidro ficam quase opacas nos dois tons */
 html.vidro-tonalizado[data-theme="dark"]{--glass-regular:rgba(46,46,50,.97);--bg-sidebar:rgba(40,40,43,.98)}
 html.vidro-tonalizado[data-theme="light"]{--glass-regular:rgba(252,252,253,.98);--bg-sidebar:rgba(238,238,241,.98)}
+
+/* ---- Torre como central de avisos (26/09, pedido do Hugo) ----
+   A janelinha de responder sem ir até o chat: véu escuro, cartão de 640 no alto com a IA, o chat,
+   a pasta, "Abrir o chat" e ×; dentro vai o que o chat está pedindo (perguntas, plano, autorização). */
+#torreResposta{position:fixed;inset:0;z-index:9000;background:var(--scrim, rgba(0,0,0,.35));display:flex;justify-content:center;align-items:flex-start;
+  padding-top:max(60px,10vh)}
+#torreResposta .tr-cx{width:min(640px,92vw);max-height:80vh;overflow:auto;padding:12px;border-radius:14px;background:var(--bg-content);
+  box-shadow:var(--shadow-float),inset 0 0 0 1px var(--separator);display:flex;flex-direction:column;gap:10px;
+  animation:menu-abre var(--dur-fast) ease-out}
+#torreResposta .tr-top{display:flex;align-items:center;gap:8px;min-width:0}
+#torreResposta .tr-logo{flex:none;width:16px;height:16px;display:grid;place-items:center;color:var(--label-2)}
+#torreResposta .tr-logo svg{width:16px;height:16px}
+#torreResposta .tr-logo .logo-motor > g[mask]{display:none}
+#torreResposta .tr-logo .logo-motor > path{fill:currentColor}
+#torreResposta .tr-tit{min-width:0;font:600 14px/18px var(--font-sans);color:var(--label-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#torreResposta .tr-onde{flex:none;font:400 12px/16px var(--font-sans);color:var(--label-2)}
+#torreResposta .tr-ir{flex:none;height:24px;padding:0 10px;border:0;border-radius:12px;background:var(--fill-2);color:var(--label-1);font:500 12px/15px var(--font-sans)}
+#torreResposta .tr-ir:hover{background:var(--fill-1)}
+#torreResposta .tr-x{flex:none;width:24px;height:24px;display:grid;place-items:center;border:0;border-radius:6px;background:transparent;color:var(--label-3)}
+#torreResposta .tr-x:hover{background:var(--fill-3);color:var(--label-1)}
+#torreResposta .tr-x .ic{width:12px;height:12px}
+#torreResposta .tr-corpo > :is(.pane-perguntas,.pane-perm,.plano-pronto,.cx-cartao,.cx-pergunta){margin:0}
+#torreResposta .tr-corpo > .pane-perm{display:flex}
+.torre-aba .torre-conta{font-variant-numeric:tabular-nums}
+.torre-grupo-espera .torre-nome{color:var(--status-wait-text)}

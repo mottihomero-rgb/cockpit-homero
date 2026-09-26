@@ -157,8 +157,8 @@ function loadConfig() {
    boot, restauracao que falhou no meio, retrato velho da tela — nao pode mais comer aba:
    as que faltam voltam pro que vai ao disco e a tela recebe o recado.
    COMO A ABA E RECONHECIDA: pelo numero das conversas que estao dentro dela (`sessao`), nunca
-   pela pasta. A pasta muda sozinha — quando o app agrupa por cliente, `Projetos-claude/X/demanda`
-   vira `Projetos-claude/X` — e casar por pasta fazia a trava nao reconhecer as abas e devolver
+   pela pasta. A pasta muda sozinha — quando o app agrupa por cliente, `Projetos/X/demanda`
+   vira `Projetos/X` — e casar por pasta fazia a trava nao reconhecer as abas e devolver
    copia de todas, virando aba repetida. Numero de conversa nao muda. Aba nova, ainda sem
    conversa nenhuma, cai no criterio antigo da pasta.
    A contagem fica na MEMORIA de proposito: reler e reinterpretar o arquivo de 2,2 MB a cada
@@ -982,7 +982,7 @@ const claudeCwd = new Map();
 /* O Claude Code nomeia a pasta da sessao trocando TODO caractere que nao e letra nem numero
    por traco. Aqui so trocava "/" e ".", entao pasta com espaco ou acento gerava um caminho
    que nao existe no disco e a conversa nunca voltava. Conferido: a pasta real do cliente
-   "Matheus Mota" e "-Users-...-Projetos-claude-Matheus-Mota", e a de "Adsure - Copy Lancamentos"
+   "Matheus Mota" e "-Users-...-Projetos-Matheus-Mota", e a de "Adsure - Copy Lancamentos"
    e "-Users-...-Adsure---Copy-Lan-amentos" (o "c cedilha" tambem vira traco). */
 function caminhoReal(dir) {
   // O Claude Code resolve o atalho (realpath) ANTES de montar o nome da pasta da conversa.
@@ -4936,7 +4936,7 @@ handle('sys:home', () => HOME);
 
 /* Escolher pasta sem um ponto de partida cai na home, e de la sao 3 cliques ate os projetos.
    O padrao passa a ser a pasta dos projetos do Claude, que e de onde quase toda aba nasce. */
-const PASTA_PROJETOS = path.join(HOME, 'Desktop', 'Projetos-claude');
+const PASTA_PROJETOS = path.join(HOME, 'Desktop', 'Projetos');
 function pastaInicial(start) {
   if (start) return start;
   try { if (fs.statSync(PASTA_PROJETOS).isDirectory()) return PASTA_PROJETOS; } catch {}
@@ -4995,10 +4995,10 @@ handle('prompts:salvar', (_e, lista) => {
 
 /* ---------- guardar a conversa no Obsidian ----------
    Regra da casa: texto mora no vault. Conversa de cliente vai para a pasta dele; o resto cai
-   em "3 - Operação". O nome do cliente sai da pasta do chat (…/Projetos-claude/<Cliente>/…). */
+   em "3 - Operação". O nome do cliente sai da pasta do chat (…/Projetos/<Cliente>/…). */
 const VAULT = path.join(HOME, 'Documents', 'Adsure - Copy Lançamentos');
 function pastaNoVault(cwd) {
-  const m = String(cwd || '').match(/Projetos-claude\/([^/]+)/);
+  const m = String(cwd || '').match(/Projetos\/([^/]+)/);
   const cliente = m && m[1];
   const genericos = ['Homero', 'Adsure'];
   if (cliente && !genericos.includes(cliente)) {

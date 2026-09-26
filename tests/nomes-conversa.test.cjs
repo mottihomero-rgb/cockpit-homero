@@ -98,12 +98,12 @@ test('os exemplos da instrução passam na validação (agora são do mundo dele
 });
 
 test('a pasta do chat vai como pista do cliente, só quando diz algo', () => {
-  assert.equal(nomes.pistaDaPasta('/Users/homeromotti/Desktop/Projetos-claude/Pedro'), 'Pedro');
-  assert.equal(nomes.pistaDaPasta('/Users/homeromotti/Desktop/Projetos-claude/Adsure/2026-09-26_cockpit-vincular-conta/codigo'),
+  assert.equal(nomes.pistaDaPasta('/Users/homeromotti/Projetos/Pedro'), 'Pedro');
+  assert.equal(nomes.pistaDaPasta('/Users/homeromotti/Projetos/Adsure/Cockpit Vincular Conta - 26-09-2026/codigo'),
     'Adsure (cockpit vincular conta)');
   assert.equal(nomes.pistaDaPasta('/Users/homeromotti/Documents/Adsure - Sistemas/Cockpit'), 'Cockpit');
   assert.equal(nomes.pistaDaPasta('/Users/homeromotti'), '', 'a pasta pessoal não diz nada (na 1a versão tudo virava Adsure)');
-  assert.match(nomes.montarPedido({ mensagens: ['faz a página'], pasta: '/Users/h/Desktop/Projetos-claude/Pedro' }), /Pasta do chat: Pedro\n/);
+  assert.match(nomes.montarPedido({ mensagens: ['faz a página'], pasta: '/Users/h/Projetos/Pedro' }), /Pasta do chat: Pedro\n/);
   assert.doesNotMatch(nomes.montarPedido({ mensagens: ['faz a página'], pasta: '/Users/h' }), /Pasta do chat/);
   assert.match(func('materialDoNome'), /pasta: P\.cwd/);
   assert.match(main, /pasta: typeof d\.pasta === 'string' \? d\.pasta : ''/);
@@ -645,13 +645,13 @@ test('a lista esconde as conversas do robô de memória (claude-mem), como os ou
   assert.match(main, /if \(!incluirRobos && \(CONVERSA_DE_ROBO\.test\(it\.f\)/);
   const re = new RegExp(main.match(/const CONVERSA_DE_ROBO = \/(.*)\/;/)[1]);
   assert.ok(re.test('/Users/h/.claude/projects/-Users-h--claude-mem-observer-sessions/a.jsonl'));
-  assert.ok(!re.test('/Users/h/.claude/projects/-Users-h-Desktop-Projetos-claude-Pedro/a.jsonl'));
+  assert.ok(!re.test('/Users/h/.claude/projects/-Users-h-Desktop-Projetos-Pedro/a.jsonl'));
 });
 
 test('a lista esconde também conversa de teste (pasta temporária) e o robô do chat do webinário', () => {
   const re = new RegExp(main.match(/const PASTA_DE_ROBO = \/(.*)\/;/)[1]);
-  for (const p of ['/private/tmp/ck-e2e', '/tmp', '/Users/h/Desktop/Projetos-claude/Pedro/2026-09-12_chat-ao-vivo-zoom']) assert.ok(re.test(p), p);
-  for (const p of ['/Users/h/Desktop/Projetos-claude/Pedro', '/Users/h/tmpx', '/Users/homeromotti']) assert.ok(!re.test(p), p);
+  for (const p of ['/private/tmp/ck-e2e', '/tmp', '/Users/h/Projetos/Pedro/Chat ao Vivo do Zoom - 12-09-2026']) assert.ok(re.test(p), p);
+  for (const p of ['/Users/h/Projetos/Pedro', '/Users/h/tmpx', '/Users/homeromotti']) assert.ok(!re.test(p), p);
   assert.match(main, /PASTA_DE_ROBO\.test\(fi\.cwd \|\| ''\)\)\) continue;/, 'Claude');
   assert.match(main, /if \(!incluirRobos && PASTA_DE_ROBO\.test\(fi\.cwd \|\| ''\)\) continue;/, 'Codex');
 });

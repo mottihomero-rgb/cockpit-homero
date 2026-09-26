@@ -1864,6 +1864,7 @@ function setDot(P, state) {
    (permissão ou pergunta) fica vermelho e parado, e isso ganha de tudo. Quem pisca está
    trabalhando; quem está parado em vermelho está esperando ele. */
 function pintarPonto(P) {
+  pintarSeloTorre();
   if (!P || !P.el) return;
   const pt = $('.p-dot', P.el);
   if (!pt) return;
@@ -5393,6 +5394,84 @@ document.addEventListener('keyup', (e) => { if (e.shiftKey || e.key === 'Shift')
 // no celular a seleção vem pelo toque longo: acompanha a seleção mudando
 document.addEventListener('selectionchange', () => { if (window.SEM_ELECTRON) setTimeout(mostrarBotaoResponder, 0); else if (!selecaoNaResposta()) esconderBotaoResponder(); });
 document.addEventListener('scroll', esconderBotaoResponder, true);
+
+/* ---- responder pela torre (26/09, pedido do Hugo) ----
+   Chat esperando você: clicar na torre abre uma janelinha com o que ele pede — as perguntas, o
+   plano pronto, a pergunta do Codex ou o pedido de autorização — para responder ali mesmo, sem
+   ir até o chat. As perguntas, o plano e o cartão do Codex MUDAM de lugar para a janelinha (os
+   botões continuam os deles) e voltam quando ela fecha. O pedido de autorização é lido pelo
+   showApproval dentro do chat a cada pedido, então ali vai uma cópia cujos botões apertam os de
+   verdade. Respondeu (o chat saiu de "esperando"), a janelinha fecha sozinha. */
+function responderPelaTorre(P) {
+  if (!P || !panes.has(P.id)) return;
+  fecharRespostaDaTorre();
+  let mover = null, copia = null;
+  if (P.perguntasAtual && P.perguntasAtual.el && P.perguntasAtual.el.isConnected) mover = P.perguntasAtual.el;
+  else if (P.planoPendente && P.planoPendente.el && P.planoPendente.el.isConnected) mover = P.planoPendente.el;
+  else {
+    const bar = $('.pane-perm', P.el);
+    if (bar && !bar.classList.contains('hidden')) {
+      copia = bar.cloneNode(true);
+      for (const cls of ['pp-yes', 'pp-no', 'pp-sempre']) {
+        const b = $('.' + cls, copia), orig = $('.' + cls, bar);
+        if (b && orig) b.onclick = () => orig.click();
+      }
+    } else if (P.questions) {
+      for (const q of P.questions.values()) if (q && !q.done && q.el && q.el.isConnected) { mover = q.el; break; }
+    }
+  }
+  if (!mover && !copia) { irAoChat(P); return; }
+  const veu = document.createElement('div');
+  veu.id = 'torreResposta';
+  veu.innerHTML = '<div class="tr-cx" role="dialog" aria-label="Responder"><div class="tr-top"><span class="tr-logo"></span>'
+    + '<span class="tr-tit"></span><span class="tr-onde"></span><span class="pq-gap"></span>'
+    + '<button class="tr-ir" type="button">Abrir o chat</button>'
+    + '<button class="tr-x" type="button" title="Fechar (esc)" aria-label="Fechar">' + ico('x') + '</button></div><div class="tr-corpo"></div></div>';
+  $('.tr-logo', veu).innerHTML = svgMotor(P.engine); $('.tr-logo', veu).dataset.motor = P.engine;
+  $('.tr-tit', veu).textContent = P.titulo || 'sem título';
+  const A = abaDe(P); $('.tr-onde', veu).textContent = A ? nomeProjeto(A.cwd) + (NA_VPS(A.cwd) ? ' · VPS' : '') : '';
+  const corpo = $('.tr-corpo', veu);
+  const volta = mover ? { el: mover, pai: mover.parentNode, depois: mover.nextSibling } : null;
+  if (mover) corpo.appendChild(mover); else corpo.appendChild(copia);
+  document.body.appendChild(veu);
+  const estado = { P, veu, volta, vigia: 0 };
+  torreResposta = estado;
+  const fechar = () => fecharRespostaDaTorre();
+  veu.addEventListener('mousedown', (e) => { if (e.target === veu) fechar(); });
+  $('.tr-x', veu).onclick = fechar;
+  $('.tr-ir', veu).onclick = () => { fechar(); irAoChat(P); };
+  estado.vigia = setInterval(() => {
+    if (!panes.has(P.id) || estadoDoPainel(P).cls !== 'espera') return fechar();
+    if (mover && !corpo.contains(mover)) return fechar();              // a pergunta foi respondida e saiu
+    if (copia && $('.pane-perm', P.el).classList.contains('hidden')) fechar();
+  }, 250);
+  const foco = $('.pane-perguntas', veu) || $('button', corpo);
+  if (foco) setTimeout(() => foco.focus(), 30);
+}
+let torreResposta = null;
+function fecharRespostaDaTorre() {
+  const t = torreResposta; if (!t) return;
+  torreResposta = null;
+  clearInterval(t.vigia);
+  // o que foi emprestado volta para o chat, no mesmo lugar (se ainda existir)
+  if (t.volta && t.volta.el && t.veu.contains(t.volta.el) && t.volta.pai && t.volta.pai.isConnected) {
+    t.volta.pai.insertBefore(t.volta.el, t.volta.depois && t.volta.depois.parentNode === t.volta.pai ? t.volta.depois : null);
+  }
+  t.veu.remove();
+  if (torreVisivel()) pintarTorre(false);
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && torreResposta && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); fecharRespostaDaTorre(); }
+}, true);
+/* o número no ícone da torre: quantos chats esperam por ele ou têm resposta nova para ler */
+function pintarSeloTorre() {
+  const bt = $('.act[data-view="torre"]'); if (!bt) return;
+  const selo = $('.act-selo', bt); if (!selo) return;
+  let n = 0;
+  for (const P of panes.values()) { const c = estadoDoPainel(P).cls; if (c === 'espera' || (P.nova && c !== 'ocupado')) n++; }
+  selo.classList.toggle('hidden', !n);
+  selo.textContent = n > 9 ? '9+' : String(n || '');
+}
 
 function renderizarHistorico(P, m) {
   const role = m.role || m.kind || m.type;
@@ -9403,7 +9482,7 @@ async function menuArquivos(P, termo) {
     let sel = 0;
     /* A linha de baixo mostra a PASTA do arquivo a partir da pasta do painel ("renderer/redesign"),
        que é o que separa dois arquivos de mesmo nome. Com o caminho inteiro, os 40 itens
-       começavam iguais ("~/Desktop/Projetos-claude/…") e o corte escondia justo a parte que muda.
+       começavam iguais ("~/Projetos/…") e o corte escondia justo a parte que muda.
        Arquivo na raiz mostra o nome da pasta do painel. O caminho inteiro fica no balão do mouse. */
     const raizBusca = String(pastaDoWorktree(P) || '').replace(/\/+$/, '');
     const pastaDoItem = (caminho) => {
@@ -9756,7 +9835,7 @@ const buscaAtual = { claude: '', codex: '', acp: '', gemini: '', grok: '', todas
 const filtroPasta = { claude: 'ABA', codex: 'ABA', acp: 'ABA', gemini: 'ABA', grok: 'ABA', todas: 'ABA' };
 
 // cada pasta dentro daqui e um cliente (funcao porque o HOME so chega no boot)
-const PROJETOS = () => HOME + '/Desktop/Projetos-claude';
+const PROJETOS = () => HOME + '/Projetos';
 
 // sem cache de proposito: cliente novo aparece na hora que a pasta e criada
 async function lerClientes() {
@@ -9775,7 +9854,7 @@ function dentroDe(cwd, alvo) {
 /* De qualquer caminho, descobre de qual cliente ele e — e o que define em qual aba a conversa
    mora. Uma subpasta do cliente (Adsure/paginas/checkout) continua sendo Adsure, senao cada
    subpasta abria uma aba nova e a lista lateral nao achava nada.
-   Pasta fora de Projetos-claude devolve ela mesma, e nao vazio: vazio queria dizer "Mac
+   Pasta fora de Projetos devolve ela mesma, e nao vazio: vazio queria dizer "Mac
    inteiro", entao uma aba dessas despejava TODAS as conversas do computador na lista. */
 function clienteDe(cwd) {
   const raiz = PROJETOS();
@@ -11279,7 +11358,7 @@ function naPintarAtalhos() {
 
 /* A mesma ideia dos atalhos da VPS, agora para o lado do Mac: um clique em vez da janela de
    pastas do macOS. A ordem e a de quem ele mais usa: a pasta padrao dos Ajustes, depois as
-   pastas das conversas mais recentes, depois os clientes de Projetos-claude que faltarem.
+   pastas das conversas mais recentes, depois os clientes de Projetos que faltarem.
    Teto de 12 botoes para a tela nao virar uma parede. */
 const NA_MAX_ATALHOS = 12;
 /* Cada desenho da fileira ganha um numero, igual ao da lista lateral. Ler os clientes do disco
@@ -11625,7 +11704,7 @@ function irAoChat(P) {
    estado com o sinal na frente — anel girando = trabalhando, círculo âmbar com "!" = esperando
    você. Parado não tem sinal. O nome da IA saiu do título (o logo já diz) e foi para a dica.
    Sessão de FORA (com `caminho`): o caminho em mono + há quanto tempo, e os botões embaixo. */
-function linhaDaTorre({ titulo, motor, estado, aoClicar, acoes, engine, foco, caminho, ha, nova }) {
+function linhaDaTorre({ titulo, motor, estado, aoClicar, acoes, engine, foco, caminho, ha, nova, onde }) {
   const d = document.createElement('div');
   d.className = 'torre-item ' + (estado.cls || '') + (foco ? ' foco' : '');
   d.innerHTML = '<span class="ti-logo"></span><span class="ti-txt"><span class="ti-cab"><span class="ti-tit"></span></span>'
@@ -11645,8 +11724,10 @@ function linhaDaTorre({ titulo, motor, estado, aoClicar, acoes, engine, foco, ca
        (autorizar ou responder, o detalhe fica na dica), parado com o motor ligado = "Pronto".
        O estadoDoPainel continua dizendo a frase inteira: a tarja da faixa de avisos usa ela. */
     const curto = estado.cls === 'espera' ? 'esperando você' : txt === 'parado, motor ligado' ? 'pronto' : txt;
+    // 26/09: a torre não separa mais por pasta: a pasta (ou VPS) vem na linha de estado
+    const comOnde = (t) => onde ? t + ' · ' + onde : t;
     // "trabalhando há 22s" vira "Trabalhando há 22s": a linha começa com maiúscula, como no desenho
-    $('.ti-est-txt', d).textContent = curto.charAt(0).toUpperCase() + curto.slice(1);
+    $('.ti-est-txt', d).textContent = comOnde(curto.charAt(0).toUpperCase() + curto.slice(1));
     if (curto !== txt) $('.ti-est', d).title = txt.charAt(0).toUpperCase() + txt.slice(1);
     const sinal = $('.ti-sinal', d);
     /* ponto azul = resposta nova que ele ainda não viu (chegou com a aba dela no fundo). Pronto
@@ -11685,25 +11766,37 @@ async function pintarTorre(forcarAgentes) {
   const sessoesDaqui = new Set();
   for (const P of panes.values()) for (const s of [P.sessaoId, P.resumeId]) if (s) sessoesDaqui.add(s);
 
+  /* 26/09 (pedido do Hugo, por áudio): a torre virou central de avisos, sem separar por pasta
+     nem VPS. Três grupos: Esperando você (clicar abre uma janelinha para responder ali mesmo, sem
+     ir até o chat), Prontas para ler (resposta nova que ele ainda não viu: clicar leva ao chat e
+     ela SAI da torre, como notificação lida) e Trabalhando. Chat parado e já lido não aparece. */
   const blocos = [];
   let total = 0, ocupados = 0, esperando = 0;
+  const grupos = { espera: [], pronta: [], ocupado: [] };
   for (const A of abas.values()) {
-    const daAba = A.ordem.map((id) => panes.get(id)).filter(Boolean);
-    if (!daAba.length) continue;
-    const sec = document.createElement('div');
-    sec.className = 'torre-aba';
-    sec.innerHTML = '<span class="torre-cor"></span><span class="torre-nome"></span><span class="torre-conta"></span>';
-    $('.torre-cor', sec).style.background = NA_VPS(A.cwd) ? 'var(--green)' : 'var(--accent)';
-    $('.torre-nome', sec).textContent = nomeProjeto(A.cwd) + (NA_VPS(A.cwd) ? ' · VPS' : '');
-    // 26/09: o grupo é só o nome da aba, como no desenho; a contagem foi para a dica
-    sec.title = shortPath(A.cwd) + ' · ' + daAba.length + (daAba.length === 1 ? ' chat' : ' chats');
-    blocos.push(sec);
-    for (const P of daAba) {
+    for (const P of A.ordem.map((id) => panes.get(id)).filter(Boolean)) {
       const e = estadoDoPainel(P);
-      total++; if (e.cls === 'ocupado') ocupados++; if (e.cls === 'espera') esperando++;
+      total++;
+      const onde = nomeProjeto(A.cwd) + (NA_VPS(A.cwd) ? ' · VPS' : '');
+      if (e.cls === 'espera') { esperando++; grupos.espera.push({ P, e, onde }); }
+      else if (e.cls === 'ocupado') { ocupados++; grupos.ocupado.push({ P, e, onde }); }
+      else if (P.nova) grupos.pronta.push({ P, e: { cls: 'parado', txt: 'pronta' }, onde });
+    }
+  }
+  const TITULOS = { espera: 'Esperando você', pronta: 'Prontas para ler', ocupado: 'Trabalhando' };
+  for (const g of ['espera', 'pronta', 'ocupado']) {
+    if (!grupos[g].length) continue;
+    const sec = document.createElement('div');
+    sec.className = 'torre-aba torre-grupo-' + g;
+    sec.innerHTML = '<span class="torre-nome"></span><span class="torre-conta"></span>';
+    $('.torre-nome', sec).textContent = TITULOS[g];
+    $('.torre-conta', sec).textContent = String(grupos[g].length);
+    blocos.push(sec);
+    for (const { P, e, onde } of grupos[g]) {
       blocos.push(linhaDaTorre({
-        titulo: P.titulo || 'sem título', motor: nomeMotor(P.engine), estado: e, aoClicar: () => irAoChat(P),
-        engine: P.engine, foco: P === focusPane, nova: !!P.precisaRolar,
+        titulo: P.titulo || 'sem título', motor: nomeMotor(P.engine), estado: e, onde,
+        aoClicar: g === 'espera' ? () => responderPelaTorre(P) : () => { irAoChat(P); pintarTorre(false); },
+        engine: P.engine, foco: P === focusPane, nova: g === 'pronta',
       }));
     }
   }
@@ -11721,10 +11814,10 @@ async function pintarTorre(forcarAgentes) {
     cab.title = [cab.dataset.dica, conta].filter(Boolean).join('\n');
   }
   box.innerHTML = '';
-  if (!total) {
+  if (!blocos.length) {
     const vazio = document.createElement('div');
     vazio.className = 'torre-resumo';
-    vazio.textContent = 'Nenhum chat aberto';
+    vazio.textContent = total ? 'Nada pendente' : 'Nenhum chat aberto';
     box.appendChild(vazio);
   }
   for (const b of blocos) box.appendChild(b);

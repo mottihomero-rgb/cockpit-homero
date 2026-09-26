@@ -277,6 +277,10 @@ const caminhoDoPainel = (P, c) =>
 const lerParaVisor = (c) => ((NA_VPS(c) && window.api.verArquivoVps) ? window.api.verArquivoVps(c) : window.api.verArquivo(c));
 
 /* ============ painel ============ */
+/* Contorno azul de 0,9 s no painel. Desde o redesenho só o aviso do agente (avisoDoAgente) usa:
+   é um "olha aqui" que chega sozinho, e não troca de chat. Ir até um chat (torre, faixa, lista,
+   recado do sistema) NÃO pisca: trocar de chat é instantâneo (README, "Movimento"). Com
+   Reduzir movimento o painel.css desliga a animação. */
 function piscar(P) {
   P.el.classList.remove('piscando');
   void P.el.offsetWidth;              // reinicia a animacao se clicar de novo
@@ -1629,6 +1633,8 @@ function fillModels(P) {
      no Mac esconde o cérebro). */
   $('.p-model', P.el).innerHTML = ico('brain') + '<span>' + modeloAtual(P).nome + '</span>' + ico('updown');
   pintarControlesCodex(P);
+  // chat ainda sem tokens: o "0k / 1000k" segue o modelo escolhido (a janela é por modelo)
+  if (!P.tokens) pintarTokens(P);
 }
 function posicionarChave(P) {
   const faixa = $('.p-chave', P.el);
@@ -1672,6 +1678,8 @@ function setFocus(P) {
   const A = abaDe(P);
   if (A) { A.ativo = P.id; if (abaAtiva !== A) ativarAbaProjeto(A); }
   if (window.SEM_ELECTRON) window.dispatchEvent(new CustomEvent('cockpit:foco', { detail: { paneId: P.id } }));
+  // o chat recebeu foco: a resposta nova já foi vista, o ponto azul some (README, "Estados")
+  if (P.nova) { P.nova = false; pintarPonto(P); }
   if (focusPane === P) return;
   focusPane = P;
   avisarQuemEspera();   // o chat que ele acabou de abrir nao precisa mais de tarja
@@ -1761,7 +1769,16 @@ function pintarTokens(P) {
   pintarAnel(P);
   const el = $('.p-tokens', P.el);
   if (!el) return;
-  if (!P.tokens) { el.innerHTML = ''; return; }
+  /* Chat vazio (tela E6): "0k / 1000k" quando a janela do modelo é conhecida. A classe "vazio"
+     deixa o painel.css mostrar esse zero SÓ enquanto o chat não tem nada: conversa restaurada
+     ainda sem o aviso de tokens do motor não pode dizer "0k". Janela desconhecida: nada. */
+  el.classList.toggle('vazio', !P.tokens);
+  if (!P.tokens) {
+    const j = janelaConhecida(P);
+    el.textContent = j ? '0k / ' + Math.round(j / 1000) + 'k' : '';
+    el.title = j ? 'Conversa vazia. Cabem ' + Math.round(j / 1000) + 'k palavras-token neste modelo.' : '';
+    return;
+  }
   /* Redesenho 26/09: o cabeçalho mostra só "312k / 1000k" em 11px (README, "Painel de chat").
      A barrinha azul saiu: o quanto já encheu é o anel da caixa de escrever (pintarAnel), e um
      segundo azul no cabeçalho brigava com o único botão azul da área. Número inteiro de k: a
@@ -1785,6 +1802,27 @@ function pintarTokens(P) {
    so acontece depois da resposta inteira. Pior: o "esta enchendo" mentia, e mandar resumir
    resumia uma conversa vazia. Painel NOVO nao precisa disto: ele ja nasce zerado. */
 function zerarContexto(P) { P.tokens = 0; P.janela = 0; pintarTokens(P); }
+
+/* O tamanho da janela só chega com o primeiro aviso de tokens do motor (o Claude manda no fim
+   da resposta; o Codex, durante). Até lá o chat vazio ficava sem o "0k / 1000k" do desenho.
+   Então o app GUARDA o que cada motor já disse de cada modelo (cfg.janelas, "motor|modelo") e
+   usa isso até o motor falar de novo. Modelo "[1m]" é 1 milhão pelo próprio nome. Fora disso
+   (o Gemini e o Grok nunca dizem) fica sem número: melhor nada do que um tamanho chutado. */
+const chaveJanela = (P) => P.engine + '|' + (P.model || '');
+function lembrarJanela(P, janela) {
+  if (!P || !janela || !cfg) return;
+  cfg.janelas = cfg.janelas || {};
+  const k = chaveJanela(P);
+  if (cfg.janelas[k] === janela) return;   // só grava quando muda: o Codex avisa a cada passo
+  cfg.janelas[k] = janela;
+  try { Promise.resolve(window.api.setConfig(cfg)).catch(() => {}); } catch {}
+}
+function janelaConhecida(P) {
+  if (P.janela) return P.janela;
+  const guardada = cfg && cfg.janelas && cfg.janelas[chaveJanela(P)];
+  if (guardada) return guardada;
+  return /\[1m\]$/.test(P.model || '') ? 1000000 : 0;
+}
 
 async function compactarConversa(P) {
   if (P.busy) { avisoEnvio(P, 'Espere ele terminar para resumir a conversa.'); return; }
@@ -1832,6 +1870,18 @@ function pintarPonto(P) {
   if (!pt) return;
   const espera = estadoDoPainel(P).cls === 'espera';
   pt.className = 'p-dot dot ' + (espera ? 'espera' : (P.dotEstado || 'off'));
+  /* "nova" é o último da fila (README: esperando > trabalhando > nova): só vale em chat parado.
+     O painel.css desenha o ponto azul antes do nome a partir desta classe. */
+  if (P.nova && !espera && P.dotEstado !== 'busy') pt.className += ' nova';
+}
+
+/* Resposta nova (README do redesenho, "Estados"): o turno acabou num chat que NÃO está em foco.
+   Fica o ponto azul antes do nome até ele olhar para o chat (setFocus apaga). No chat em foco a
+   resposta já está na frente dele: ponto ali seria ruído. Antes do redesenho o chat que
+   respondeu ficava com o ponto verde de "parado"; o desenho novo trocou por "parado = nada" e
+   "nova = azul", e só a metade do "nada" tinha chegado. */
+function marcarRespostaNova(P) {
+  if (P && P !== focusPane) P.nova = true;
 }
 
 /* ============ desenho das mensagens ============ */
@@ -2658,12 +2708,24 @@ function irAoAchado(P, passo) {
   if (cx) cx.textContent = (P.achouI + 1) + ' de ' + lista.length;
 }
 
+/* Com a busca aberta a conversa ganha uma folga no topo (painel.css): a barra flutua em cima
+   da conversa e cobria a 1ª mensagem, com os botões Copiar, Corrigir e Voltar no tempo dela, sem
+   jeito de rolar para tirar de baixo numa conversa curta. Quem está no MEIO da conversa não
+   pode ver o texto pular: a rolagem anda o mesmo tanto que a folga. No topo não compensa, que é
+   onde a folga tem de aparecer. No celular a busca fica no fluxo e a folga é zero. */
+function mostrarBarraBusca(P, barra, mostrar) {
+  const folga = () => parseFloat(getComputedStyle(P.chat).paddingTop) || 0;
+  const antes = folga();
+  barra.classList.toggle('hidden', !mostrar);
+  const delta = folga() - antes;
+  if (delta && P.chat.scrollTop > 0) P.chat.scrollTop += delta;
+}
 function abrirBuscaConversa(P) {
   if (!P) return;
   let barra = $('.p-busca', P.el);
   if (!barra) {
     barra = document.createElement('div');
-    barra.className = 'p-busca';
+    barra.className = 'p-busca hidden';   // nasce escondida: quem mostra é o mostrarBarraBusca, que mede a folga
     barra.innerHTML = '<span class="pb-ic">' + ico('search') + '</span>'
       + '<input class="pb-inp" placeholder="Buscar" spellcheck="false">'
       + '<span class="pb-conta"></span>'
@@ -2686,14 +2748,14 @@ function abrirBuscaConversa(P) {
     $$('.pb-bt[data-vai]', barra).forEach(b => b.onclick = () => irAoAchado(P, Number(b.dataset.vai)));
     $('.pb-x', barra).onclick = () => fecharBuscaConversa(P);
   }
-  barra.classList.remove('hidden');
+  mostrarBarraBusca(P, barra, true);
   const inp = $('.pb-inp', barra);
   inp.focus(); inp.select();
 }
 
 function fecharBuscaConversa(P) {
   const barra = $('.p-busca', P.el);
-  if (barra) barra.classList.add('hidden');
+  if (barra) mostrarBarraBusca(P, barra, false);
   P.buscaTermo = '';
   limparAchados(P);
   $('.p-input', P.el).focus();
@@ -4341,12 +4403,12 @@ function receberEventoPane(ev) {
     case 'goal': metaCodex(P, ev); break;
     case 'settings': aplicarSettingsCodex(P, ev); break;
     case 'tokens':
-      if (ev.janela) P.janela = ev.janela;
+      if (ev.janela) { P.janela = ev.janela; lembrarJanela(P, ev.janela); }
       P.tokens = ev.total || 0;
       pintarTokens(P);
       break;
     case 'api-usage': break;   // era o contador do Astra por créditos, que saiu da tela
-    case 'janela': P.janela = ev.total; pintarTokens(P); break;
+    case 'janela': P.janela = ev.total; lembrarJanela(P, ev.total); pintarTokens(P); break;
     case 'agentes': agentesEvento(P, ev); break;
     case 'voz': vozEvento(P, ev); break;
     case 'note': note(P, ev.text, ev.error); break;
@@ -4356,6 +4418,7 @@ function receberEventoPane(ev) {
       P.busy = false;
       if (P.sugestoesPendentes) mostrarSugestoes(P, P.sugestoesPendentes);
       escondePerm(P, false);   // perguntas não bloqueantes continuam respondíveis
+      marcarRespostaNova(P);   // antes do setDot: ele repinta o ponto já com o "nova"
       setDot(P, 'idle'); P.blocks.clear(); pararTrabalho(P); limparPassos(P);
       mostrarContinuar(P);
       atualizarGit(P);   // leva 10.4: o turno acabou; o chip mostra o que ele mexeu na pasta
@@ -10067,7 +10130,7 @@ async function openSession(s, el) {
      partes; quem chega com um numero solto (reabrir o fechado, o celular voltando para a
      ultima conversa) acha a cadeia pelas ligacoes. O painel fica na parte MAIS NOVA. */
   const partes = Array.isArray(s.partes) && s.partes.length ? s.partes : partesDaCadeia(s);
-  // ja esta aberta em algum painel? so pisca e leva voce ate ela
+  // ja esta aberta em algum painel? so leva voce ate ela (sem piscar: trocar de chat e instantaneo)
   // R2-007: checa também o arquivo (igual motorQueAbriu) — Codex repete o mesmo id em várias
   // .jsonl; sem isso, abrir uma versão ANTIGA só focava a versão atual já aberta, sem trocar.
   const aberta = [...panes.values()].find(q => q.engine === s.engine && NA_VPS(q.cwd) === remoto
@@ -10080,7 +10143,6 @@ async function openSession(s, el) {
     document.querySelectorAll('.hist-item').forEach(x => x.classList.remove('on'));
     if (el) el.classList.add('on');
     setFocus(trocando);
-    piscar(trocando);
     $('.p-input', trocando.el).focus();
     return trocando;
   }
@@ -10772,11 +10834,12 @@ function estadoDoPainel(P) {
   if (P.hist && P.hist.length) return { txt: 'parado', cls: 'parado' };
   return { txt: 'vazio', cls: 'vazio' };
 }
-// leva até o chat: troca de aba se precisar, põe o foco nele e pisca para ele achar na tela
+/* leva até o chat: troca de aba se precisar e põe o foco nele. Sem piscar (redesenho, README
+   "Movimento": trocar de aba ou de chat é instantâneo) — quem mostra qual é o chat é o foco:
+   o nome em --label-1 e a caixa de escrever com o anel. */
 function irAoChat(P) {
   if (!P || !panes.has(P.id)) return;
   setFocus(P);
-  piscar(P);
   const inp = $('.p-input', P.el); if (inp) inp.focus();
 }
 /* Linha da torre no desenho novo (25/09): logo da IA (a cor dela SÓ no logo) + título + linha de
@@ -11867,12 +11930,13 @@ function acaoDeMenu(a) {
   if (a === 'atalhos') return alternarTelaAtalhos();
   if (a === 'desfazer' || a === 'refazer' || a === 'selecionarTudo') return edicaoDoMenu(a);
   // clicou no recado do sistema: traz a aba e o chat que ficaram prontos para a frente
+  // (sem piscar: a troca é instantânea, README "Movimento")
   if (a.startsWith('ir:')) {
     const P = panes.get(a.slice(3));
     if (!P) return;
     const A = abaDe(P);
     if (A && A !== abaAtiva) ativarAbaProjeto(A);
-    setFocus(P); piscar(P);
+    setFocus(P);
     $('.p-input', P.el).focus();
     return;
   }

@@ -97,6 +97,9 @@
 .p-tokens{flex:none;display:block;white-space:nowrap;font:400 11px/16px var(--font-sans);
   color:var(--label-3);font-variant-numeric:tabular-nums}
 .p-tokens:empty{display:none}
+/* o "0k / 1000k" do chat vazio (tela E6) só vale com o chat vazio de verdade: assim que entra
+   qualquer coisa na conversa ele some até o motor mandar o número real (pintarTokens) */
+.pane:not(:has(> .pane-chat > .pane-empty)) .p-tokens.vazio{display:none}
 
 /* o ponto de estado sai da linha 1 no Mac: o sinal agora mora antes do nome (linha 2, abaixo).
    O elemento continua aqui porque o telefone, que esconde a linha 2, ainda mostra ele. */
@@ -133,10 +136,14 @@
 .pn-input{flex:1;min-width:0;height:22px;margin-left:-6px;padding:0 6px;border:0;border-radius:6px;
   background:var(--fill-2);color:var(--label-1);font:var(--f-headline);outline:none;box-shadow:var(--anel-foco)}
 
-/* o sinal de estado antes do nome, um só (esperando > trabalhando; parado = nada). Ele espelha o
-   .p-dot da linha 1, que o pintarPonto já mantém certo: assim o sinal não tem lógica própria e
-   nunca discorda do ponto do telefone nem da bolinha da aba. */
+/* o sinal de estado antes do nome, um só (esperando > trabalhando > nova; parado = nada). Ele
+   espelha o .p-dot da linha 1, que o pintarPonto já mantém certo: assim o sinal não tem lógica
+   própria e nunca discorda do ponto do telefone nem da bolinha da aba. */
 .pane-nome::before{content:none}
+/* resposta nova: ponto de 7 em --accent (tela 04: x=69, o nome passa para 83 com o gap de 7).
+   O pintarPonto só põe o .nova em chat parado e o setFocus tira, então a prioridade já vem certa. */
+.pane:has(> .pane-hd .p-dot.nova) > .pane-nome::before{content:"";flex:none;width:7px;height:7px;
+  border-radius:50%;background:var(--accent)}
 .pane:has(> .pane-hd .p-dot.busy) > .pane-nome::before{content:"";flex:none;box-sizing:border-box;
   width:10px;height:10px;border-radius:50%;
   border:1.5px solid var(--fill-1);border-top-color:var(--label-1);border-right-color:var(--label-1);
@@ -149,8 +156,10 @@
    design). Enquanto nenhuma mensagem veio depois dele, o chat está parado no erro. Perde para
    esperando e trabalhando (um sinal por chat). O desenho é o mesmo traço do icones.js. */
 .pane:not(:has(> .pane-hd .p-dot:is(.busy,.espera))):has(> .pane-chat > .note.err):not(:has(> .pane-chat > .note.err ~ .msg)) > .pane-nome::before{
-  content:"";flex:none;width:14px;height:14px;background:var(--status-error);
+  content:"";flex:none;width:14px;height:14px;border-radius:0;background:var(--status-error);
   -webkit-mask:var(--pn-warn) center/14px 14px no-repeat;mask:var(--pn-warn) center/14px 14px no-repeat}
+/* (o border-radius:0 acima é porque o erro ganha da "nova" quando os dois valem: sem ele o raio
+   de 50% do ponto azul recortava as pontas do triângulo) */
 .pane{--pn-warn:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M8 2.5l6 10.5H2z'/%3E%3Cpath d='M8 6.5v3'/%3E%3Ccircle cx='8' cy='11.2' r='.75' fill='black' stroke='none'/%3E%3C/svg%3E")}
 
 /* esmaecimento de 14pt abaixo do cabeçalho: a conversa some por baixo dele em vez de bater
@@ -202,6 +211,11 @@
   background:var(--glass-regular);-webkit-backdrop-filter:var(--blur-glass);backdrop-filter:var(--blur-glass);
   box-shadow:var(--shadow-float)}
 html[data-theme$="-hc"] .p-busca{box-shadow:var(--shadow-float),inset 0 0 0 1px var(--glass-edge)}
+/* com a busca aberta, folga no topo da conversa: sem ela a barra cobria a linha "Você" da 1ª
+   mensagem e os botões dela (Copiar, Corrigir, Voltar no tempo) ficavam por baixo, sem clique.
+   42 = 70 (topo da barra) + 32 (altura) + 8 de respiro − 68 (cabeçalho). Só pesa no topo da
+   conversa: no meio dela o mostrarBarraBusca anda a rolagem junto e nada pula. */
+.pane:has(> .p-busca:not(.hidden)) > .pane-chat{padding-top:42px}
 .pb-ic{flex:none;display:flex;color:var(--label-2)}
 .pb-ic .ic{width:14px;height:14px}
 .pb-inp{flex:1;min-width:0;height:24px;padding:0 0 0 4px;border:0;background:none;outline:none;
@@ -223,9 +237,12 @@ html[data-theme$="-hc"] .p-busca{box-shadow:var(--shadow-float),inset 0 0 0 1px 
    a cor de "esperando você", e o design não marca o atual. */
 mark.acha{background:var(--highlight);color:inherit;border-radius:3px;padding:0 1px}
 
-/* ---------- Reduzir movimento: o anel do título para de girar ---------- */
+/* ---------- Reduzir movimento: o anel do título para de girar ----------
+   e o contorno que pisca no painel quando o agente manda um aviso (.piscando, style.css) some:
+   o cartão do aviso na conversa já diz o que chegou. */
 @media (prefers-reduced-motion: reduce){
   .pane-nome::before,.pane-hd .p-dot{animation:none !important}
+  .pane.piscando{animation:none}
   .ch-lado,.ch-lado > span:first-child,.p-close,.p-git,.pn-edit,.pb-bt{transition:none}
 }
 
@@ -259,6 +276,8 @@ mark.acha{background:var(--highlight);color:inherit;border-radius:3px;padding:0 
     background:var(--status-wait)}
   :root:has(.so-celular) .pane-hd .p-dot.espera::before{content:"!";display:block;color:#1A1000;
     font:800 9.5px/13px var(--font-sans);text-align:center}
+  :root:has(.so-celular) .pane-hd .p-dot.nova{display:block;width:7px;height:7px;border-radius:50%;
+    background:var(--accent)}
   :root:has(.so-celular) .pane:not(:has(> .pane-hd .p-dot:is(.busy,.espera))):has(> .pane-chat > .note.err):not(:has(> .pane-chat > .note.err ~ .msg)) > .pane-hd .p-dot{
     display:block;width:14px;height:14px;border-radius:0;background:var(--status-error);
     -webkit-mask:var(--pn-warn) center/14px 14px no-repeat;mask:var(--pn-warn) center/14px 14px no-repeat}
@@ -268,4 +287,6 @@ mark.acha{background:var(--highlight);color:inherit;border-radius:3px;padding:0 
   :root:has(.so-celular) .pane-chat{padding:10px 16px 18px}
   :root:has(.so-celular) .ch-nome{display:none}
   :root:has(.so-celular) .p-busca{position:relative;top:auto;right:auto;flex:none;width:auto;max-width:none;margin:0 12px 6px}
+  /* lá a busca fica no fluxo, em cima da conversa: a folga do Mac sobraria */
+  :root:has(.so-celular) .pane:has(> .p-busca:not(.hidden)) > .pane-chat{padding-top:10px}
 }

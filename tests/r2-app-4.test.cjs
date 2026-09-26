@@ -103,6 +103,7 @@ function contextoOpenSession() {
   ctx.pintarPasta = () => {}; ctx.mostrarPastaNoPainel = () => {}; ctx.atualizarGit = () => {};
   ctx.pintarModo = () => {}; ctx.pintarNome = () => {}; ctx.setFocus = P => { ctx.focusPane = P; };
   ctx.savePanes = () => {}; ctx.marcarAbertas = () => {}; ctx.note = () => {};
+  ctx.lembrarDonoDoNome = () => {};   // dono do nome da conversa (nomes.json): fora do que este teste guarda
   ctx.renderizarHistorico = () => {}; ctx.scroll = () => {};
   ctx.limparPlano = () => {}; ctx.limparSugestoes = () => {}; ctx.piscar = () => {};
   ctx.$ = (sel, e) => (e && e.nodes && e.nodes[sel]) || elemento();

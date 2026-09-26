@@ -190,7 +190,10 @@
       if (selos.get(P) === selo) return;
       const topo = P.chat.scrollTop;
       const noFim = P.chat.scrollHeight - topo - P.chat.clientHeight < 100;
-      P.hist = []; P.blocks.clear(); P.tools.clear(); P.execEl = null; P.rolagem = null;
+      /* esvazia o MESMO array em vez de criar outro: o dono do nome da conversa e a identidade do
+         P.hist (nomeDono). Com um array novo, a conversa perdia o dono na 1a vez que ele saia e
+         voltava ao app, e o nome congelava (nenhum marco seguinte chamava a IA). */
+      P.hist.length = 0; P.blocks.clear(); P.tools.clear(); P.execEl = null; P.rolagem = null;
       P.chat.replaceChildren();
       for (const m of msgs) renderizarHistorico(P, m);
       selos.set(P, selo);

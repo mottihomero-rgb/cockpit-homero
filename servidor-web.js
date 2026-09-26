@@ -27,7 +27,7 @@ const PERMITIDOS = new Set([
   'codex:models', 'codex:api-status', 'codex:apps',
   'sessions:claude', 'sessions:codex', 'sessions:cli', 'sessions:acp', 'sessions:history',
   'sessions:titulo', 'sessions:buscar', 'sessions:claudeRemoto', 'sessions:historyRemoto',
-  'sessao:renomear', 'sessao:nomeCurto', 'sessao:fork',
+  'sessao:renomear', 'sessao:nomeCurto', 'sessao:donoNome', 'sessao:fork',
   'acp:config', 'skills:list', 'prompts:ler', 'prompts:salvar',
   'anexo:ler', 'imagem:salvar', 'ocr:ler',
   // ditar do celular: ele grava pelo microfone DELE e o Mac so passa o texto a limpo,

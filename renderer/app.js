@@ -7627,6 +7627,23 @@ function pintarBlocoDeUso(cx, engine, c) {
   let bloco = $('.cv-uso-motor[data-motor="' + engine + '"]', cx);
   // conta ainda nao lida, ou IA que nao esta instalada neste Mac: nada no topo
   if (!c || (MOTORES_OK && MOTORES_OK[engine] === false)) { if (bloco) bloco.remove(); return; }
+  /* 26/09 (desenho novo): o reset sai na HORA em que zera ("zera 14:20", "zera seg 09:00"), como
+     no desenho; quanto falta fica na dica. O aviso de limite em cima da caixa continua relativo. */
+  const janela = (rotulo, j) => {
+    if (!j) return '';
+    const pct = Math.min(100, Math.max(0, Math.round(j.pct || 0)));
+    return '<div class="cv-uso-janela"><div class="cv-uso-top"><span class="cv-uso-rot">' + rotulo + '</span>'
+      + '<span class="cv-uso-pct">' + pct + '%</span>'
+      + (j.reseta ? '<span class="cv-uso-zera"' + (j.reseta > Date.now() ? ' title="zera ' + escaparAtributo(quandoFuturo(j.reseta)) + '"' : '')
+        + '>' + escaparAtributo(textoDoZera(j.reseta)) + '</span>' : '')
+      + '</div><div class="cv-uso-barra"><span style="width:' + pct + '%"></span></div></div>';
+  };
+  const janelas = c.entrou ? janela('Sessão', c.sessao) + janela('Semana', c.semana) : '';
+  /* 26/09: IA com login mas sem número de uso para mostrar (o Grok não tem; o Claude antes da
+     primeira leitura ou com a consulta segurada) não ocupa linha: era um logo + nome solto entre
+     as barras e a pasta, e os quatro blocos empurravam a lista para baixo. A conta dela continua
+     no menu do chat (Conta). Sem login o bloco fica: o "Entrar" é o caminho para entrar. */
+  if (c.entrou && !janelas) { if (bloco) bloco.remove(); return; }
   if (!bloco) {
     bloco = document.createElement('div');
     bloco.className = 'cv-uso-motor';
@@ -7648,29 +7665,16 @@ function pintarBlocoDeUso(cx, engine, c) {
     return;
   }
   bloco.classList.remove('sem-conta');
-  const janela = (rotulo, j) => {
-    if (!j) return '';
-    const pct = Math.min(100, Math.max(0, Math.round(j.pct || 0)));
-    return '<div class="cv-uso-janela"><div class="cv-uso-top"><span class="cv-uso-rot">' + rotulo + '</span>'
-      + '<span class="cv-uso-pct">' + pct + '%</span>'
-      + (j.reseta ? '<span class="cv-uso-zera">zera ' + escaparAtributo(quandoFuturo(j.reseta)) + '</span>' : '')
-      + '</div><div class="cv-uso-barra"><span style="width:' + pct + '%"></span></div></div>';
-  };
-  const janelas = janela('Sessão', c.sessao) + janela('Semana', c.semana);
   bloco.innerHTML = '<div class="cv-uso-cab">' + logo + '<span class="cv-uso-nome"></span>'
     + (c.plano ? '<span class="cv-uso-plano"></span>' : '') + '</div>'
-    + (janelas ? '<div class="cv-uso-janelas">' + janelas + '</div>' : '');
+    + '<div class="cv-uso-janelas">' + janelas + '</div>';
   /* 26/09 (desenho novo): a linha diz QUAL IA é ("Claude", "Codex"), como o título da coluna do
      desenho; a conta (nome, e-mail) vai só na dica. Com o e-mail na tela, quatro linhas em
      negrito de endereço pareciam lista de contatos e não diziam de relance de qual IA era o uso. */
   $('.cv-uso-nome', bloco).textContent = motor;
   if (c.plano) $('.cv-uso-plano', bloco).textContent = c.plano;
-  // o que antes era frase na coluna ("segurou as consultas", "não consegui ler") vai no title
-  const semNumero = !c.sessao && !c.semana;
-  const porque = semNumero && c.limitado
-    ? 'O ' + motor + ' segurou as consultas agora · tento de novo ' + (c.voltaEm ? quandoFuturo(c.voltaEm) : 'em alguns minutos')
-    : semNumero && ['claude', 'codex'].includes(engine) ? 'Não consegui ler o uso agora'
-    : c.velho ? 'Última leitura ' + haQuanto(c.velho) : '';
+  // número guardado de uma leitura antiga (a consulta de agora foi segurada): o quando vai no title
+  const porque = c.velho ? 'Última leitura ' + haQuanto(c.velho) : '';
   const conta = [c.nome, c.email].filter((x, i, a) => x && a.indexOf(x) === i);
   bloco.title = [motor, c.plano, ...conta].filter(Boolean).join(' · ') + (porque ? '\n' + porque : '');
 }
@@ -8098,6 +8102,21 @@ function usoDeTodos(forcar) {
   for (const e of new Set([...panes.values()].map(p => p.engine))) lerUso(e, forcar);
 }
 setInterval(() => usoDeTodos(false), USO_INTERVALO);
+
+/* A hora em que o limite zera, como no desenho: "zera 14:20" quando é hoje e "zera seg 09:00"
+   em outro dia (o limite semanal zera em até 7 dias; passando disso vai a data, "zera 03/10
+   09:00", para o dia da semana não enganar). Hora local do Mac, 24 h. */
+function textoDoZera(ms) {
+  const agora = Date.now();
+  if (!(ms > agora)) return 'já zerou';
+  const d = new Date(ms), h = new Date(agora), dd = (n) => String(n).padStart(2, '0');
+  const hm = dd(d.getHours()) + ':' + dd(d.getMinutes());
+  const dias = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate())
+    - new Date(h.getFullYear(), h.getMonth(), h.getDate())) / 864e5);
+  if (dias === 0) return 'zera ' + hm;
+  if (dias < 7) return 'zera ' + ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][d.getDay()] + ' ' + hm;
+  return 'zera ' + dd(d.getDate()) + '/' + dd(d.getMonth() + 1) + ' ' + hm;
+}
 
 function quandoFuturo(ms) {
   const d = ms - Date.now();

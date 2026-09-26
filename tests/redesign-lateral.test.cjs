@@ -191,3 +191,57 @@ test('uso por IA: nome da IA na linha, conta na dica; ↻ só no hover do cabeç
   assert.doesNotMatch(c, /\n\s*\.side-busca\{font-size:16px\}/, 'sem o guarda do celular a busca virava 16px numa janela estreita do Mac');
   assert.match(c, /body:has\(#btnGaveta\) \.side-busca\{font-size:16px\}/);
 });
+
+/* ---- rodada 1 de consertos da área lateral (26/09) ---- */
+
+test('logo da IA numa cor só no bloco de uso, na cadeia da lista e na Torre (o Gemini sem o degradê)', () => {
+  /* o logo oficial do Gemini é uma estrela de fill branco com um grupo de manchas coloridas por
+     máscara em cima. Pôr a cor no contêiner não basta: o grupo tem de sair e o path tem de pegar
+     a cor (senão a estrela fica branca e some no claro). Regra 8 do README. */
+  const regras = [...semComentario(css).matchAll(/([^{}]+)\{([^}]*)\}/g)].map((m) => ({ sel: m[1], dec: m[2] }));
+  const cobre = (cls, alvo, dec) => regras.some((r) => new RegExp('\\' + cls + '(?![\\w-])').test(r.sel)
+    && r.sel.includes(alvo) && dec.test(r.dec));
+  for (const cls of ['.cv-uso-logo', '.hi-motor', '.ti-logo']) {
+    assert.ok(cobre(cls, '.logo-motor > g[mask]', /display:none/), cls + ': o degradê colorido do Gemini tem de sair');
+    assert.ok(cobre(cls, '.logo-motor > path', /fill:currentColor/), cls + ': sem o fill a estrela sai branca');
+  }
+});
+
+test('o limite zera na HORA do reset ("zera 14:20", "zera seg 09:00"), não em tempo relativo', () => {
+  // "agora" do teste: sábado, 26/09 às 15:00 (hora local)
+  const agora = new Date(2026, 8, 26, 15, 0).getTime();
+  const ctx = { Date: class extends Date { static now() { return agora; } } };
+  vm.runInNewContext(pegar('textoDoZera') + '\nthis.z = textoDoZera;', ctx);
+  assert.equal(ctx.z(new Date(2026, 8, 26, 17, 20).getTime()), 'zera 17:20', 'hoje: só a hora');
+  assert.equal(ctx.z(new Date(2026, 8, 27, 0, 30).getTime()), 'zera dom 00:30', 'passou da meia-noite já é outro dia');
+  assert.equal(ctx.z(new Date(2026, 8, 28, 9, 0).getTime()), 'zera seg 09:00');
+  assert.equal(ctx.z(new Date(2026, 9, 2, 9, 5).getTime()), 'zera sex 09:05');
+  assert.equal(ctx.z(new Date(2026, 9, 6, 9, 0).getTime()), 'zera 06/10 09:00', 'mais de uma semana: a data, o dia da semana enganaria');
+  assert.equal(ctx.z(agora - 60000), 'já zerou', 'antes saía "zera já zerou"');
+  const b = pegar('pintarBlocoDeUso');
+  assert.match(b, /escaparAtributo\(textoDoZera\(j\.reseta\)\)/, 'a barra usa a hora do reset');
+  assert.doesNotMatch(b, /'zera ' \+ escaparAtributo\(quandoFuturo/, 'o relativo ("zera em 2h") saiu da barra');
+  // o aviso de limite em cima da caixa continua relativo: lá o que importa é quanto falta
+  assert.match(app, /function quandoFuturo\(ms\) \{/);
+});
+
+test('IA logada sem número de uso não cria bloco (Grok, Claude antes da leitura)', () => {
+  const b = pegar('pintarBlocoDeUso');
+  const corte = b.indexOf('if (c.entrou && !janelas) { if (bloco) bloco.remove(); return; }');
+  assert.ok(corte > 0, 'sem Sessão nem Semana o bloco não entra');
+  assert.ok(corte < b.indexOf("document.createElement('div')"), 'o corte vem antes de criar o bloco');
+});
+
+test('acabamento da lista, da rotina e dos Ajustes na coluna estreita', () => {
+  const c = semComentario(css);
+  // o tempo tem largura fixa à direita: o logo da cadeia fica na mesma coluna com "2 d" ou "ontem"
+  assert.match(c, /\.hi-w\{order:3;min-width:36px;text-align:right;/);
+  // ▶ só preenchido (o ico() põe contorno de 1,4 em todo ícone)
+  assert.match(c, /\.ri-acao \.ic\{width:12px;height:12px;stroke:none\}/);
+  // com a alça no mínimo (220) o título não encolhe abaixo da palavra + (i): quem cede é o pop-up
+  const tit = /\.aj-tit\{([^}]*)\}/.exec(c)[1];
+  assert.doesNotMatch(tit, /min-width:0/, 'com min-width:0 o (i) da Caixa de entrada ia para baixo do botão da pasta');
+  assert.match(c, /\.aj-pop\{flex:0 1 auto;min-width:0;max-width:min\(120px,50%\);/);
+  // e a alça continua com o mínimo de 220
+  assert.match(app, /Math\.min\(480, Math\.max\(220, e\.clientX - sb\.getBoundingClientRect\(\)\.left\)\)/);
+});

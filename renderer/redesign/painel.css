@@ -51,8 +51,13 @@
    base é o primeiro <path>; o grupo com a máscara das manchas sai. */
 .ch-lado svg.logo-motor > g[mask],.pe-logo svg.logo-motor > g[mask]{display:none}
 .ch-lado svg.logo-motor > path,.pe-logo svg.logo-motor > path{fill:currentColor}
-.ch-lado:hover{background:var(--fill-3);color:var(--label-1)}
+/* hover e pressionado de item parado: o design não define (o Sistema só mostra normal e ativo).
+   É o "sem moldura" da folha, um degrau acima: --fill-3 em cima de um trilho que já é --fill-3
+   quase não aparecia. Hover --fill-2, pressionado --fill-1; o ativo (--control-selected) segue
+   mais claro que os dois. */
+.ch-lado:hover{background:var(--fill-2);color:var(--label-1)}
 .ch-lado:hover > span:first-child{color:var(--label-2)}
+.ch-lado:active{background:var(--fill-1)}
 .ch-lado[aria-pressed="true"]{background:var(--control-selected);color:var(--label-1);
   box-shadow:0 1px 2px rgba(0,0,0,.18),0 0 0 .5px var(--separator-strong)}
 .ch-lado[aria-pressed="true"][data-motor="claude"] > span:first-child{color:var(--logo-claude)}
@@ -139,6 +144,14 @@
 .pane:has(> .pane-hd .p-dot.espera) > .pane-nome::before{content:"!";flex:none;width:13px;height:13px;
   border-radius:50%;background:var(--status-wait);color:#1A1000;
   font:800 9.5px/13px var(--font-sans);text-align:center}
+/* erro: triângulo "warn" de 14 em --status-error (tela E1). O painel não tem estado de erro
+   próprio; quem diz que deu errado é o cartão de erro da conversa (.note.err, o "Erro" do
+   design). Enquanto nenhuma mensagem veio depois dele, o chat está parado no erro. Perde para
+   esperando e trabalhando (um sinal por chat). O desenho é o mesmo traço do icones.js. */
+.pane:not(:has(> .pane-hd .p-dot:is(.busy,.espera))):has(> .pane-chat > .note.err):not(:has(> .pane-chat > .note.err ~ .msg)) > .pane-nome::before{
+  content:"";flex:none;width:14px;height:14px;background:var(--status-error);
+  -webkit-mask:var(--pn-warn) center/14px 14px no-repeat;mask:var(--pn-warn) center/14px 14px no-repeat}
+.pane{--pn-warn:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M8 2.5l6 10.5H2z'/%3E%3Cpath d='M8 6.5v3'/%3E%3Ccircle cx='8' cy='11.2' r='.75' fill='black' stroke='none'/%3E%3C/svg%3E")}
 
 /* esmaecimento de 14pt abaixo do cabeçalho: a conversa some por baixo dele em vez de bater
    numa linha dura (README: "Não usar linha dura") */
@@ -147,9 +160,12 @@
 
 /* ---------- a coluna de leitura ----------
    Margem lateral de 28 (16 em painel < 560pt), no máximo 700 de largura, no meio, e 22 entre um
-   bloco e o outro. O espaço entre blocos passa a ser do contêiner (gap): antes cada bloco
-   trazia 18px de lado e 8–14px embaixo, cada um de um jeito. */
-.pane-chat{display:flex;flex-direction:column;gap:22px;padding:10px 28px 6px}
+   bloco e o outro. Antes cada bloco trazia 18px de lado e 8–14px embaixo, cada um de um jeito.
+   Os 22 são margem em cima de cada bloco que vem depois de outro (no fim desta seção), e NÃO o
+   gap do flex: o mensagens.css faz o mesmo ritmo com a mesma regra, e gap + margem somavam 44
+   entre a bolha e a resposta quando os dois arquivos se juntam. Regra igual nos dois = 22 com
+   um, com o outro ou com os dois. */
+.pane-chat{display:flex;flex-direction:column;gap:0;padding:10px 28px 6px}
 @container (max-width:559.98px){
   .pane-chat{padding-left:16px;padding-right:16px}
 }
@@ -159,10 +175,15 @@
    redefinir o recuo por dentro, se quiserem. */
 :where(.pane-chat) > :is(.msg,.think,.tool,.exec,.trab,.troca,.note,.envio-nota){padding-left:0;padding-right:0;padding-top:0;padding-bottom:0}
 :where(.pane-chat) > :is(.cx-cartao,.aviso-agente,.turno-fim){margin-top:0;margin-bottom:0}
+.pane-chat > * + *{margin-top:22px}
 
 /* ---------- estado vazio ----------
-   Só o logo de 36 no meio, na cor do assistente. Sem frase e sem transparência. */
-.pane-chat > .pane-empty{flex:1 0 auto;max-width:none;height:auto;display:flex;align-items:center;justify-content:center;opacity:1}
+   Só o logo de 36, na cor do assistente. Sem frase e sem transparência. No design o logo mora
+   no meio de um bloco de 600 que começa no alto da coluna (tela E6: centro a 378 do topo do
+   painel), e não no meio do espaço até a caixa: aqui a caixa ocupa lugar em vez de flutuar, e
+   centrar no que sobra punha o logo ~36pt mais baixo. Painel baixo (faixa de aviso, divisão na
+   horizontal, telefone): o bloco encolhe até caber e o logo fica no meio do que houver. */
+.pane-chat > .pane-empty{flex:0 1 600px;min-height:0;max-width:none;height:auto;display:flex;align-items:center;justify-content:center;opacity:1}
 .pe-logo{width:36px;height:36px;border-radius:0;background:none;color:var(--motor,var(--label-2))}
 .pe-logo svg{width:36px;height:36px;display:block}
 
@@ -197,14 +218,14 @@ html[data-theme$="-hc"] .p-busca{box-shadow:var(--shadow-float),inset 0 0 0 1px 
 .pb-bt:focus-visible{outline:none;box-shadow:var(--anel-foco)}
 .pb-bt .ic{width:14px;height:14px}
 .pb-bt.pb-x .ic{width:12px;height:12px}
-/* os achados em --highlight, todos iguais (tela 23). O atual (o "2" do "2 de 5") ganha só um
-   traço âmbar embaixo: dá para achar qual é sem trocar a cor do marca-texto. */
+/* os achados em --highlight, todos iguais (tela 23), inclusive o atual: quem mostra qual é o
+   "2 de 5" é a rolagem, que o traz para a vista. O traço âmbar que o atual tinha saiu: âmbar é
+   a cor de "esperando você", e o design não marca o atual. */
 mark.acha{background:var(--highlight);color:inherit;border-radius:3px;padding:0 1px}
-mark.acha.agora{box-shadow:inset 0 -2px 0 var(--status-wait)}
 
 /* ---------- Reduzir movimento: o anel do título para de girar ---------- */
 @media (prefers-reduced-motion: reduce){
-  .pane-nome::before{animation:none !important}
+  .pane-nome::before,.pane-hd .p-dot{animation:none !important}
   .ch-lado,.ch-lado > span:first-child,.p-close,.p-git,.pn-edit,.pb-bt{transition:none}
 }
 
@@ -221,7 +242,21 @@ mark.acha.agora{box-shadow:inset 0 -2px 0 var(--status-wait)}
   :root:has(.so-celular) .p-close{width:32px;height:32px}
   :root:has(.so-celular) .p-tokens{font-size:10px}
   :root:has(.so-celular) .ch-lado{height:auto;padding:9px 8px;font-size:10.5px}
-  :root:has(.so-celular) .pane-hd .p-dot{display:block}
+  /* o ponto do telefone vira o MESMO sinal da linha 2 do Mac (README, "Estados"): parado não
+     mostra nada, trabalhando é o anel neutro girando, esperando é o círculo âmbar com "!" e o
+     erro é o triângulo. Antes era o ponto de 7px antigo, com as cores trocadas: âmbar
+     piscando para trabalhando, vermelho (a cor de erro) para esperando e verde para parado. */
+  :root:has(.so-celular) .pane-hd .p-dot{display:none;flex:none;box-sizing:border-box;animation:none}
+  :root:has(.so-celular) .pane-hd .p-dot.busy{display:block;width:10px;height:10px;border-radius:50%;
+    background:none;border:1.5px solid var(--fill-1);border-top-color:var(--label-1);border-right-color:var(--label-1);
+    animation:ck-spin 1s linear infinite}
+  :root:has(.so-celular) .pane-hd .p-dot.espera{display:block;width:13px;height:13px;border-radius:50%;
+    background:var(--status-wait)}
+  :root:has(.so-celular) .pane-hd .p-dot.espera::before{content:"!";display:block;color:#1A1000;
+    font:800 9.5px/13px var(--font-sans);text-align:center}
+  :root:has(.so-celular) .pane:not(:has(> .pane-hd .p-dot:is(.busy,.espera))):has(> .pane-chat > .note.err):not(:has(> .pane-chat > .note.err ~ .msg)) > .pane-hd .p-dot{
+    display:block;width:14px;height:14px;border-radius:0;background:var(--status-error);
+    -webkit-mask:var(--pn-warn) center/14px 14px no-repeat;mask:var(--pn-warn) center/14px 14px no-repeat}
   :root:has(.so-celular) .pane-nome{display:none}
   /* lá o painel não é container (celular.css: container-type:normal, cada chat ocupa a tela
      com display:contents na coluna), então as regras de painel estreito vêm escritas aqui */

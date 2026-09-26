@@ -71,3 +71,38 @@ test('a cor do assistente fica só no logo do seletor (nenhum fundo azul nem da 
   assert.doesNotMatch(ativo[1], /--accent|--motor|--logo-/, 'o item ativo voltou a ser pintado com cor: ' + ativo[1]);
   assert.match(ativo[1], /--control-selected/, 'o item ativo é o --control-selected do README');
 });
+
+/* Revisão 2 do painel (26/09): os sinais seguem a tabela "Estados" do README em todo lugar. */
+const blocoCelular = () => { const i = css.indexOf('@media (max-width: 820px)'); return css.slice(i, css.indexOf('\n}\n', i)); };
+
+test('o sinal do telefone é o mesmo do Mac: parado sem nada, anel neutro, "!" âmbar, triângulo', () => {
+  const b = blocoCelular();
+  assert.match(b, /\.pane-hd \.p-dot\{display:none/, 'no telefone o ponto parado (idle/off) voltou a aparecer');
+  const busy = b.match(/\.p-dot\.busy\{([^}]*)\}/);
+  assert.ok(busy && /ck-spin/.test(busy[1]) && /--label-1/.test(busy[1]), 'trabalhando tem de ser o anel neutro girando');
+  const esp = b.match(/\.p-dot\.espera\{([^}]*)\}/);
+  assert.ok(esp && /--status-wait/.test(esp[1]), 'esperando tem de ser o círculo em --status-wait');
+  assert.match(b, /\.p-dot\.espera::before\{content:"!"/, 'o círculo de esperando perdeu o "!"');
+  assert.doesNotMatch(b, /\.p-dot[^{]*\{[^}]*(--green|--yellow|--red)\b/, 'o ponto do telefone voltou às cores antigas (âmbar = trabalhando, vermelho = esperando)');
+});
+
+test('erro no chat: triângulo em --status-error antes do nome, tirado do cartão de erro da conversa', () => {
+  const r = css.match(/\.note\.err\):not\(:has\(> \.pane-chat > \.note\.err ~ \.msg\)\) > \.pane-nome::before\{([^}]*)\}/);
+  assert.ok(r, 'sumiu o sinal de erro da linha 2');
+  assert.match(r[1], /--status-error/);
+  assert.match(r[1], /--pn-warn/);
+  assert.match(css, /:not\(:has\(> \.pane-hd \.p-dot:is\(\.busy,\.espera\)\)\):has\(> \.pane-chat > \.note\.err\)/,
+    'o erro tem de perder para esperando e trabalhando (um sinal por chat)');
+});
+
+test('vazio no alto como no design; achado atual igual aos outros', () => {
+  assert.match(css, /\.pane-chat > \.pane-empty\{flex:0 1 600px;min-height:0/, 'o logo do vazio voltou a centrar no espaço até a caixa (~36pt mais baixo que a tela E6)');
+  assert.doesNotMatch(css, /mark\.acha\.agora\{/, 'o achado atual voltou a ter marca própria (o design pinta todos iguais)');
+});
+
+test('o ritmo de 22 é margem (a mesma regra do mensagens.css), nunca gap + margem', () => {
+  const chat = css.match(/\n\.pane-chat\{([^}]*)\}/);
+  assert.ok(chat, 'sumiu a regra da coluna de leitura');
+  assert.doesNotMatch(chat[1], /gap:(?!0)/, 'o .pane-chat voltou a ter gap: somado à margem do mensagens.css dá 44 entre blocos');
+  assert.match(css, /\.pane-chat > \* \+ \*\{margin-top:22px\}/, 'sumiu o vão de 22 entre blocos');
+});

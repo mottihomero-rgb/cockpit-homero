@@ -187,9 +187,10 @@ test('visor conserva o arquivo mais recente quando a leitura anterior chega depo
   assert.equal(pre.textContent, 'novo'); assert.match(v.nodes['.visor-nome'].textContent, /^b/);
 });
 /* Redesenho 25/09: o pedido virou cartão com cabeçalho próprio. O título ("Primeiro") mora no
-   .pp-tit e o objeto (arquivo/comando) no .pp-txt; showApproval pinta pelo pintarPedido. */
+   .pp-tit e o objeto (arquivo/comando) no .pp-txt; showApproval pinta pelo pintarPedido e marca a
+   chegada (chegadaDoPedido, a subida de 8pt que só roda quando o pedido chega). */
 function approvalContext() {
-  const c = context(['showApproval', 'pintarPedido', 'partesDoPedido', 'pintarHaPedido', 'duracaoCurta'],
+  const c = context(['showApproval', 'pintarPedido', 'partesDoPedido', 'pintarHaPedido', 'duracaoCurta', 'chegadaDoPedido'],
     { shortPath: p => p, linhasDoDiff: () => [], comContexto: l => l }), P = pane(c), bar = element();
   bar.nodes = Object.fromEntries(['.pp-tit', '.pp-ha', '.pp-txt', '.pp-cam', '.pp-por', '.pp-diff', '.pp-yes', '.pp-no'].map(s => [s, element()]));
   P.el.nodes['.pane-perm'] = bar; return { c, P, bar };

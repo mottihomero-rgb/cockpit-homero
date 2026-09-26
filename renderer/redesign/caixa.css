@@ -48,8 +48,9 @@
 .pl-pt,.pl-feito .pl-pt,.pl-fazendo .pl-pt{flex:none;position:relative;top:0;width:12px;height:16px;
   border:0;border-radius:0;background:none;display:flex;align-items:center;justify-content:center}
 .pl-pt::before{content:"";box-sizing:border-box;display:block}
-/* pendente: círculo vazio de 9 em --label-4 */
-.pl-pendente .pl-pt::before{width:9px;height:9px;border-radius:50%;border:1.25px solid var(--label-4)}
+/* pendente: círculo vazio de 9 em --label-4. O desenho escreve 1,25, mas a tela arredonda a borda
+   para pixel inteiro e o que a referência mede é 1: fica 1, igual nas duas. */
+.pl-pendente .pl-pt::before{width:9px;height:9px;border-radius:50%;border:1px solid var(--label-4)}
 /* em andamento: o anel do "trabalhando" (parado aqui, como no desenho) */
 .pl-fazendo .pl-pt::before{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--fill-1);
   border-top-color:var(--label-1);border-right-color:var(--label-1)}
@@ -60,14 +61,17 @@
 
 /* ---------- pedido de autorização (a 8pt das bordas do painel) ----------
    Era uma faixa com banho azul; agora é o cartão de vidro do desenho: raio 12, padding 12,
-   contorno de 1pt em --status-wait-line. Chega subindo 8pt UMA vez, sem pulsar. */
+   contorno de 1pt em --status-wait-line. Chega subindo 8pt UMA vez, sem pulsar.
+   A animação mora na classe .pp-chegando, que o showApproval põe quando o pedido CHEGA e tira
+   logo depois. Antes ela ficava presa no :not(.hidden): toda volta para a aba (o painel sai do
+   display:none) rodava a chegada de novo, e trocar de aba não tem animação. */
 @keyframes pp-chega{from{transform:translateY(8px);opacity:0}}
 .pane-perm{margin:0 8px 8px;padding:12px;border:0;border-radius:12px;display:flex;flex-direction:column;
   align-items:stretch;gap:10px;background:var(--glass-regular);
   -webkit-backdrop-filter:var(--blur-glass);backdrop-filter:var(--blur-glass);
   box-shadow:var(--shadow-float),inset 0 0 0 1px var(--status-wait-line);
   font:var(--f-body);color:var(--label-1)}
-.pane-perm:not(.hidden){animation:pp-chega var(--dur-base) var(--ease-out)}
+.pane-perm.pp-chegando{animation:pp-chega var(--dur-base) var(--ease-out)}
 .pp-cab{display:flex;align-items:center;gap:8px;min-width:0}
 .pp-cab .rd-espera{font-size:10px;line-height:14px}
 .pp-tit{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -125,6 +129,11 @@
    (mostrarContinuar, app.js). Botão de 24, --fill-2, raio 6, 12/500 em --label-1 (README, "Fim
    do turno"). A linha em si (.turno-fim) é da área dos passos; aqui só o botão. */
 .turno-fim > .p-cont{display:inline-flex;padding:0}
+/* turno curto sem a linha "Levou 2m": a linha é só dele. À esquerda da coluna e opacidade cheia,
+   igual à linha do fim do turno do desenho (o .turno-fim antigo do style.css centralizava e
+   apagava a 80%; esta linha é da caixa, então o acerto mora aqui). Sem o padding 0 2px do .p-cont
+   antigo: o botão começa na mesma linha do texto da coluna. */
+.p-cont.turno-fim{display:flex;justify-content:flex-start;opacity:1;padding:0}
 .cont-chip{height:24px;padding:0 10px;border:0;border-radius:6px;display:inline-flex;align-items:center;gap:5px;
   background:var(--fill-2);color:var(--label-1);font:500 12px/15px var(--font-sans);
   transition:background-color var(--dur-fast) ease-out}
@@ -138,6 +147,10 @@
 .an-fio{fill:none;stroke:var(--label-2);stroke-width:2.5;stroke-linecap:butt;stroke-dasharray:37.7;stroke-dashoffset:37.7}
 .p-compactar.meio .an-fio{stroke:var(--status-wait)}
 .p-compactar.cheio .an-fio{stroke:var(--status-error)}
+
+/* modo de envio com o chat trabalhando: o style.css pintava de azul com moldura (ícone em
+   caixinha e um segundo azul na área). Fica o ícone solto em --label-2, no Mac e no celular. */
+.pane.ocupado .p-modoenvio{color:var(--label-2);border-color:transparent}
 
 /* "/" virou ícone: a moldura que ele tinha como texto em mono sai nas duas telas */
 .p-slash{border-color:transparent}
@@ -168,7 +181,7 @@
 
 /* ---------- Reduzir movimento ---------- */
 @media (prefers-reduced-motion: reduce){
-  .pane-perm:not(.hidden){animation:none}
+  .pane-perm.pp-chegando{animation:none}
   .pl-cheio{transition:none}
 }
 
@@ -180,13 +193,13 @@
   /* ---------- esmaecimento de 28pt acima da pilha ----------
      No desenho a pilha flutua sobre a conversa com um degradê de 28 em cima. Aqui a pilha fica
      no fluxo (a rolagem, o "grudar no fim" e a medida do painel continuam iguais) e o efeito é o
-     mesmo: a conversa some suave nos últimos 28px. A máscara também faz os 14pt de cima (README,
-     "Abaixo do cabeçalho, um esmaecimento de 14pt") porque é UMA propriedade só: se cada área
-     pusesse a sua, a de baixo apagaria a de cima. O padding de 28 deixa a última linha, rolada
-     até o fim, fora do esmaecimento. */
+     mesmo: a conversa some suave nos últimos 28px. Só embaixo: os 14pt de cima (abaixo do
+     cabeçalho) são do painel (.pane-nome::after, redesign/painel.css); pôr aqui também somava os
+     dois e o topo esmaecia em dobro. O padding de 28 deixa a última linha, rolada até o fim, fora
+     do esmaecimento. */
   .pane-chat{padding-bottom:28px;
-    -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 14px,#000 calc(100% - 28px),transparent 100%);
-    mask-image:linear-gradient(to bottom,transparent 0,#000 14px,#000 calc(100% - 28px),transparent 100%)}
+    -webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 28px),transparent 100%);
+    mask-image:linear-gradient(to bottom,#000 calc(100% - 28px),transparent 100%)}
 
   /* ---------- a caixa ----------
      Vidro, raio 12, a 8pt das bordas, padding 8 6 6, sem borda. Painel em foco: anel azul. */
@@ -195,8 +208,6 @@
     background:var(--glass-regular);-webkit-backdrop-filter:var(--blur-glass);backdrop-filter:var(--blur-glass);
     box-shadow:var(--shadow-float)}
   .pane.focus .pane-cmp{border-color:transparent;box-shadow:var(--shadow-float),var(--anel-foco)}
-  html[data-theme$="-hc"] .pane-cmp{box-shadow:var(--shadow-float),inset 0 0 0 1px var(--glass-edge)}
-  html[data-theme$="-hc"] .pane.focus .pane-cmp{box-shadow:var(--shadow-float),inset 0 0 0 1px var(--glass-edge),var(--anel-foco)}
   .p-anexos{padding:0 4px 2px;gap:6px}
   .pane-cmp .p-sugs{padding:0 6px 2px}
 
@@ -262,7 +273,7 @@
   .p-model.pendente::after{top:3px;right:2px}
 
   /* permissão: cadeado de 14 + nome (o nome só em painel ≥ 560) */
-  .modo-btn.p-modo{height:26px;min-width:26px;padding:0 5px;gap:4px;border:0;border-radius:6px;
+  .modo-btn.p-modo{height:26px;min-width:24px;padding:0 5px;gap:4px;border:0;border-radius:6px;
     justify-content:center;font:400 12px/15px var(--font-sans);color:var(--label-2);
     transition:background-color var(--dur-fast) ease-out}
   .modo-btn.p-modo:hover{background:var(--fill-3);color:var(--label-2);border-color:transparent}
@@ -319,6 +330,21 @@
 @media (max-width: 820px), (pointer: coarse) and (max-width: 1100px) {
   /* a fileira do celular é apertada: o anel continua só aparecendo a partir de 20% */
   .p-compactar.baixo{display:none}
+  /* A ponta direita (anel · parar · enviar) gruda JUNTA na borda. No celular.css só o enviar e o
+     parar grudavam, os dois em right:0: com a fileira rolando de lado (10 botões de 32 não cabem
+     em 393), a sombra sólida do enviar comia um terço do anel, e com o chat trabalhando o parar
+     ficava inteiro EMBAIXO do enviar. Agora cada um gruda no seu lugar e o que rola por baixo é o
+     meio da fileira. Sem rolar, ficam onde já estavam: o sticky só empurra quem passaria da borda.
+     O parar gruda a 42 (32 do enviar + os 10 da sombra dele): a sombra cai no vão, não no botão.
+     Quem gruda precisa de fundo cheio (--bg2, o da caixa), senão o que passa por baixo aparece.
+     A sombra do anel é só a do vão (4): com 10, ela cortava o cadeado ao lado, parado em 393. */
+  .cmp-bar > .p-compactar{position:sticky;right:36px;z-index:2;background-color:var(--bg2);
+    box-shadow:-4px 0 0 0 var(--bg2)}
+  .cmp-bar:has(> .p-stop:not(.hidden)) > .p-compactar{right:84px}
+  /* parar do desenho (círculo de 26 em --fill-1, quadrado em --label-1), desenhado no fundo cheio
+     do botão de 32×44 do celular. Era caixinha com moldura e quadrado vermelho. */
+  .cmp-bar > .p-stop{right:42px;border-color:transparent;color:var(--label-1);
+    background:radial-gradient(circle,var(--fill-1) 0 12.5px,transparent 13px) var(--bg2)}
   /* lá a fileira rola de lado, então nada precisa ir para o "…" */
   .cmp-bar .p-mais{display:none}
   /* o botão de modelo do celular é só ícone: fica o cérebro, saem as setinhas */

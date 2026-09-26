@@ -1233,9 +1233,13 @@ function claudeMessage(paneId, m) {
   if (m.type === 'control_response') return;
   if (m.type === 'control_request' && m.request && m.request.subtype === 'can_use_tool') {
     const key = 'cl_' + paneId + '_' + m.request_id;
+    /* tool + mudanca: o cartão de autorização do redesenho mostra o antes/depois do que ele vai
+       permitir (README, "Pedido de autorização"). O ACP já mandava; o Claude saía sem diff. É o
+       MESMO dado que o passo de edição usa (dadosDaEdicao), só que antes de ele permitir. */
     const dadosEvento = {
       key, title: 'Claude quer usar: ' + (m.request.tool_name || 'ferramenta'),
       detail: claudeToolArg(m.request.tool_name, m.request.input), reason: '',
+      tool: m.request.tool_name || '', mudanca: dadosDaEdicao(m.request.tool_name, m.request.input),
     };
     // evento guardado igual ao emit: e o que 'pane:estado' devolve pro celular reconectar sem perder a tarja
     pendingApprovals.set(key, { kind: 'claude', paneId, reqId: m.request_id, input: m.request.input, evento: { tipo: 'approval', dados: dadosEvento } });

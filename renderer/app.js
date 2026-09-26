@@ -1925,6 +1925,12 @@ function mostrarContinuar(P) {
   (naLinha ? ult : chat).appendChild(box);
   scroll(P);
 }
+// o chip "Continuar" está dentro da parte da conversa que aparece agora (não rolou para fora)?
+function chipNaVista(P, chip) {
+  const r = chip.getBoundingClientRect();
+  const c = (P.chat || chip.parentElement).getBoundingClientRect();
+  return r.height > 0 && r.bottom > c.top && r.top < c.bottom;
+}
 function limparContinuar(P) {
   const b = P && P.el && $('.p-cont', P.el);
   if (b) b.remove();
@@ -3697,9 +3703,16 @@ async function send(P) {
      no fim de um turno desta conversa, entao chat recem-aberto nao liga o motor sem querer.
      Nao vale durante o ditado (campo vazio ali e falha de captacao, nao pedido), nem com
      anexo ou desenho do quadro pendurado — isso e esquecimento, e o texto ainda vem. */
-  if (!inp.value.trim() && $('.p-cont', P.el) && podeContinuar(P)
+  /* Redesenho: o chip saiu da caixa e mora no fim da conversa. Rolada para cima, ele sai da vista
+     e o Enter vazio mandaria "continue" sem nenhum sinal na tela. Aí o Enter só desce até o chip
+     (ele aparece, e o próximo Enter continua), como era quando o chip ficava sempre à vista. */
+  const chipCont = $('.p-cont', P.el);
+  if (!inp.value.trim() && chipCont && podeContinuar(P)
       && !(P.anexos || []).length && !P.quadroColado
-      && VIVO.P !== P && DITADO.P !== P) inp.value = 'continue';
+      && VIVO.P !== P && DITADO.P !== P) {
+    if (chipNaVista(P, chipCont)) inp.value = 'continue';
+    else chipCont.scrollIntoView({ block: 'nearest' });
+  }
   const text = inp.value.trim();
   if (text || (P.anexos || []).length || P.quadroColado) limparSugestoes(P);
   /* Print colado sozinho TEM de sair. Antes o envio exigia texto: ele colava a imagem, apertava
@@ -4115,7 +4128,10 @@ function partesDoPedido(ev) {
   const titulo = String(ev.title || '');
   // o Claude manda "Claude quer usar: Edit"; o ACP manda o nome da ferramenta em ev.tool
   const ferramenta = ev.tool || (/quer usar:\s*(\S+)/.exec(titulo) || [])[1] || '';
-  const cab = VERBO[ferramenta] || titulo || 'Pedido de autorização';
+  /* O Codex manda "Rodar comando no seu Mac": no Mac é o normal, então o cabeçalho fica o curto do
+     desenho. "na VPS" continua escrito: comando rodando em outra máquina é a exceção que ele
+     precisa ver antes de permitir. */
+  const cab = VERBO[ferramenta] || titulo.replace(/^(Rodar comando) no seu Mac$/, '$1') || 'Pedido de autorização';
   const linhas = String(ev.detail || '').split('\n');
   let caminho = '';
   // o Codex manda "comando\nem /pasta": a pasta desce para a linha de baixo, como no desenho
@@ -4163,6 +4179,18 @@ function pintarHaPedido(P) {
   if (ha) ha.textContent = 'há ' + duracaoCurta(Date.now() - (P.aprovacaoAtual.desde || Date.now()));
 }
 setInterval(() => { for (const P of panes.values()) if (P.aprovacaoAtual) pintarHaPedido(P); }, 1000);
+/* O cartão sobe 8pt UMA vez, quando o pedido chega (.pp-chegando, redesign/caixa.css). A classe sai
+   logo depois: presa no cartão, a animação rodava de novo toda vez que ele voltava para a aba (o
+   painel sai do display:none), e trocar de aba não tem animação. Pedido que chega com a aba no
+   fundo já perdeu a classe quando ele abre a aba: aparece parado, sem animação. */
+function chegadaDoPedido(bar) {
+  if (!bar) return;
+  clearTimeout(bar.chegadaTimer);
+  bar.classList.remove('pp-chegando');
+  void bar.offsetWidth;               // o próximo pedido da fila anima de novo, do começo
+  bar.classList.add('pp-chegando');
+  bar.chegadaTimer = setTimeout(() => bar.classList.remove('pp-chegando'), 400);
+}
 
 function showApproval(P, ev) {
   if (P.aprovacaoAtual) {
@@ -4174,6 +4202,7 @@ function showApproval(P, ev) {
   const pedido = { key: ev.key, desde: Date.now() }; P.aprovacaoAtual = pedido;
   pintarPedido(P, bar, ev);
   bar.classList.remove('hidden');
+  chegadaDoPedido(bar);
   marcarEspera(P);                    // a aba tem de mudar de cara AGORA, mesmo estando no fundo
   const botoes = [$('.pp-yes', bar), $('.pp-no', bar)];
   botoes.forEach(b => { b.disabled = false; });

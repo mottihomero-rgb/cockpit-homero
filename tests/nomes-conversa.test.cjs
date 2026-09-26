@@ -85,13 +85,36 @@ test('a instrução não obriga mais "<tipo> <projeto>" e pede a demanda real', 
   assert.match(main, /require\('\.\/nomes-conversa'\)/);
 });
 
+// 2a versao (26/09): a 1a acabou com o generico mas descrevia o CONTEUDO ("Video de IA com Robo
+// Humanoide", "Video IA com Voces Cantando"). A medida e o exemplo dele: "Criacao de Video com IA".
+test('a instrução pede o trabalho + o objeto, na altura do exemplo dele, e não o detalhe do momento', () => {
+  const p = nomes.PEDIDO_NOME;
+  assert.match(p, /começa pelo trabalho, em substantivo \(Criação de, Edição de/, 'demanda de fazer algo: o trabalho na frente');
+  assert.match(p, /problema ou pergunta como algo está, o título é o objeto e o problema/, 'pergunta e diagnostico: o objeto');
+  assert.match(p, /pergunta como foi feito, ela quer fazer igual: o trabalho é criar aquilo/,
+    '"como eles fizeram?" e o pedido de criar (o caso da Criacao Dupla)');
+  assert.match(p, /continuar valendo quando a conversa avançar/);
+  assert.match(p, /Nada de detalhe de um momento só: quem aparece ou participa da peça, cor, efeito/,
+    'o detalhe do momento deixava o nome valido so para aquela mensagem');
+  assert.match(p, /Abrir, mostrar, mandar, conferir e liberar nunca são o trabalho, nem em substantivo/,
+    '"abre a pasta" virava "Abrir Pasta"/"Abertura da Vinheta"');
+  assert.match(p, /O trabalho sempre vem com o objeto/, 'o generico "<Trabalho> <Cliente>" continua proibido');
+  assert.match(p, /encurte o objeto .* e nunca tire o trabalho/,
+    'o trabalho na frente come letras: sem isto 4% dos nomes passavam de 48 e eram recusados');
+});
+
 test('os exemplos da instrução são de assunto inventado e, se a IA copiar, a validação recusa', () => {
+  assert.ok(nomes.EXEMPLOS.length >= 4);
   for (const e of nomes.EXEMPLOS) {
     assert.ok(nomes.PEDIDO_NOME.includes(e));
     assert.equal(nomes.validarNome(e), '', 'copiou o exemplo: ' + e);
   }
   assert.doesNotMatch(nomes.PEDIDO_NOME, /Adsure|Cockpit|Pedro|Excelência|Criação de Vídeo com IA/,
     'exemplo com o assunto dele vicia: sai o mesmo nome para tudo');
+  // o caso que ele reclamou e de video de IA do Instagram: a palavra nao pode vir da instrucao, so da
+  // conversa. Com ela aqui, todo nome puxaria para "Video" e "IA" (e a avaliacao nao provaria nada).
+  assert.doesNotMatch(nomes.PEDIDO_NOME, /v[íi]deo|\bIA\b|intelig[êe]ncia artificial|instagram|reels|trend|rob[ôo]/i,
+    'assunto do caso dele na instrucao: vicia os nomes');
 });
 
 test('a pasta não vai mais para a IA: com ela, tudo virava "Adsure"', () => {
@@ -175,7 +198,11 @@ test('validação: recusa conversa, várias linhas, nome longo e o genérico do 
     'Alterações Adsure', 'Conserto Cockpit', 'Criação Dupla', 'Conversa', 'ok',
   ]) assert.equal(nomes.validarNome(ruim), '', 'devia recusar: ' + JSON.stringify(ruim));
   for (const n of ['Alfa Beta Gama Delta Épsilon Zeta', 'Relatório de Vendas de Agosto']) assert.notEqual(nomes.validarNome(n), '');
-  for (const n of ['A', 'x'.repeat(49)]) assert.equal(nomes.validarNome(n), '');
+  for (const n of ['A', 'x'.repeat(57)]) assert.equal(nomes.validarNome(n), '');
+  // o trabalho na frente (instrucao de 26/09) soma umas 12 letras: com o teto antigo de 48, 4% dos nomes
+  // eram recusados e a conversa ficava com a frase provisoria
+  assert.equal(nomes.validarNome('Estruturação da Pós-Graduação em Direito Previdenciário'),
+    'Estruturação da Pós-Graduação em Direito Previdenciário');
 });
 
 /* ================= o ritmo ================= */

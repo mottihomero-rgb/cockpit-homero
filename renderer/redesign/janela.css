@@ -269,3 +269,52 @@ body:has(> #novaAba:not(.hidden)) .aba.ativa:hover{background:var(--fill-3);colo
   .aba .aba-dot.busy{animation:none}
   .aba:hover,#abasTopo .aba-mais,#activitybar .act,.fx-acao,.fx-x{transition:none}
 }
+
+/* ---------- uso das IAs no topo (26/09, no jeito do Codenotch) ----------
+   Um anel de 28 por IA logo depois dos botões da janela: trilho em fill-2, o feito em label-2
+   (laranja a partir de 75%, vermelho a partir de 90%), o logo da IA no meio e o número ao lado.
+   Sem arrastar aqui: região de arrastar não recebe o passar do mouse. */
+#usoTopo{flex:none;display:flex;align-items:center;gap:4px;margin-left:-6px;-webkit-app-region:no-drag}
+#usoTopo:empty{display:none}
+.ut-ia{height:32px;display:flex;align-items:center;gap:4px;padding:0 8px 0 2px;border:0;border-radius:8px;
+  background:transparent;color:var(--label-1);cursor:default;transition:background-color var(--dur-fast) ease-out}
+.ut-ia:hover,.ut-ia:focus-visible{background:var(--fill-3);outline:none}
+.ut-anel{position:relative;width:28px;height:28px;flex:none}
+.ut-anel > svg{position:absolute;inset:0;width:28px;height:28px;transform:rotate(-90deg)}
+.ut-anel circle{fill:none;stroke-width:2.5}
+.ut-trilho{stroke:var(--fill-2)}
+.ut-feito{stroke:var(--label-2);stroke-linecap:round;transition:stroke-dasharray var(--dur-slow,.4s) ease-out}
+.ut-ia[data-nivel="medio"] .ut-feito{stroke:var(--status-wait)}
+.ut-ia[data-nivel="alto"] .ut-feito{stroke:var(--status-error)}
+/* .ut-anel na frente: a regra geral .mo-logo (16, do sheets.css) vem depois e ganharia */
+.ut-anel .ut-logo{position:absolute;inset:0;width:28px;height:28px;display:grid;place-items:center}
+.ut-anel .ut-logo svg{width:13px;height:13px}
+.ut-anel .ut-logo .logo-motor > g[mask]{display:none}
+.ut-anel .ut-logo .logo-motor > path{fill:currentColor}
+.ut-pct{font:600 12px/16px var(--font-sans);font-variant-numeric:tabular-nums;color:var(--label-1)}
+.ut-ia[data-nivel="alto"] .ut-pct{color:var(--status-error)}
+
+/* o cartão que abre ao passar o mouse: vidro, raio 16, título com o logo, e por janela de uso
+   a linha "Sessão · Renova …", a barra e "x% usado · y% restante" */
+#usoCartao{position:fixed;z-index:9000;width:268px;padding:12px 14px 13px;border-radius:16px;
+  background:var(--glass-regular);-webkit-backdrop-filter:var(--blur-glass);backdrop-filter:var(--blur-glass);
+  box-shadow:var(--shadow-float),inset 0 0 0 1px var(--glass-edge);color:var(--label-1);pointer-events:auto;
+  animation:menu-abre var(--dur-fast) ease-out;transform-origin:28px 0}
+#usoCartao.hidden{display:none}
+#usoCartao .uc-top{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+#usoCartao .uc-logo{width:16px;height:16px;flex:none}
+#usoCartao .uc-logo svg{width:16px;height:16px}
+#usoCartao .uc-logo .logo-motor > g[mask]{display:none}
+#usoCartao .uc-logo .logo-motor > path{fill:currentColor}
+#usoCartao .uc-tit{flex:1;font:600 14px/18px var(--font-sans)}
+#usoCartao .uc-plano{font:400 11px/14px var(--font-sans);color:var(--label-2)}
+#usoCartao .uc-jan + .uc-jan{margin-top:10px}
+#usoCartao .uc-lin{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font:400 12px/16px var(--font-sans)}
+#usoCartao .uc-renova{color:var(--label-2);font-variant-numeric:tabular-nums}
+#usoCartao .uc-barra{height:5px;margin:6px 0 5px;border-radius:3px;background:var(--fill-2);overflow:hidden}
+#usoCartao .uc-barra span{display:block;height:100%;border-radius:3px;background:var(--label-2)}
+#usoCartao [data-nivel="medio"] .uc-barra span{background:var(--status-wait)}
+#usoCartao [data-nivel="alto"] .uc-barra span{background:var(--status-error)}
+#usoCartao .uc-num{font:400 11px/14px var(--font-sans);color:var(--label-2);font-variant-numeric:tabular-nums}
+#usoCartao .uc-velho{margin-top:10px;font:400 11px/14px var(--font-sans);color:var(--label-3)}
+html[data-theme$="-hc"] #usoCartao,body.sem-vidro #usoCartao{background:var(--bg-elevated)}

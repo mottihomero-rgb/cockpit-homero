@@ -513,7 +513,8 @@ test('a barra de ícones tem UM botão de conversas no lugar dos 4 logos, no Mac
     assert.ok(!/data-view="h(claude|codex|acp|gemini|grok)"/.test(html), arq + ': nada das vistas por motor');
     for (const v of ['torre', 'rotinas', 'settings']) assert.ok(html.includes('data-view="' + v + '"'), arq + ': ' + v + ' continua');
     assert.match(html, /id="histTodas"/);
-    assert.match(html, /id="cvUso"/);
+    // 26/09: no Mac o uso saiu da coluna e foi para o topo da janela (#usoTopo); o celular segue na coluna
+    assert.match(html, arq === 'index.html' ? /id="usoTopo"/ : /id="cvUso"/);
   }
   // atalhos e celular abrem a vista única
   assert.match(pegar('abrirBuscaDeConversa'), /x\.dataset\.view !== 'conversas'/);

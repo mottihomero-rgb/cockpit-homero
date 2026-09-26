@@ -7812,13 +7812,110 @@ const contaLidaEm = porMotor(0);
    A trava de um minuto e so do ABRIR a vista (pintarUsoLateral), senao abrir e fechar a coluna
    viraria uma consulta de limite atras da outra (a Anthropic responde 429). */
 async function pintarContaLateral(engine, forcar) {
-  const cx = $('#cvUso');
-  if (!cx || !MOTORES_VISIVEIS.includes(engine)) return;
+  const cx = $('#cvUso'), topo = $('#usoTopo');
+  if ((!cx && !topo) || !MOTORES_VISIVEIS.includes(engine)) return;
   if (!contaCache[engine] || forcar) {
     contaLidaEm[engine] = Date.now();
     try { contaCache[engine] = await window.api.contaLer(engine); } catch { /* fica o que ja tinha */ }
   }
-  pintarBlocoDeUso(cx, engine, contaCache[engine]);
+  if (cx) pintarBlocoDeUso(cx, engine, contaCache[engine]);
+  if (topo) pintarAnelTopo(topo, engine, contaCache[engine]);
+}
+
+/* ---- uso das IAs no topo da janela (26/09, no jeito do Codenotch) ----
+   No Mac o uso saiu do topo da lista de Conversas (uma IA embaixo da outra ali ficava estranho)
+   e virou um anel por IA ao lado dos botões da janela: o logo no meio, o anel é quanto já usou
+   da sessão (sem sessão, da semana) e o número ao lado. Passar o mouse abre o cartão daquela IA
+   com Sessão e Semana: quando renova, a barra e "x% usado · y% restante". Nada além disso.
+   IA sem conta neste Mac, ou sem número de limite (o Grok), não aparece: vincular mora em
+   Ajustes › Contas, e o resto da conta na janela da Conta. */
+const nivelDeUso = (pct) => pct >= 90 ? 'alto' : pct >= 75 ? 'medio' : '';
+function pctDeUso(j) { return Math.min(100, Math.max(0, Math.round((j && j.pct) || 0))); }
+function pintarAnelTopo(topo, engine, c) {
+  let el = $('.ut-ia[data-motor="' + engine + '"]', topo);
+  if (!c || !c.entrou || !(c.sessao || c.semana) || (MOTORES_OK && MOTORES_OK[engine] === false)) {
+    if (el) el.remove();
+    return;
+  }
+  if (!el) {
+    el = document.createElement('button');
+    el.className = 'ut-ia';
+    el.dataset.motor = engine;
+    const depois = MOTORES_VISIVEIS.slice(MOTORES_VISIVEIS.indexOf(engine) + 1)
+      .map(m => $('.ut-ia[data-motor="' + m + '"]', topo)).find(Boolean);
+    topo.insertBefore(el, depois || null);
+    el.addEventListener('mouseenter', () => abrirCartaoUso(el, engine));
+    el.addEventListener('mouseleave', () => fecharCartaoUso(false));
+    el.addEventListener('focus', () => abrirCartaoUso(el, engine));
+    el.addEventListener('blur', () => fecharCartaoUso(false));
+    // clicar abre a janela da conta (sair, trocar, contas guardadas), como o bloco antigo
+    el.addEventListener('click', () => { fecharCartaoUso(true); abrirContaDaLateral(engine); });
+  }
+  const j = c.sessao || c.semana;
+  const pct = j ? pctDeUso(j) : 0;
+  const R = 11, volta = 2 * Math.PI * R;
+  el.dataset.nivel = j ? nivelDeUso(pct) : '';
+  el.innerHTML = '<span class="ut-anel"><svg viewBox="0 0 28 28" aria-hidden="true">'
+    + '<circle class="ut-trilho" cx="14" cy="14" r="' + R + '"></circle>'
+    + (j ? '<circle class="ut-feito" cx="14" cy="14" r="' + R + '" stroke-dasharray="' + (volta * pct / 100).toFixed(2) + ' ' + volta.toFixed(2) + '"></circle>' : '')
+    + '</svg><span class="ut-logo mo-logo" data-motor="' + engine + '">' + svgMotor(engine) + '</span></span>'
+    + '<span class="ut-pct">' + (j ? pct + '%' : '—') + '</span>';
+  el.setAttribute('aria-label', 'Uso do ' + nomeDoMotor(engine) + (j ? ': ' + pct + '%' : ''));
+  // cartão aberto desta IA: repinta junto, com os números novos
+  const cartao = $('#usoCartao');
+  if (cartao && !cartao.classList.contains('hidden') && cartao.dataset.motor === engine) abrirCartaoUso(el, engine);
+}
+function textoRenova(ms) {
+  if (!(ms > Date.now())) return 'Já renovou';
+  const d = new Date(ms), h = new Date(), dd = (n) => String(n).padStart(2, '0');
+  const hm = dd(d.getHours()) + ':' + dd(d.getMinutes());
+  const dias = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate())
+    - new Date(h.getFullYear(), h.getMonth(), h.getDate())) / 864e5);
+  if (dias === 0) return 'Renova hoje, ' + hm;
+  if (dias === 1) return 'Renova amanhã, ' + hm;
+  if (dias < 7) return 'Renova ' + ['dom.', 'seg.', 'ter.', 'qua.', 'qui.', 'sex.', 'sáb.'][d.getDay()] + ', ' + hm;
+  return 'Renova ' + dd(d.getDate()) + '/' + dd(d.getMonth() + 1) + ', ' + hm;
+}
+let cartaoUsoTimer = 0;
+function abrirCartaoUso(el, engine) {
+  clearTimeout(cartaoUsoTimer);
+  const c = contaCache[engine];
+  if (!c) return;
+  let cartao = $('#usoCartao');
+  if (!cartao) {
+    cartao = document.createElement('div');
+    cartao.id = 'usoCartao';
+    cartao.setAttribute('role', 'tooltip');
+    cartao.addEventListener('mouseenter', () => clearTimeout(cartaoUsoTimer));
+    cartao.addEventListener('mouseleave', () => fecharCartaoUso(false));
+    document.body.appendChild(cartao);
+  }
+  const janela = (rotulo, j) => {
+    if (!j) return '';
+    const pct = pctDeUso(j);
+    return '<div class="uc-jan" data-nivel="' + nivelDeUso(pct) + '"><div class="uc-lin"><span class="uc-rot">' + rotulo + '</span>'
+      + (j.reseta ? '<span class="uc-renova">' + escaparAtributo(textoRenova(j.reseta)) + '</span>' : '') + '</div>'
+      + '<div class="uc-barra"><span style="width:' + pct + '%"></span></div>'
+      + '<div class="uc-num">' + pct + '% usado · ' + (100 - pct) + '% restante</div></div>';
+  };
+  const corpo = janela('Sessão', c.sessao) + janela('Semana', c.semana);
+  cartao.dataset.motor = engine;
+  cartao.innerHTML = '<div class="uc-top"><span class="uc-logo mo-logo" data-motor="' + engine + '">' + svgMotor(engine) + '</span>'
+    + '<span class="uc-tit"></span>' + (c.plano ? '<span class="uc-plano"></span>' : '') + '</div>'
+    + (corpo || '<div class="uc-num">Limite indisponível</div>')
+    + (c.velho ? '<div class="uc-velho">Última leitura ' + escaparAtributo(haQuanto(c.velho)) + '</div>' : '');
+  $('.uc-tit', cartao).textContent = 'Uso do ' + nomeDoMotor(engine);
+  if (c.plano) $('.uc-plano', cartao).textContent = String(c.plano).charAt(0).toUpperCase() + String(c.plano).slice(1);
+  cartao.classList.remove('hidden');
+  // preso embaixo do anel; sem sair da janela pela direita
+  const r = el.getBoundingClientRect(), w = cartao.offsetWidth || 260;
+  cartao.style.top = Math.round(r.bottom + 8) + 'px';
+  cartao.style.left = Math.round(Math.max(8, Math.min(r.left + r.width / 2 - 28, window.innerWidth - w - 8))) + 'px';
+}
+function fecharCartaoUso(agora) {
+  clearTimeout(cartaoUsoTimer);
+  const fim = () => { const c = $('#usoCartao'); if (c) c.classList.add('hidden'); };
+  if (agora) fim(); else cartaoUsoTimer = setTimeout(fim, 160);
 }
 function pintarUsoLateral(forcar) {
   for (const m of MOTORES_VISIVEIS) pintarContaLateral(m, !!forcar && Date.now() - contaLidaEm[m] > 60000);
@@ -11675,10 +11772,13 @@ function abrirBuscaDeConversa() {
   if (campo) setTimeout(() => { campo.focus(); campo.select(); }, 60);
 }
 
-// enquanto a coluna estiver aberta, o limite se atualiza sozinho de 2 em 2 minutos
+// o uso se atualiza sozinho de 2 em 2 minutos: no Mac ele mora no topo da janela, sempre à
+// vista (26/09); no celular continua na coluna, e só vale com ela aberta
 setInterval(() => {
-  if ($('#sidebar').classList.contains('hidden')) return;
-  if (!lateralAberta()) return;
+  if (document.hidden) return;
+  if (!$('#usoTopo') && ($('#sidebar').classList.contains('hidden') || !lateralAberta())) return;
+  // Gemini e Grok não passam pelo lerUso: a conta relê o uso deles, no máximo a cada 5 min
+  for (const eng of ['gemini', 'grok']) if (contaCache[eng] && contaCache[eng].entrou && Date.now() - contaLidaEm[eng] > 300000) pintarContaLateral(eng, true);
   // 25/09: a vista única mostra o uso de todas: relê as duas que têm limite de sessão e semana
   for (const eng of ['claude', 'codex']) if (contaCache[eng]) lerUso(eng, true);   // o lerUso repinta a lateral
 }, 120000);
@@ -12228,6 +12328,8 @@ document.addEventListener('keydown', (e) => {
        até ele abrir outro chat. */
     for (const P of panes.values()) paintEngine(P);
     naPintar();
+    // o uso no topo da janela (Mac) aparece logo ao abrir, sem esperar a coluna de Conversas
+    if ($('#usoTopo')) pintarUsoLateral();
   }).catch(() => {});
   if (!noTelefone) window.api.codexModels().then(ms => {
     if (ms && ms.length) { MODELOS_CODEX = traduzCodex(ms); for (const P of panes.values()) if (P.engine === 'codex') fillModels(P); }

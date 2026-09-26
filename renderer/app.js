@@ -5880,11 +5880,15 @@ function mensagensDele(P) {
    mudando de rumo, o nome acompanha o trabalho principal; a IA recebe o nome atual e o repete se
    ele ainda vale, para o nome nao ficar pulando a cada rodada.
    A instrucao e a validacao moram no nomes-conversa.js (lado do main). */
-const MARCOS_NOME = [1, 2, 4, 7, 12];
+/* 26/09 (pedido dele): muita conversa começa com uma pergunta lateral ("como funciona um
+   computador?") e só depois vira a demanda de verdade ("organizar o Claude no PC"). O nome
+   acompanhava só nos marcos 1, 2, 4, 7 e 12 — entre o 7 e o 12 ficava preso no assunto lateral.
+   Agora a IA revê o nome no fim de TODA resposta até a 15ª, e depois a cada 5. O MANTER segura o
+   nome quando o assunto não mudou (a chamada custa ~2 s do Haiku pelo login, sem cobrança). */
+const NOME_TODA_RESPOSTA_ATE = 15;
 function proximoMarcoNome(feito) {
-  for (const m of MARCOS_NOME) if (m > feito) return m;
-  let m = 22; while (m <= feito) m += 10;
-  return m;
+  if (feito < NOME_TODA_RESPOSTA_ATE) return feito + 1;
+  return (Math.floor(feito / 5) + 1) * 5;
 }
 /* O material: as mensagens dele (a 1a e as 9 mais recentes) e a PRIMEIRA e a ULTIMA resposta do
    assistente (medido com 25 conversas reais: com as duas ultimas, um pedido lateral do fim, tipo

@@ -31,7 +31,7 @@ function renderer() {
   const chamadas = [];
   const c = {
     console, String, Array, Number, Set, Math, Promise,
-    MARCOS_NOME: undefined,
+    NOME_TODA_RESPOSTA_ATE: undefined,
     pintarNome() {}, savePanes() { c.salvou++; }, salvou: 0,
     lateral: false, recargas: [],
     lateralAberta() { return c.lateral; }, loadHist(engine, force) { c.recargas.push({ engine, force }); },
@@ -50,7 +50,7 @@ function renderer() {
     assert.ok(i >= 0, nome + ' existe');
     return app.slice(i + 1, app.indexOf(';\n', i) + 1).replace('const ', 'var ');
   };
-  vm.runInContext(constante('MARCOS_NOME') + '\n' + constante('PALAVRA_DE_LIGACAO') + '\n' + ['mensagensDele',
+  vm.runInContext(constante('NOME_TODA_RESPOSTA_ATE') + '\n' + constante('PALAVRA_DE_LIGACAO') + '\n' + ['mensagensDele',
     'proximoMarcoNome', 'materialDoNome', 'nomearCurto', 'trocarNome', 'palavrasDoNome', 'mesmoAssunto',
     'nomearNoFimDoTurno', 'assumirNome', 'lembrarDonoDoNome', 'salvarNomeCurto', 'buscarNome'].map(n => func(n)).join('\n'), c);
   return { c, chamadas };
@@ -189,7 +189,7 @@ test('validação: recusa conversa, várias linhas, nome longo e o vago; aceita 
 });
 
 /* ================= o ritmo ================= */
-test('ritmo: IA na hora da 1ª mensagem e depois no FIM dos turnos 1, 2, 4, 7 e 12 (e a cada 10)', async () => {
+test('ritmo: IA na hora da 1ª mensagem, no FIM de toda resposta até a 15ª e depois a cada 5', async () => {
   const r = renderer();
   const P = painel();
   primeiraMensagem(r, P, 'Esse vídeo de IA é trend. Como eles fizeram?');
@@ -202,7 +202,8 @@ test('ritmo: IA na hora da 1ª mensagem e depois no FIM dos turnos 1, 2, 4, 7 e 
     turno(r, P, t === 1 ? undefined : 'pedido ' + t, 'resposta ' + t);
     if (r.chamadas.length > antes) { turnosQueChamaram.push(t); r.chamadas.at(-1).d.resolve('Nome ' + t); await esperar(); }
   }
-  assert.deepEqual(turnosQueChamaram, [1, 2, 4, 7, 12, 22]);
+  assert.deepEqual(turnosQueChamaram, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20],
+    'a conversa que começa com pergunta lateral troca de nome assim que a demanda de verdade aparece');
   const fim1 = r.chamadas[1].material;
   assert.deepEqual(fim1.respostas, ['resposta 1'], 'no fim do 1o turno a IA ja ve a resposta do assistente');
   assert.equal(fim1.atual, 'Vídeo de IA em Trend', 'o nome atual vai junto para ser mantido se ainda vale');
@@ -468,9 +469,7 @@ test('conversa com nome NOVO da IA aberta da lista: a IA continua acompanhando d
   r.c.window.api.donoNome = async () => 'ia';
   await r.c.lembrarDonoDoNome(P, 's1', P.titulo, 0);
   turno(r, P, 'pedido 6');
-  assert.equal(r.chamadas.length, 0, 'marco 5 ja passou: a proxima olhada e no 7');
-  turno(r, P, 'pedido 7');
-  assert.equal(r.chamadas.length, 1);
+  assert.equal(r.chamadas.length, 1, '26/09: até a 15a resposta a IA revê o nome em toda resposta');
   assert.equal(r.chamadas[0].material.atual, 'Mapa dos Robôs do Mac', 'o nome da IA vai como atual, para ser mantido');
 });
 
@@ -516,7 +515,7 @@ test('celular: o atualizar() de quando ele volta ao app não tira o dono do nome
     if (r.chamadas.length > antes) { turnos.push(t); r.chamadas.at(-1).d.resolve('Vídeo de IA do Instagram'); await esperar(); }
     voltarAoApp(P);
   }
-  assert.deepEqual(turnos, [1, 2, 4, 7, 12], 'depois da 1a volta ao app nenhum marco chamava a IA');
+  assert.deepEqual(turnos, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 'depois da 1a volta ao app nenhum marco chamava a IA');
 });
 
 // achados 3 e 8: título legítimo recusado para sempre
@@ -606,18 +605,22 @@ test('estabilidade: pedido lateral de uma vez não toma o nome; trabalho novo co
   const P = painel();
   primeiraMensagem(r, P, 'organiza o mapa dos robôs do Mac');
   r.chamadas[0].d.resolve('Mapa dos Robôs do Mac'); await esperar();
-  const respostas = { 1: 'Mapa dos Robôs do Mac', 2: 'Transferência de Vídeos para SSD', 4: 'Mapa dos Robôs do Mac',
-    7: 'Ativação de Esforço Máximo no Cockpit', 12: 'Transferência de Vídeos para SSD', 22: 'Transferência dos Vídeos pro SSD' };
+  // 26/09: revisão em toda resposta até a 15a; os laterais caem entre respostas do assunto principal
+  const respostas = { 1: 'Mapa dos Robôs do Mac', 2: 'Transferência de Vídeos para SSD', 3: 'Mapa dos Robôs do Mac',
+    4: 'Mapa dos Robôs do Mac', 5: 'Mapa dos Robôs do Mac', 6: 'Mapa dos Robôs do Mac', 7: 'Ativação de Esforço Máximo no Cockpit',
+    8: 'Mapa dos Robôs do Mac', 9: 'Mapa dos Robôs do Mac', 10: 'Mapa dos Robôs do Mac', 11: 'Mapa dos Robôs do Mac',
+    12: 'Transferência de Vídeos para SSD', 13: 'Transferência dos Vídeos pro SSD', 14: 'Transferência dos Vídeos pro SSD',
+    15: 'Transferência dos Vídeos pro SSD', 20: 'Transferência dos Vídeos pro SSD' };
   const nomeDepois = {};
-  for (let t = 1; t <= 22; t++) {
+  for (let t = 1; t <= 20; t++) {
     const antes = r.chamadas.length;
     turno(r, P, t === 1 ? undefined : 'pedido ' + t, 'resposta ' + t);
     if (r.chamadas.length > antes) { r.chamadas.at(-1).d.resolve(respostas[t]); await esperar(); nomeDepois[t] = P.titulo; }
   }
   assert.equal(nomeDepois[2], 'Mapa dos Robôs do Mac', 'o pedido lateral do fim tomava o nome');
   assert.equal(nomeDepois[7], 'Mapa dos Robôs do Mac');
-  assert.equal(nomeDepois[12], 'Mapa dos Robôs do Mac', 'dois laterais diferentes seguidos nao confirmam nada');
-  assert.equal(nomeDepois[22], 'Transferência dos Vídeos pro SSD', 'o mesmo assunto novo em 2 marcos seguidos: o trabalho mudou');
+  assert.equal(nomeDepois[12], 'Mapa dos Robôs do Mac', 'um lateral sozinho nao confirma nada');
+  assert.equal(nomeDepois[13], 'Transferência dos Vídeos pro SSD', 'o mesmo assunto novo em 2 revisões seguidas: o trabalho mudou');
 });
 
 test('estabilidade: a IA pode responder MANTER, e o main devolve o nome atual', async () => {

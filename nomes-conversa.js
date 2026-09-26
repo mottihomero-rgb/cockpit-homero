@@ -6,46 +6,91 @@
  * vezes, "Criacao Adsure", "Analise Pedro" e "Criacao Dupla" para uma conversa sobre como fazer
  * um video de IA que viralizou. Nome que serve para qualquer conversa nao acha nenhuma.
  *
- * Agora o nome diz a DEMANDA REAL, como uma pessoa daria titulo ao trabalho, e a IA ve tambem o
- * comeco das respostas do assistente — e o que conta o que o pedido virou ("como eles fizeram?"
- * so vira "Trend do COLORS Fake no Instagram" depois que o assistente abriu o link).
+ * Agora o nome diz a DEMANDA REAL, como uma pessoa daria titulo ao trabalho: o trabalho e o objeto
+ * ("Criacao de Video com IA", o exemplo dele). A IA ve tambem o comeco das respostas do assistente —
+ * e o que conta o que o pedido virou ("como eles fizeram?" so mostra que o video e de IA depois que o
+ * assistente abriu o link).
  *
  * Este arquivo e puro (sem Electron) de proposito: o main.js usa para chamar a IA, os testes
  * rodam direto no node e o script que renomeia as conversas antigas usa o MESMO pedido e a
  * MESMA validacao que o app. */
 
-/* Os exemplos sao de assuntos INVENTADOS, longe do trabalho dele (restaurante, clinica,
+/* Os exemplos sao de assuntos INVENTADOS, longe do trabalho dele (loja, restaurante, clinica,
    vendedores): ensinam o jeito de pensar sem dar palavra pronta para copiar. A versao anterior dava
-   exemplo do proprio formato e saiu "Alteracoes" seis vezes. Se a IA ainda assim devolver o titulo de
-   um exemplo, a validacao recusa (EXEMPLOS). */
-const EXEMPLOS = ['Cardápio da Semana do Restaurante', 'Planilha de Comissões de Agosto', 'Site da Clínica Fora do Ar'];
+   exemplo do proprio formato e saiu "Alteracoes" seis vezes. Nenhum exemplo fala de video, de IA ou
+   de rede social: o caso que ele reclamou e desse assunto, e exemplo dele viciaria todos os nomes.
+   Se a IA ainda assim devolver o titulo de um exemplo, a validacao recusa (EXEMPLOS). */
+const EXEMPLOS = ['Montagem de Vitrine da Loja', 'Criação do Cardápio Semanal', 'Planilha de Comissões dos Vendedores',
+  'Site da Clínica Fora do Ar', 'Reservas do Hotel no Feriado', 'Prospecção da Academia do Paulo',
+  'Cadastro da Cooperativa de Leite'];
+/* A 2a versao (26/09) calibra a ALTURA do nome. A 1a acabou com o generico ("Alteracoes Adsure"),
+   mas errou para o outro lado: descrevia o conteudo em vez da demanda ("Video de IA com Robo
+   Humanoide", "Video IA com Voces Cantando") e o nome valia so para aquele momento. O exemplo dele
+   e a medida: "Criacao de Video com IA" — o trabalho e o objeto, como ele chamaria numa lista de
+   tarefas; nem "Criacao Dupla" (sem objeto) nem o detalhe de quem aparece no video.
+   Medido com as mesmas 25 conversas reais, 5 rodadas (o Haiku varia muito de uma rodada para outra):
+   de 19 a 21 dos 23 nomes no espirito da demanda e 17 ou 18 comecando pelo trabalho (a 1a versao: 17 a
+   19 e so 5 a 7), e a conversa do exemplo dele comecou por "Criacao de Video" nas 5 (na tela do app,
+   "Criacao de Video com IA" do comeco ao fim). A 1a linha nao diz mais "assistente
+   de IA": a palavra IA tinha que vir da conversa, nao da instrucao. Ver nomes/avaliacao-v2.md da
+   entrega de 26/09. */
 const PEDIDO_NOME = [
-  'Você dá título a conversas de trabalho entre uma pessoa e um assistente de IA. O título aparece numa lista '
+  'Você dá título a conversas de trabalho entre uma pessoa e um assistente. O título aparece numa lista '
   + 'com dezenas de outras conversas e serve para a pessoa achar esta de relance.',
-  'O título diz a DEMANDA REAL: o resultado que a pessoa quer desta conversa, do jeito que ela mesma chamaria '
-  + 'esse trabalho.',
-  '- De 2 a 5 palavras e no máximo 40 letras, em português do Brasil, com acento. Curto vence completo.',
-  '- Português natural, com preposição quando precisa (de, do, da, com, para, no). Maiúscula no começo das '
-  + 'palavras principais e preposição em minúscula.',
-  '- Específico: diga O QUE está sendo feito e SOBRE O QUÊ (o assunto, a peça, o problema). Duas conversas '
+  'O título diz a DEMANDA REAL: o trabalho que a pessoa quer desta conversa, do jeito que ela mesma o '
+  + 'anotaria numa lista de tarefas.',
+  '- De 2 a 5 palavras e no máximo 40 letras, em português do Brasil, com acento. Curto vence completo: se '
+  + 'passar de 40 letras, encurte o objeto (a forma curta que a pessoa usa, sem o nome completo por extenso) e '
+  + 'nunca tire o trabalho.',
+  '- Português natural, com as preposições entre as palavras (de, do, da, com, para, no): "Cardápio do '
+  + 'Restaurante", nunca "Cardápio Restaurante". Maiúscula no começo das palavras principais e preposição em '
+  + 'minúscula.',
+  '- Quando a pessoa quer que algo seja feito, o título começa pelo trabalho, em substantivo (Criação de, '
+  + 'Edição de, Montagem de, Conserto do, Análise de, Pesquisa de, Levantamento de, Transcrição de, '
+  + 'Configuração de, Publicação de, Relatório de, Resumo de), e segue com o objeto. Quando ela conta um problema ou pergunta como algo está, o título é o '
+  + 'objeto e o problema do jeito que ela contou, sem o trabalho na frente.',
+  '- Abrir, mostrar, mandar, conferir e liberar nunca são o trabalho, nem em substantivo (Abertura de, Envio de); '
+  + 'rodar e fazer também não (Execução de): diga o que está sendo feito. '
+  + 'Se a pessoa só pediu isso, o título é o objeto em que o trabalho está sendo feito, que a resposta revela.',
+  '- Quando a pessoa mostra algo pronto de outra pessoa e pergunta como foi feito, ela quer fazer igual: o '
+  + 'trabalho é criar aquilo.',
+  '- O objeto na altura certa: o tipo da peça, do sistema ou do problema, mais o que o separa de forma '
+  + 'duradoura: para quem é (o cliente, o produto, o curso) ou a técnica que define o trabalho. Nome de método '
+  + 'ou de ferramenta interna diz menos que o cliente; "do Projeto", "Geral" e "Hoje" não separam nada. Duas conversas '
   + 'diferentes do mesmo cliente têm que ganhar títulos diferentes.',
-  '- Nome de cliente, produto ou sistema só entra se fizer parte da demanda e couber.',
+  '- O título tem que continuar valendo quando a conversa avançar: o título certo para a 1ª mensagem continua '
+  + 'certo depois de dez mensagens sobre o mesmo trabalho. Nada de detalhe de um momento só: quem aparece ou '
+  + 'participa da peça, cor, efeito, estilo, um trecho, "vocês", o passo de agora, a data. Onde procurar (um '
+  + 'grupo, uma pasta, outra conversa) também não é o assunto.',
+  '- Nome de cliente, produto ou sistema só entra se fizer parte da demanda e couber. Nome de pessoa só entra '
+  + 'quando ela é o cliente do trabalho, nunca por ter mandado a mensagem ou o pedido.',
   '- Proibido título genérico, que serviria para qualquer conversa: nada de "Alterações <nome>", '
   + '"Conserto <nome>", "Criação <nome>", "Ajustes <nome>" ou "Análise <nome>" em que <nome> é só o cliente '
-  + 'ou o sistema.',
+  + 'ou o sistema. O trabalho sempre vem com o objeto.',
   '- O título é do trabalho PRINCIPAL: o que ocupa a conversa e ainda está valendo. A primeira mensagem conta '
   + 'enquanto ainda for o assunto; as mais recentes mostram para onde o trabalho foi. O último pedido só vira '
   + 'título quando é um trabalho novo que tomou o lugar do anterior. Pedido rápido e lateral (abrir um '
-  + 'arquivo, responder "sim", conferir um número, liberar um acesso) nunca vira título.',
+  + 'arquivo, responder "sim", conferir um número, liberar ou reativar um acesso ou um login, perguntar o custo) nunca vira '
+  + 'título, nem quando é o último: um pedido de uma mensagem só não toma o lugar de um trabalho que ocupou '
+  + 'várias.',
   '- As respostas do assistente servem só para entender o que foi pedido. O título é da demanda da pessoa, '
-  + 'não do que o assistente respondeu.',
+  + 'não do que o assistente respondeu nem do resultado ("em dia", "resolvido", "no ar").',
   '- Quando a pessoa manda um link, um print ou um arquivo, o título diz o que ela quer com ele.',
   'Exemplos do jeito de pensar (assuntos inventados; nunca use estas palavras):',
+  '- Pedidos "1. essa vitrine da loja do shopping ficou linda, como montaram? 2. faz uma igual na minha loja, '
+  + 'com as botas vermelhas na frente e a vendedora Carla no meio" → ' + EXEMPLOS[0]
+  + ' (e não "Vitrine com Botas Vermelhas" nem "Montagem de Vitrine com a Carla")',
   '- Pedidos "1. monta o cardápio da semana do restaurante 2. troca o frango de quarta por peixe 3. manda '
-  + 'pro meu e-mail" → ' + EXEMPLOS[0] + ' (mandar por e-mail é lateral)',
-  '- Pedido "abre o arquivo", resposta "Abri a planilha de comissões de agosto dos 12 vendedores" → ' + EXEMPLOS[1],
-  '- Pedido "o site da clínica caiu, vê o que houve", resposta "O domínio venceu ontem" → ' + EXEMPLOS[2],
-  '- Ruins: "Alterações Restaurante", "Abrir Arquivo", "Conserto Site".',
+  + 'pro meu e-mail" → ' + EXEMPLOS[1] + ' (o peixe é detalhe; mandar por e-mail é lateral)',
+  '- Pedidos "1. roda o roteiro Alfa de prospecção 2. é para a academia do Paulo" → ' + EXEMPLOS[5]
+  + ' (e não "Execução do Roteiro Alfa")',
+  '- Pedido "cadastra no sistema a Cooperativa Agroindustrial dos Produtores de Leite do Vale do Ribeira" → '
+  + EXEMPLOS[6] + ' (o nome comprido encurtado)',
+  '- Pedido "abre o arquivo", resposta "Abri a planilha de comissões de agosto dos 12 vendedores" → ' + EXEMPLOS[2],
+  '- Pedido "o site da clínica caiu, vê o que houve", resposta "O domínio venceu ontem" → ' + EXEMPLOS[3],
+  '- Pedido "como estão as reservas do hotel para o feriado?", resposta "Estão em dia, 80% ocupado" → '
+  + EXEMPLOS[4] + ' (e não "Hotel com Reservas em Dia")',
+  '- Ruins: "Alterações Restaurante", "Abrir Arquivo", "Conserto Site", "Peixe na Quarta", "Relatório do Projeto".',
   '- Quando vier o título atual e o trabalho principal continua o mesmo, responda só MANTER: trocar o nome de '
   + 'uma conversa que não mudou de assunto faz a pessoa perder a conversa na lista.',
   'Responda SÓ o título (ou MANTER), numa linha: sem aspas, sem ponto final, sem explicação.',
@@ -223,7 +268,10 @@ function validarNome(saida) {
   // Vivo" tem 7 pedacos e e curto); o teto de caracteres logo abaixo segura o tamanho
   const palavras = s.split(' ').filter(p => !LIGACAO.has(p.toLowerCase()));
   if (palavras.length < 1 || palavras.length > 6) return '';
-  if (s.length < 3 || s.length > 48) return '';
+  // 56 e nao mais 48 (26/09): o trabalho na frente ("Estruturacao da", "Levantamento de") soma umas 12
+  // letras, e com 48 cerca de 4% das respostas da instrucao nova eram recusadas — a conversa ficava com a
+  // frase provisoria. A tela corta com reticencias; o que passa de 56 continua recusado.
+  if (s.length < 3 || s.length > 56) return '';
   return s.charAt(0).toLocaleUpperCase('pt-BR') + s.slice(1);
 }
 

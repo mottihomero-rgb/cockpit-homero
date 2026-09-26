@@ -4705,7 +4705,8 @@ function createWindow() {
        14x14 (medido numa NSWindow escondida em 26/09: 9,9 / 32,9 / 55,9, todos 14x14), com a
        bolinha de 12 no meio: x=19 poe a bolinha em 20, e y=19 poe o centro em 19+7 = 26, o meio
        dos 52. O passo entre os tres (23) e do sistema: o trafficLightPosition so move o primeiro. */
-    trafficLightPosition: { x: 19, y: 19 },
+    // 26/09: a barra do topo ficou com 40 (era 52): centro dos semáforos em 13 + 7 = 20
+    trafficLightPosition: { x: 19, y: 13 },
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, spellcheck: false },
   });
   win.loadFile(path.join(__dirname, 'renderer/index.html'));

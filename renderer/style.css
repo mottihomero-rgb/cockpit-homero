@@ -1082,7 +1082,8 @@ html[data-theme^="light"] .ef-thumb{background:var(--puxador);border-color:var(-
    redesenho (25/09); o recuo de 92 = semaforos a x=20 + 60 deles + 12 de folga. O
    index-web.html ainda tem a barra de titulo e redefine tudo no celular.css.
    O desenho da barra, das abas e dos botoes + mora no redesign/janela.css. */
-:root{--topo-altura:52px;--veu-topo:52px;--recuo-semaforo:92px}
+/* 26/09: 52 → 40 (pedido dele: a barra estava "brutona, grossa"); tudo nela encolheu junto */
+:root{--topo-altura:40px;--veu-topo:40px;--recuo-semaforo:92px}
 
 /* o shell perde a altura do que fica em cima dele. É a conta de reserva: o janela.css põe o
    body em coluna flex (a faixa de avisos entra no fluxo) e o #shell fica com o que sobra. */

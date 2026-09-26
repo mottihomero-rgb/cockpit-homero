@@ -24,7 +24,7 @@
 body:has(> #shell){display:flex;flex-direction:column}
 #titlebar{order:-3;flex:none}
 #abasTopo{order:-2}
-#titlebar.hidden ~ #abasTopo{height:52px}
+#titlebar.hidden ~ #abasTopo{height:40px}
 #faixaAvisos{order:-1;flex:none}
 #shell{flex:1 1 auto;min-height:0;height:auto}
 
@@ -33,7 +33,7 @@ body:has(> #shell){display:flex;flex-direction:column}
    Recuo da esquerda = semáforos (x=20, 60 de largura) + 12; no celular é 10 (sem semáforo).
    As duas folgas (.abas-gap) crescem por igual e deixam as abas + o "+" no meio do espaço entre
    o recuo e o "+ Chat" — a mesma conta do design (área do meio de 92 a 1366 numa janela de 1470). */
-#abasTopo{height:50px;flex:none;display:flex;align-items:center;gap:0;
+#abasTopo{height:40px;flex:none;display:flex;align-items:center;gap:0;
   padding:0 12px 0 var(--recuo-semaforo);background:var(--bg-window);border-bottom:0;
   -webkit-app-region:drag}
 #abasLista{flex:0 1 auto;min-width:0;display:flex;align-items:center;gap:2px;
@@ -65,9 +65,9 @@ body:has(> #shell){display:flex;flex-direction:column}
    Trocar de aba é instantâneo (README, "Movimento"): a transição de 120ms só vale para o hover
    de uma aba que não está aberta. */
 .aba{position:relative;flex:0 1 auto;display:flex;flex-direction:row;align-items:center;
-  justify-content:flex-start;gap:7px;max-width:240px;height:28px;padding:0 12px;
+  justify-content:flex-start;gap:6px;max-width:240px;height:24px;padding:0 10px;
   border:0;border-radius:var(--r-capsule);background:transparent;box-shadow:none;
-  color:var(--label-2);font:500 13px/16px var(--font-sans);white-space:nowrap;cursor:default;
+  color:var(--label-2);font:500 12px/15px var(--font-sans);white-space:nowrap;cursor:default;
   -webkit-app-region:no-drag}
 .aba:hover{background:var(--fill-3);color:var(--label-1);
   transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
@@ -80,7 +80,7 @@ body:has(> #shell){display:flex;flex-direction:column}
 .aba-proj{flex:0 1 auto;min-width:0;max-width:170px;overflow:hidden;text-overflow:ellipsis;
   font:inherit;text-align:left}
 /* contador de chats: só o número, em --label-3, peso 400 e tabular (não dança quando muda) */
-.aba .aba-tit{flex:none;padding:0;max-width:none;color:var(--label-3);font:400 13px/16px var(--font-sans);
+.aba .aba-tit{flex:none;padding:0;max-width:none;color:var(--label-3);font:400 12px/15px var(--font-sans);
   font-variant-numeric:tabular-nums}
 .aba .aba-tit:empty{display:none}
 .aba.vps .aba-tit{color:var(--label-3)}
@@ -123,9 +123,9 @@ body:has(> #shell){display:flex;flex-direction:column}
    Os 19 da direita são os 7 do vão + o contador vazio da cápsula do design (89,4 de largura).
    É só desenho: some quando a sheet fecha, com ou sem aba criada. Fica fora do #abasLista de
    propósito — o arrastar e o clique procuram '#abasTopo .aba' e não podem achá-la. */
-.aba-provisoria{display:none;flex:none;align-items:center;height:28px;margin-left:2px;padding:0 19px 0 12px;
+.aba-provisoria{display:none;flex:none;align-items:center;height:24px;margin-left:2px;padding:0 17px 0 10px;
   border-radius:var(--r-capsule);background:var(--fill-1);color:var(--label-1);
-  font:600 13px/16px var(--font-sans);white-space:nowrap;-webkit-app-region:no-drag}
+  font:600 12px/15px var(--font-sans);white-space:nowrap;-webkit-app-region:no-drag}
 body:has(> #novaAba:not(.hidden)) .aba-provisoria{display:flex}
 body:has(> #novaAba:not(.hidden)) .aba.ativa{flex-shrink:1;background:transparent;color:var(--label-2);font-weight:500}
 body:has(> #novaAba:not(.hidden)) .aba.ativa:hover{background:var(--fill-3);color:var(--label-1)}
@@ -134,17 +134,17 @@ body:has(> #novaAba:not(.hidden)) .aba.ativa:hover{background:var(--fill-3);colo
    Os dois são o botão "Sem moldura" da folha: --label-2 parado, hover --fill-3, pressionado
    --fill-2. O "+ Chat" tem 60 de conteúdo encostado à direita, o mesmo peso visual dos
    semáforos do outro lado; a folga de 12 antes dele é a do design. */
-#abasTopo .aba-mais{flex:none;display:grid;place-items:center;width:28px;height:28px;
+#abasTopo .aba-mais{flex:none;display:grid;place-items:center;width:24px;height:24px;
   margin-left:6px;padding:0;border:0;border-radius:var(--r-capsule);background:transparent;
   color:var(--label-2);cursor:default;-webkit-app-region:no-drag;
   transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
-#abasTopo .aba-mais .ic{width:16px;height:16px}
+#abasTopo .aba-mais .ic{width:14px;height:14px}
 #abasTopo .aba-mais:hover{background:var(--fill-3);color:var(--label-1)}
 #abasTopo .aba-mais:active{background:var(--fill-2);color:var(--label-1)}
 #abasTopo .aba-mais:focus-visible{outline:none;box-shadow:var(--anel-foco)}
 #abasTopo .aba-mais.canto{display:flex;align-items:center;justify-content:flex-end;gap:6px;
-  width:80px;margin-left:12px;padding:0 10px;font:400 13px/16px var(--font-sans)}
-#abasTopo .aba-mais.canto .ic{width:14px;height:14px}
+  width:auto;margin-left:12px;padding:0 8px;font:400 12px/15px var(--font-sans)}
+#abasTopo .aba-mais.canto .ic{width:12px;height:12px}
 .am-txt{font:inherit}
 
 /* ---------- arrastar aba (e chat) ----------
@@ -276,11 +276,11 @@ body:has(> #novaAba:not(.hidden)) .aba.ativa:hover{background:var(--fill-3);colo
    Sem arrastar aqui: região de arrastar não recebe o passar do mouse. */
 #usoTopo{flex:none;display:flex;align-items:center;gap:4px;margin-left:-6px;-webkit-app-region:no-drag}
 #usoTopo:empty{display:none}
-.ut-ia{height:32px;display:flex;align-items:center;gap:4px;padding:0 8px 0 2px;border:0;border-radius:8px;
+.ut-ia{height:26px;display:flex;align-items:center;gap:3px;padding:0 6px 0 2px;border:0;border-radius:7px;
   background:transparent;color:var(--label-1);cursor:default;transition:background-color var(--dur-fast) ease-out}
 .ut-ia:hover,.ut-ia:focus-visible{background:var(--fill-3);outline:none}
-.ut-anel{position:relative;width:28px;height:28px;flex:none}
-.ut-anel > svg{position:absolute;inset:0;width:28px;height:28px;transform:rotate(-90deg)}
+.ut-anel{position:relative;width:22px;height:22px;flex:none}
+.ut-anel > svg{position:absolute;inset:0;width:22px;height:22px;transform:rotate(-90deg)}
 .ut-anel circle{fill:none;stroke-width:2.5}
 .ut-trilho{stroke:var(--fill-2)}
 .ut-feito{stroke:var(--label-2);stroke-linecap:round;transition:stroke-dasharray var(--dur-slow,.4s) ease-out,stroke var(--dur-fast) ease-out}
@@ -289,17 +289,17 @@ body:has(> #novaAba:not(.hidden)) .aba.ativa:hover{background:var(--fill-3);colo
 .ut-ia:is(:hover,:focus-visible)[data-nivel="medio"] .ut-feito{stroke:var(--status-wait)}
 .ut-ia:is(:hover,:focus-visible)[data-nivel="alto"] .ut-feito{stroke:var(--status-error)}
 /* .ut-anel na frente: a regra geral .mo-logo (16, do sheets.css) vem depois e ganharia */
-.ut-anel .ut-logo{position:absolute;inset:0;width:28px;height:28px;display:grid;place-items:center;
+.ut-anel .ut-logo{position:absolute;inset:0;width:22px;height:22px;display:grid;place-items:center;
   color:var(--label-2);transition:color var(--dur-fast) ease-out}
 .ut-ia:is(:hover,:focus-visible) .ut-anel .ut-logo{color:var(--label-1)}
 .ut-ia[data-motor="claude"]:is(:hover,:focus-visible) .ut-anel .ut-logo{color:var(--claude)}
 .ut-ia[data-motor="codex"]:is(:hover,:focus-visible) .ut-anel .ut-logo{color:var(--codex)}
 .ut-ia[data-motor="gemini"]:is(:hover,:focus-visible) .ut-anel .ut-logo{color:var(--gemini)}
 .ut-ia[data-motor="grok"]:is(:hover,:focus-visible) .ut-anel .ut-logo{color:var(--grok)}
-.ut-anel .ut-logo svg{width:13px;height:13px}
+.ut-anel .ut-logo svg{width:11px;height:11px}
 .ut-anel .ut-logo .logo-motor > g[mask]{display:none}
 .ut-anel .ut-logo .logo-motor > path{fill:currentColor}
-.ut-pct{font:600 12px/16px var(--font-sans);font-variant-numeric:tabular-nums;color:var(--label-2);
+.ut-pct{font:600 11px/14px var(--font-sans);font-variant-numeric:tabular-nums;color:var(--label-2);
   transition:color var(--dur-fast) ease-out}
 .ut-ia:is(:hover,:focus-visible) .ut-pct{color:var(--label-1)}
 .ut-ia:is(:hover,:focus-visible)[data-nivel="alto"] .ut-pct{color:var(--status-error)}

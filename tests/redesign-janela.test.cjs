@@ -15,15 +15,15 @@ const ler = (f) => fs.readFileSync(path.join(raiz, f), 'utf8');
 const css = ler('renderer/redesign/janela.css');
 const HTMLS = ['renderer/index.html', 'renderer/index-web.html'];
 
-test('os semáforos caem no meio da barra do topo de 52', () => {
+test('os semáforos caem no meio da barra do topo de 40 (era 52: ele achou grossa)', () => {
   const m = ler('main.js').match(/trafficLightPosition:\s*\{\s*x:\s*(\d+),\s*y:\s*(\d+)\s*\}/);
   assert.ok(m, 'trafficLightPosition sumiu do main.js');
   // o Electron põe o TOPO do quadro do botão em y; no macOS 26 o quadro mede 14×14 (medido numa
   // NSWindow escondida), então o centro fica em y + 7
-  assert.equal(Number(m[2]) + 7, 52 / 2, 'o centro dos semáforos saiu do meio da barra');
+  assert.equal(Number(m[2]) + 7, 40 / 2, 'o centro dos semáforos saiu do meio da barra');
   assert.equal(Number(m[1]) + 1, 20, 'a bolinha de 12 (no meio do quadro de 14) sai de x=20');
-  assert.match(ler('renderer/style.css'), /:root\{--topo-altura:52px;--veu-topo:52px;/);
-  assert.match(css, /#titlebar\.hidden ~ #abasTopo\{[^}]*height:52px/);
+  assert.match(ler('renderer/style.css'), /:root\{--topo-altura:40px;--veu-topo:40px;/);
+  assert.match(css, /#titlebar\.hidden ~ #abasTopo\{[^}]*height:40px/);
 });
 
 test('a aba é cápsula: sinal, nome, contador e ×, sem o cartão de duas linhas', () => {
@@ -81,7 +81,7 @@ test('a faixa de aviso empurra os chats no Mac e no celular (não cobre o cabeç
   assert.doesNotMatch(ler('renderer/celular.css'), /#faixaAvisos\{[^}]*position:fixed/);
   // e o index.html continua escondendo a barra de título (a altura de 52 depende disso)
   assert.match(ler('renderer/index.html'), /<div id="titlebar" class="hidden">/);
-  assert.match(css, /#titlebar\.hidden ~ #abasTopo\{height:52px\}/);
+  assert.match(css, /#titlebar\.hidden ~ #abasTopo\{height:40px\}/);
 });
 
 test('texto da tarja em pedaços: nome de arquivo em mono, tudo por textContent', () => {

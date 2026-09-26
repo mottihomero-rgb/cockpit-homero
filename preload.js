@@ -76,6 +76,7 @@ contextBridge.exposeInMainWorld('api', {
   termLinhaShell: (cwd) => ipcRenderer.invoke('term:linhaShell', cwd),
   renomear: (o) => ipcRenderer.invoke('sessao:renomear', o),
   nomeCurto: (o) => ipcRenderer.invoke('sessao:nomeCurto', o),
+  donoNome: (o) => ipcRenderer.invoke('sessao:donoNome', o),
   // apagar conversa: manda para a Lixeira. Fora do mapa HANDLERS de proposito (R1) — o iPhone
   // nao pode apagar arquivo do Mac pelo Wi-Fi
   apagarSessao: (o) => ipcRenderer.invoke('sessao:apagar', o),

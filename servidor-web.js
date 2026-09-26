@@ -27,7 +27,7 @@ const PERMITIDOS = new Set([
   'codex:models', 'codex:api-status', 'codex:apps',
   'sessions:claude', 'sessions:codex', 'sessions:cli', 'sessions:acp', 'sessions:history',
   'sessions:titulo', 'sessions:buscar', 'sessions:claudeRemoto', 'sessions:historyRemoto',
-  'sessao:renomear', 'sessao:nomeCurto', 'sessao:fork',
+  'sessao:renomear', 'sessao:nomeCurto', 'sessao:donoNome', 'sessao:fork',
   // a costura das conversas quando se troca de IA (ler e gravar; apagar so no Mac)
   'ligacoes:ler', 'ligacoes:gravar',
   'acp:config', 'skills:list', 'prompts:ler', 'prompts:salvar',

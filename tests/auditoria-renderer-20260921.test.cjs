@@ -43,7 +43,7 @@ function context(names, extras = {}) {
     'pararTrabalho', 'limparPassos', 'limparContinuar', 'trabalhando', 'subirNaLista', 'comecarTurno',
     'marcarEspera', 'escondePerm', 'limparPlano', 'fillModels', 'paintEngine', 'pintarPasta',
     'mostrarPastaNoPainel', 'atualizarGit', 'pintarModo', 'savePanes', 'scroll', 'piscar',
-    'marcarAbertas', 'esquecerCadeiaDoPainel', 'guardarParteAnterior', 'pintarConversas']) c[name] = noop;
+    'marcarAbertas', 'esquecerCadeiaDoPainel', 'guardarParteAnterior', 'pintarConversas', 'lembrarDonoDoNome']) c[name] = noop;
   c.envioComAnexos = (P, text, attachments) => ({ text, displayText: text, attachments });
   c.userMsg = (P, text, attachments) => { const b = element(); b.dataset.hist = String(P.hist.length); b.parentNode = P.chat; b.remove = () => { b.parentNode = null; }; P.hist.push({ texto: text, attachments }); return b; };
   c.window.api.paneSend = async p => { c.sent.push(p); return true; };

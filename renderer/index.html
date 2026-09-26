@@ -113,11 +113,23 @@
         <div class="aj-grupo">
           <div class="aj-gtit">Geral</div>
           <div class="aj-cartao">
-            <section class="aj aj-aparencia">
+            <!-- 26/09 (pedido dele, igual aos Ajustes do Mac): miniaturas em vez do pop-up. Automático,
+                 Tom claro e Tom escuro; embaixo o Liquid Glass (Translúcido ou Tonalizado). O desenho
+                 de cada miniatura é CSS (lateral.css, .mini-*); quem liga é o pintarAparencia. -->
+            <section class="aj aj-aparencia aj-miniaturas">
               <div class="aj-tit">Aparência<button class="info" type="button" aria-label="Como funciona" data-dica="Automática segue o claro e o escuro do Mac. Com Aumentar contraste ou Reduzir transparência ligados no Mac, o Cockpit reforça o contraste sozinho."></button></div>
-              <!-- pop-up (26/09, como no desenho): o <select> invisível por cima abre o menu do
-                   sistema; o botão mostra a escolha (pintarAparencia no app.js) -->
-              <label class="aj-pop aj-sel"><span class="path-box" id="aparenciaTxt">Automática</span><span class="aj-seta"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 6L8 3.5 10.5 6M5.5 10L8 12.5 10.5 10"></path></g></svg></span><select id="selAparencia" aria-label="Aparência"><option value="auto">Automática</option><option value="clara">Clara</option><option value="escura">Escura</option></select></label>
+              <div class="aj-mini" role="radiogroup" aria-label="Aparência">
+                <button class="mini-op" type="button" role="radio" data-aparencia="auto"><span class="mini-img mini-auto"><span class="mini-lado mini-claro"><span class="mini-barra"></span><span class="mini-jan"><i></i><i></i><i></i></span></span><span class="mini-lado mini-escuro"><span class="mini-barra"></span><span class="mini-jan"><i></i><i></i><i></i></span></span></span><span class="mini-nome">Automático</span></button>
+                <button class="mini-op" type="button" role="radio" data-aparencia="clara"><span class="mini-img mini-claro"><span class="mini-barra"></span><span class="mini-jan"><i></i><i></i><i></i></span></span><span class="mini-nome">Tom claro</span></button>
+                <button class="mini-op" type="button" role="radio" data-aparencia="escura"><span class="mini-img mini-escuro"><span class="mini-barra"></span><span class="mini-jan"><i></i><i></i><i></i></span></span><span class="mini-nome">Tom escuro</span></button>
+              </div>
+            </section>
+            <section class="aj aj-miniaturas">
+              <div class="aj-tit">Liquid Glass</div>
+              <div class="aj-mini" role="radiogroup" aria-label="Liquid Glass">
+                <button class="mini-op" type="button" role="radio" data-vidro="translucido"><span class="mini-img mini-vidro"><span class="mini-pilula"></span></span><span class="mini-nome">Translúcido</span></button>
+                <button class="mini-op" type="button" role="radio" data-vidro="tonalizado"><span class="mini-img mini-vidro tonalizado"><span class="mini-pilula"></span></span><span class="mini-nome">Tonalizado</span></button>
+              </div>
             </section>
             <section class="aj">
               <div class="aj-tit">Foto<button class="info" type="button" aria-label="Como funciona" data-dica="Aparece nas suas mensagens."></button></div>

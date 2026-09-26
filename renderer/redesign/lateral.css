@@ -574,3 +574,48 @@ html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inse
 .side-ferramentas.icones.buscando .side-lupa{display:none}
 .side-ferramentas.icones.buscando .side-busca-cx{display:flex;order:-1}
 .side-ferramentas.icones .side-pastas{top:32px;left:12px;right:12px}
+
+/* ---- Ajustes › Aparência e Liquid Glass em miniaturas, como nos Ajustes do Mac (26/09) ----
+   Cada opção é uma miniatura de 64×46 (fundo de tela azul, a barra de cima e uma janela com os três
+   semáforos) e o nome embaixo. A escolhida ganha o anel cinza de 3 e o nome em negrito. A linha do
+   título fica em cima e as miniaturas embaixo: a coluna dos Ajustes é estreita. */
+.aj.aj-miniaturas{flex-direction:column;align-items:stretch;padding-top:10px;padding-bottom:10px;gap:8px}
+.aj-miniaturas .aj-tit{flex:none}
+.aj-mini{display:flex;gap:10px;justify-content:flex-start;flex-wrap:wrap}
+.mini-op{display:flex;flex-direction:column;align-items:center;gap:5px;padding:0;border:0;background:transparent;
+  color:var(--label-2);font:400 11px/14px var(--font-sans);cursor:default}
+.mini-op.on{color:var(--label-1);font-weight:600}
+.mini-img{position:relative;display:block;width:64px;height:46px;border-radius:8px;overflow:hidden;
+  box-shadow:0 0 0 1px rgba(0,0,0,.14);outline:3px solid transparent;outline-offset:2px;
+  transition:outline-color var(--dur-fast) ease-out}
+.mini-op:hover .mini-img{outline-color:var(--fill-1)}
+.mini-op.on .mini-img{outline-color:#8E8E93}
+.mini-op:focus-visible{outline:none}
+.mini-op:focus-visible .mini-img{outline-color:var(--accent)}
+/* o fundo de tela: o azul em ondas do Mac (claro = mais luz; escuro = mais noite) */
+.mini-claro,.mini-vidro{background:
+  radial-gradient(120% 90% at 85% 10%,rgba(255,255,255,.55),transparent 55%),
+  linear-gradient(135deg,#9DB8F5 0%,#3D63D8 45%,#1E3FB0 70%,#7FA8F7 100%)}
+.mini-escuro{background:
+  radial-gradient(120% 90% at 85% 10%,rgba(120,150,255,.35),transparent 55%),
+  linear-gradient(135deg,#27317A 0%,#1A2266 45%,#0E1440 70%,#2E48A8 100%)}
+.mini-auto{display:flex}
+.mini-lado{position:relative;flex:1;overflow:hidden}
+.mini-lado .mini-jan{left:10px}
+/* a barra de cima (a "janela de cima" clara ou escura) e a janela com os semáforos */
+.mini-barra{position:absolute;left:4px;top:5px;width:34px;height:9px;border-radius:3px;background:rgba(255,255,255,.72)}
+.mini-escuro .mini-barra{background:rgba(40,44,70,.85)}
+.mini-jan{position:absolute;left:14px;top:22px;right:-6px;bottom:-6px;border-radius:5px;background:#F5F5F7;
+  display:flex;gap:3px;padding:6px 0 0 6px;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.mini-escuro .mini-jan{background:#1C1C1E}
+.mini-jan i{width:5px;height:5px;border-radius:50%;background:#FF5F57}
+.mini-jan i:nth-child(2){background:#FEBC2E}
+.mini-jan i:nth-child(3){background:#28C840}
+/* Liquid Glass: a pílula de vidro no meio (translúcida ou tonalizada, quase opaca) */
+.mini-pilula{position:absolute;left:9px;right:9px;top:15px;height:17px;border-radius:9px;
+  background:rgba(255,255,255,.32);box-shadow:inset 0 0 0 1px rgba(255,255,255,.6),0 2px 6px rgba(0,0,0,.18)}
+.mini-vidro.tonalizado .mini-pilula{background:rgba(255,255,255,.86)}
+
+/* o vidro Tonalizado: as camadas de vidro ficam quase opacas nos dois tons */
+html.vidro-tonalizado[data-theme="dark"]{--glass-regular:rgba(46,46,50,.97);--bg-sidebar:rgba(40,40,43,.98)}
+html.vidro-tonalizado[data-theme="light"]{--glass-regular:rgba(252,252,253,.98);--bg-sidebar:rgba(238,238,241,.98)}

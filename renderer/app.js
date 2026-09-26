@@ -11289,15 +11289,36 @@ function aplicarTema(t) {
    só mostra o nome da escolha. Antes era um seletor de três segmentos que não cabia ao lado do
    título e empurrava o cartão Geral para duas linhas. */
 function pintarAparencia(escolha) {
+  // Mac (26/09): miniaturas como nos Ajustes do Mac; a escolhida ganha o anel e o nome em negrito
+  $$('.mini-op[data-aparencia]').forEach(b => { const on = b.dataset.aparencia === escolha; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
   const sel = $('#selAparencia');
   if (!sel) return;
   sel.value = escolha;
   const txt = $('#aparenciaTxt');
   if (txt && sel.selectedIndex >= 0) txt.textContent = sel.options[sel.selectedIndex].textContent;
 }
+$$('.mini-op[data-aparencia]').forEach(b => b.addEventListener('click', async () => {
+  cfg.tema = b.dataset.aparencia;
+  aplicarTema(cfg.tema);
+  if (typeof aplicarVidro === 'function') aplicarVidro(cfg.vidro);
+  await window.api.setConfig(cfg);
+}));
+/* Liquid Glass (26/09): Translúcido é o vidro de sempre; Tonalizado deixa as camadas de vidro (menus,
+   cartões, janelinhas) quase opacas, como a opção do Mac. Só troca tokens (lateral.css). */
+function aplicarVidro(v) {
+  const tom = v === 'tonalizado';
+  document.documentElement.classList.toggle('vidro-tonalizado', tom);
+  $$('.mini-op[data-vidro]').forEach(b => { const on = (b.dataset.vidro === 'tonalizado') === tom; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+}
+$$('.mini-op[data-vidro]').forEach(b => b.addEventListener('click', async () => {
+  cfg.vidro = b.dataset.vidro;
+  aplicarVidro(cfg.vidro);
+  await window.api.setConfig(cfg);
+}));
 if ($('#selAparencia')) $('#selAparencia').addEventListener('change', async (e) => {
   cfg.tema = e.target.value;
   aplicarTema(cfg.tema);
+  if (typeof aplicarVidro === 'function') aplicarVidro(cfg.vidro);
   await window.api.setConfig(cfg);
 });
 // o Mac (ou o iPhone) trocou de claro para escuro, ou ligou o contraste: a cor já resolvida
@@ -12418,6 +12439,7 @@ document.addEventListener('keydown', (e) => {
     $$('.hist-item, .new-chat').forEach(() => {});
   }
   aplicarTema(cfg.tema);
+  if (typeof aplicarVidro === 'function') aplicarVidro(cfg.vidro);
   document.body.classList.toggle('foco', !!cfg.foco);   // o modo foco continua como ele deixou
   $('#verLine').textContent = '1.1.0';   // a linha dos Ajustes já se chama "Versão"
   repintarAvatares();

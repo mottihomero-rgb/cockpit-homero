@@ -91,8 +91,12 @@ test('Ajustes em cartões sem perder nenhum controle que o app.js liga', () => {
   assert.deepEqual(ids(mac), [], 'Mac: sumiu controle');
   assert.deepEqual(ids(web), [], 'celular: sumiu controle');
   for (const id of ['chkWeb', 'webInfo', 'chkAtalhosGlobais', 'atalhosAviso']) assert.ok(mac.includes('id="' + id + '"'), id);
-  for (const html of [mac, web]) {
-    // Aparência é pop-up (26/09): <select> com as três opções dentro do botão de 22
+  // 26/09 (pedido dele): no Mac a Aparência são as miniaturas dos Ajustes do Mac + o Liquid Glass
+  for (const t of ['auto', 'clara', 'escura']) assert.match(mac, new RegExp('<button class="mini-op" type="button" role="radio" data-aparencia="' + t + '">'));
+  assert.match(mac, />Automático<\/span>[\s\S]*>Tom claro<\/span>[\s\S]*>Tom escuro<\/span>/);
+  assert.match(mac, /<div class="aj-tit">Liquid Glass<\/div>[\s\S]*data-vidro="translucido"[\s\S]*data-vidro="tonalizado"/);
+  for (const html of [web]) {
+    // no celular a Aparência continua pop-up (26/09): <select> com as três opções dentro do botão de 22
     assert.match(html, /<label class="aj-pop aj-sel"><span class="path-box" id="aparenciaTxt">[^<]*<\/span>.*<select id="selAparencia"[^>]*><option value="auto">Automática<\/option><option value="clara">Clara<\/option><option value="escura">Escura<\/option><\/select><\/label>/);
     assert.doesNotMatch(html, /class="tema-bt"/, 'o segmentado saiu');
     // Versão sem (i): a explicação mora na dica da linha

@@ -5374,7 +5374,17 @@ async function janelaConfiguracao(P) {
     let txt = '';
     try { txt = await it.previa(); } catch (e) { txt = 'Não consegui ler: ' + (e.message || e); }
     if (minha !== vez) return;   // clicou em outro item antes desta leitura voltar
-    previa.textContent = String(txt || '').split('\n').slice(0, 400).join('\n');
+    /* linha por linha: a de titulo do markdown (# e ##) ganha a cor um tom abaixo, como no
+       desenho; o resto entra como texto puro (textContent — nada do arquivo vira HTML) */
+    previa.textContent = '';
+    const linhas = String(txt || '').split('\n').slice(0, 400);
+    linhas.forEach((linha, n) => {
+      if (/^#{1,6} /.test(linha)) {
+        const h = document.createElement('span'); h.className = 'cf-h'; h.textContent = linha;
+        previa.appendChild(h);
+      } else previa.appendChild(document.createTextNode(linha));
+      if (n < linhas.length - 1) previa.appendChild(document.createTextNode('\n'));
+    });
     previa.scrollTop = 0;
   };
   const mostrarAba = (k) => {
@@ -6070,21 +6080,22 @@ function janelaTerminal(P, linha, titulo, aoFechar, opcoes) {
   cx.onclick = (e) => e.stopPropagation();
 
   const id = ESTA_TELA + 't' + (++termSeq);
-  /* Barra de 38: icone + titulo + o comando em mono + Cancelar (manda Ctrl+C) + ×. A frase
-     de orientacao saiu da tela (regra dele: so rotulo) e virou o balao do (i) ao lado do
-     titulo; o "Fechar" do rodape era o mesmo que o ×, e o rodape sumiu junto. */
+  /* Barra de 39: icone + titulo + o comando em mono + parar (manda Ctrl+C) + ×. A frase de
+     orientacao saiu da tela (regra dele: so rotulo) e virou o balao do icone e do titulo, sem
+     (i) a mais na barra; o "Cancelar" de texto virou o quadradinho de parar, do tamanho do ×
+     (a funcao e a mesma). O "Fechar" do rodape era o mesmo que o ×, e o rodape sumiu junto. */
   const orienta = op.orientacao || (op.abrirSozinho
     ? 'A entrada abre no navegador. Mantenha esta janela aberta até terminar lá. Se o navegador não abrir, clique em Abrir link aqui embaixo.'
     : 'Rodando aqui dentro do Cockpit. Se pedir para escolher ou colar algo, clique na tela preta e digite.');
   cx.innerHTML =
     '<div class="mo-top"><span class="term-ic">' + ico('terminal') + '</span><span class="mo-tit"></span>'
-    + '<span class="mo-info">' + ico('info') + '</span><span class="term-cmd"></span><span class="mo-gap"></span>'
-    + '<button class="term-cancela" id="tmCancela" title="Cancelar o que está rodando (Ctrl+C)">Cancelar</button>'
+    + '<span class="term-cmd"></span><span class="mo-gap"></span>'
+    + '<button class="term-cancela" id="tmCancela" title="Cancelar o que está rodando (⌃C)" aria-label="Cancelar">' + ico('square') + '</button>'
     + '<button class="mo-x" title="Fechar (⌘W)">' + ico('x') + '</button></div>'
     + '<div class="term-wrap"><div class="term-tela"></div></div>'
     + '<div class="term-link"><span class="mono"></span><button>Abrir link</button></div>';
   $('.mo-tit', cx).textContent = titulo || 'Terminal';
-  const info = $('.mo-info', cx); if (info) info.title = orienta;
+  for (const sel of ['.mo-tit', '.term-ic']) { const e = $(sel, cx); if (e) e.title = orienta; }
   const cmd = $('.term-cmd', cx);
   if (cmd) { cmd.textContent = String(linha || ''); cmd.title = String(linha || ''); }
 
@@ -6883,6 +6894,7 @@ async function janelaConta(P, motorPedido) {
     + '<div class="ct-linha on"><span class="ct-radio"></span><span class="ct-txt"><span class="ct-n"></span>'
     + '<span class="ct-e"></span></span><span class="ct-uso">Em uso</span></div>'
     + '</div>'
+    + '<div class="ct-mais"></div>'
     + '<div class="mo-rodape">'
     + '<button class="mo-btn" id="ctTrocar">Entrar com outra conta…</button>'
     + '<span class="mo-gap"></span>'
@@ -6894,14 +6906,16 @@ async function janelaConta(P, motorPedido) {
   $('.ct-n', atual).textContent = c.email || c.nome || motor;
   $('.ct-e', atual).textContent = partes.join(' · ');
   atual.title = balao;
-  // linhas de ação no fim da lista (o "+" de sempre, sem moldura): código e a conta da VPS
+  /* código e a conta da VPS: botões sem moldura LOGO ABAIXO da lista. A lista em radio é só
+     de contas (no desenho, E4); ação dentro dela parecia mais uma conta para escolher. */
+  const mais = $('.ct-mais', cx);
   const acao = (icone, txt, fn) => {
     const b = document.createElement('button');
-    b.className = 'ct-linha ct-acao';
-    b.innerHTML = '<span class="ct-radio-ic">' + ico(icone) + '</span><span class="ct-txt"><span class="ct-n"></span></span>';
-    $('.ct-n', b).textContent = txt;
+    b.className = 'ct-acao';
+    b.innerHTML = ico(icone) + '<span></span>';
+    $('span', b).textContent = txt;
     b.onclick = fn;
-    lista.appendChild(b);
+    mais.appendChild(b);
   };
   acao('key-round', 'Entrar com código…', () => { fecharModal(P); contaAcao(P, 'trocarCodigo', eng); });
   // o cartao acima le a conta DESTE Mac; com o chat na VPS quem responde e o servidor
@@ -6916,7 +6930,6 @@ async function janelaConta(P, motorPedido) {
   let guardadas = [];
   try { const r = await window.api.contasListar(eng); guardadas = Array.isArray(r) ? r : []; } catch {}
   if (modal.classList.contains('hidden') || !lista.isConnected) return;
-  const primeiraAcao = $('.ct-acao', lista);
   for (const g of guardadas) {
     if (g.atual) continue;
     const b = document.createElement('button');
@@ -6925,7 +6938,7 @@ async function janelaConta(P, motorPedido) {
     $('.ct-n', b).textContent = g.apelido;
     b.title = 'Trocar para esta conta';
     b.onclick = () => { fecharModal(P); trocarParaConta(P, eng, g.apelido); };
-    lista.insertBefore(b, primeiraAcao);
+    lista.appendChild(b);
   }
 }
 
@@ -9413,7 +9426,9 @@ function telaNovaAba(obrigatoria) {
   // sem nenhuma aba aberta nao ha para onde voltar: o Cancelar sairia mudo, entao nem aparece
   const cancela = $('#naCancela'); if (cancela) cancela.classList.toggle('hidden', !!obrigatoria);
   el.classList.remove('hidden');
-  setTimeout(() => $('#naOk').focus(), 40);
+  /* o Enter continua comecando (o foco fica no Começar), mas sem o anel: foco posto por codigo
+     nao e navegacao de teclado, e no desenho a capsula azul abre limpa. O anel volta no Tab. */
+  setTimeout(() => $('#naOk').focus({ focusVisible: false }), 40);
 }
 
 function fecharNovaAba() {
@@ -10507,58 +10522,82 @@ window.addEventListener('resize', () => { for (const P of panes.values()) paintE
 
 /* ---- Lista de atalhos (⌘/) ----
    REGRA: so pode entrar aqui o que FAZ o que a linha diz. Uma tela de ajuda mentindo e pior
-   do que nao ter tela nenhuma. Quem mexer em atalho tem de mexer nesta lista junto. */
+   do que nao ter tela nenhuma. Quem mexer em atalho tem de mexer nesta lista junto.
+   Cada linha: [tecla, o que faz por extenso, rotulo curto]. Na tela vai so o rotulo curto (a
+   coluna tem 272 e nada pode sair cortado com "…"); o texto por extenso mora no balao do mouse
+   e na busca. Sem rotulo curto, a tela usa o texto por extenso.
+   Ordem dos grupos = grade de 3 colunas: o Quadro (o grupo mais comprido) sobe para a 1a fila,
+   ao lado dos outros dois compridos, e a tela fica 2 linhas mais baixa. */
 const ATALHOS = [
   ['Chats e abas', [
     ['⌘T', 'Novo chat nesta aba'],
     ['⌘⇧T', 'Nova aba de projeto'],
-    ['⌘W', 'Fechar o chat (com janelinha aberta, fecha a janelinha primeiro)'],
+    ['⌘W', 'Fechar o chat (com janelinha aberta, fecha a janelinha primeiro)', 'Fechar o chat'],
     ['⌘⇧W', 'Reabrir o último chat fechado'],
     ['⌘1 … ⌘9', 'Pular de aba de projeto'],
     ['⌘⌥1 … ⌘⌥9', 'Pular de chat dentro da aba'],
     ['⌘O', 'Trocar a pasta deste chat'],
-    ['⌘B', 'Mostrar/esconder a coluna de conversas'],
-    ['⌘⇧F', 'Modo foco: só pergunta e resposta'],
+    ['⌘B', 'Mostrar/esconder a coluna de conversas', 'Coluna de conversas'],
+    ['⌘⇧F', 'Modo foco: só pergunta e resposta', 'Modo foco'],
   ]],
   ['Escrever', [
     ['Enter', 'Enviar'],
     ['⇧Enter', 'Pular linha'],
-    ['Tab', 'Recuo de 2 espaços (o cursor não sai do campo)'],
+    ['Tab', 'Recuo de 2 espaços (o cursor não sai do campo)', 'Recuo de 2 espaços'],
     ['⌘A', 'Selecionar tudo do campo'],
-    ['⌘Z / ⌘⇧Z', 'Desfazer / refazer (⌘Y também refaz)'],
-    ['⌘⇧D', 'Ditar: falar em vez de digitar'],
-    ['Esc', 'Fecha o que estiver aberto; sem nada aberto, para a IA deste chat'],
-    ['↑ / ↓', 'Com o campo vazio, traz de volta o que você já mandou (as 50 últimas)'],
-    ['letra solta', 'Digitar fora do campo joga o texto no campo deste chat'],
+    ['⌘Z / ⌘⇧Z', 'Desfazer / refazer (⌘Y também refaz)', 'Desfazer / refazer'],
+    ['⌘⇧D', 'Ditar: falar em vez de digitar', 'Ditar'],
+    ['Esc', 'Fecha o que estiver aberto; sem nada aberto, para a IA deste chat', 'Fechar ou parar'],
+    ['↑ / ↓', 'Com o campo vazio, traz de volta o que você já mandou (as 50 últimas)', 'Mensagens já enviadas'],
+    ['letra solta', 'Digitar fora do campo joga o texto no campo deste chat', 'Escrever de qualquer lugar'],
   ]],
-  ['Ler e copiar', [
-    ['PageUp / PageDown', 'Rolar a conversa sem tirar o cursor do campo'],
-    ['⌘F', 'Buscar na conversa (Enter vai pro próximo, ⇧Enter volta)'],
-    ['⌘P', 'Buscar conversa nos quatro motores e no Mac inteiro'],
-    ['⌘A depois ⌘C', 'Copiar a conversa inteira, com os comandos'],
-    ['⌘K', 'Limpar a tela (a conversa continua de onde estava)'],
-    ['⌘S', 'Salvar a conversa no Obsidian'],
-    ['⌘D', 'Perguntar aos outros motores desta aba'],
-  ]],
-  ['Quadro branco (⌘⇧E abre)', [
-    ['V H R O D N T A L P E', 'Trocar de ferramenta'],
-    ['0 · + · −', 'Enquadrar e dar zoom — SEM Command (com ⌘ quem muda de tamanho é o app)'],
-    ['Alt+D', 'Duplicar o que está selecionado'],
+  ['Quadro branco', [
+    ['⌘⇧E', 'Abrir o quadro branco'],
+    ['V H R O D N T A L P E', 'Trocar de ferramenta', 'Ferramentas'],
+    ['0 · + · −', 'Enquadrar e dar zoom — SEM Command (com ⌘ quem muda de tamanho é o app)', 'Enquadrar e zoom'],
+    ['Alt+D', 'Duplicar o que está selecionado', 'Duplicar'],
     ['Delete', 'Apagar'],
-    ['setas (⇧ anda mais)', 'Mover a peça'],
-    ['[ e ]', 'Mandar pra trás / pra frente'],
-    ['Espaço', 'Arrastar a tela'],
+    ['setas (⇧ anda mais)', 'Mover a peça (com ⇧ anda mais)', 'Mover a peça'],
+    ['[ e ]', 'Mandar pra trás / pra frente', 'Para trás / para frente'],
+    ['Espaço', 'Arrastar a tela (segurando o Espaço)', 'Arrastar a tela'],
     ['Enter', 'Editar o texto da peça'],
     ['⌘Enter', 'Mandar o desenho pro chat'],
-    ['Esc', 'Fecha uma camada por vez'],
+    ['Esc', 'Fecha uma camada por vez', 'Fechar uma camada'],
+  ]],
+  ['Ler e copiar', [
+    ['PageUp / PageDown', 'Rolar a conversa sem tirar o cursor do campo', 'Rolar a conversa'],
+    ['⌘F', 'Buscar na conversa (Enter vai pro próximo, ⇧Enter volta)', 'Buscar na conversa'],
+    ['⌘P', 'Buscar conversa nos quatro motores e no Mac inteiro', 'Buscar em todas as conversas'],
+    ['⌘A depois ⌘C', 'Copiar a conversa inteira, com os comandos', 'Copiar a conversa inteira'],
+    ['⌘K', 'Limpar a tela (a conversa continua de onde estava)', 'Limpar a tela'],
+    ['⌘S', 'Salvar a conversa no Obsidian'],
+    ['⌘D', 'Perguntar aos outros motores desta aba', 'Perguntar aos outros motores'],
   ]],
   ['Terminal embutido', [
     ['Ctrl+C', 'Cancelar o que está rodando'],
-    ['⌘K', 'Limpar o terminal (não a conversa)'],
-    ['⌘A depois ⌘C', 'Selecionar e copiar o terminal'],
-    ['⌘W', 'Fechar a janelinha do terminal'],
+    ['⌘K', 'Limpar o terminal (não a conversa)', 'Limpar o terminal'],
+    ['⌘A depois ⌘C', 'Selecionar e copiar o terminal', 'Copiar o terminal'],
+    ['⌘W', 'Fechar a janelinha do terminal', 'Fechar o terminal'],
   ]],
 ];
+
+/* A tecla no desenho do Mac, como nos menus do sistema (⌃ ⌥ ⇧ ⌘ nessa ordem, ↩ ⇥ ⌫ esc).
+   So muda o que aparece: a lista acima continua escrita do jeito que o dedo le. */
+const ORDEM_MODIF = '⌃⌥⇧⌘';
+function teclaDoMac(t) {
+  let k = String(t)
+    .replace(/^setas.*$/, '← ↑ → ↓')
+    .replace(/^PageUp \/ PageDown$/, '⇞ ⇟')
+    .replace(/^\[ e \]$/, '[ ]')
+    .replace(/^letra solta$/, 'a–z')
+    .replace(/\bAlt\+/g, '⌥').replace(/\bCtrl\+/g, '⌃')
+    .replace(/\bDelete\b/g, '⌫').replace(/Enter/g, '↩').replace(/\bTab\b/g, '⇥').replace(/\bEsc\b/g, 'esc')
+    .replace(/ depois /g, ' ').replace(/ \/ /g, '  ');
+  // modificadores na ordem do Mac: ⌘⇧T → ⇧⌘T, ⌘⌥1 → ⌥⌘1
+  k = k.replace(/[⌃⌥⇧⌘]{2,}/g, (m) => [...m].sort((a, b) => ORDEM_MODIF.indexOf(a) - ORDEM_MODIF.indexOf(b)).join(''));
+  // faixa: ⌘1 … ⌘9 → ⌘1–9
+  return k.replace(/([⌃⌥⇧⌘]*)(\d) … \1(\d)/, '$1$2–$3');
+}
 
 function alternarTelaAtalhos() {
   const tela = $('#telaAtalhos');
@@ -10573,17 +10612,17 @@ function alternarTelaAtalhos() {
     const n = document.createElement('div');
     n.className = 'at-gr-n'; n.textContent = grupo;
     g.appendChild(n);
-    for (const [tecla, oque] of linhas) {
+    for (const [tecla, oque, rotulo] of linhas) {
       const l = document.createElement('div');
       l.className = 'at-l';
-      /* Redesenho (25/09): o que a tecla faz a esquerda, a tecla a direita, uma linha so. A
-         explicacao que vinha junto — entre parenteses, depois do travessao ou do ponto e
-         virgula — sai da tela e fica no balao do mouse (regra dele: so rotulo na tela). */
-      const curto = oque.split(/ \(| — |; /)[0];
+      /* Redesenho (25/09): o que a tecla faz a esquerda, a tecla a direita, uma linha so. Na
+         tela vai o rotulo curto; a explicacao (parenteses, travessao, ponto e virgula) fica no
+         balao do mouse (regra dele: so rotulo na tela). */
+      const curto = rotulo || oque.split(/ \(| — |; /)[0];
       const d = document.createElement('span'); d.className = 'at-d'; d.textContent = curto;
-      // a tecla no desenho do Mac (↩ ⇥ esc), como nos menus do sistema; o nome por extenso fica no balão
+      // a tecla no desenho do Mac; o nome por extenso fica no balão
       const k = document.createElement('span'); k.className = 'at-k';
-      k.textContent = tecla.replace(/Enter/g, '↩').replace(/\bTab\b/g, '⇥').replace(/\bEsc\b/g, 'esc');
+      k.textContent = teclaDoMac(tecla);
       l.title = tecla + '  ' + oque;
       l.dataset.busca = (tecla + ' ' + oque + ' ' + grupo).toLowerCase();
       l.appendChild(d); l.appendChild(k);

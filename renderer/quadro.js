@@ -26,8 +26,11 @@
   const NOTA_TINTA = '#23231f';
   const LIM_PNG = 2160;    // teto do lado maior: o WebSocket do telefone corta em 8MB
   /* 'tinta' e um sentinela, nao uma cor: vira o --fg-strong do tema na hora de pintar.
-     Sem isso, traco preto some no tema escuro e traco claro some no tema claro. */
-  const PALETA = ['tinta', '#d97757', '#4a90e2', '#4f9d5d', '#c9922b', '#d9534f', '#9b7bd4'];
+     Sem isso, traco preto some no tema escuro e traco claro some no tema claro.
+     As outras cinco sao as cores do sistema do redesenho (26/09): vermelho, laranja, verde, azul
+     e roxo, o mesmo hex nos dois temas (a cor vai gravada no desenho e no PNG). Desenho antigo
+     com as cores de antes continua com elas: so a paleta dos botoes mudou. */
+  const PALETA = ['tinta', '#FF453A', '#FF9F0A', '#34C759', '#0A84FF', '#BF5AF2'];
   /* hexes que versoes antigas gravavam no lugar de 'tinta' (um por tema) */
   const TINTAS_VELHAS = ['#e8e8e8', '#1c1c20', '#073642'];
   const PADRAO = {

@@ -149,12 +149,15 @@ test('IA sem login neste Mac: logo + "Entrar", e o Entrar roda o login do motor 
   assert.deepEqual(acoes, ['login:claude:claude']);
 });
 
-test('com login: logo + nome (ou e-mail) + plano, com as barras quando houver número', () => {
+/* 26/09 (desenho novo, área lateral): a linha diz QUAL IA é ("Codex"), como o título da coluna do
+   desenho; a conta (nome/e-mail) foi para a dica. Antes a linha mostrava o e-mail. */
+test('com login: logo + nome da IA + plano (a conta na dica), com as barras quando houver número', () => {
   const { ctx, cx, acoes, bloco } = contextoConta();
   ctx.panes.set('p1', { engine: 'codex' });
   ctx.pintarBlocoDeUso(cx, 'codex', { entrou: true, email: 'h@x.com', plano: 'Pro', sessao: { pct: 12 }, semana: { pct: 40, reseta: 1 } });
   const b = bloco('codex');
-  assert.equal(b.parts['.cv-uso-nome'].textContent, 'h@x.com');
+  assert.equal(b.parts['.cv-uso-nome'].textContent, 'Codex');
+  assert.match(b.title, /h@x\.com/, 'a conta continua a um passar de mouse');
   assert.equal(b.parts['.cv-uso-plano'].textContent, 'Pro');
   assert.match(b.innerHTML, /Sessão[\s\S]*12%[\s\S]*Semana[\s\S]*40%/);
   b.listeners.click();
@@ -165,7 +168,8 @@ test('Gemini/Grok logados sem número de uso e consulta segurada continuam apare
   const { ctx, cx, bloco } = contextoConta();
   ctx.pintarBlocoDeUso(cx, 'gemini', { entrou: true, email: 'g@x.com' });
   assert.ok(bloco('gemini'), 'sumir por completo tirava o único clique que abria a conta dele');
-  assert.equal(bloco('gemini').parts['.cv-uso-nome'].textContent, 'g@x.com');
+  assert.equal(bloco('gemini').parts['.cv-uso-nome'].textContent, 'Gemini');
+  assert.match(bloco('gemini').title, /g@x\.com/);
   assert.ok(!/cv-uso-janela/.test(bloco('gemini').innerHTML));
   ctx.pintarBlocoDeUso(cx, 'claude', { entrou: true, nome: 'Homero', plano: 'Max', limitado: true, voltaEm: 1 });
   assert.ok(bloco('claude'));

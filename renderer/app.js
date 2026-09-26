@@ -1638,6 +1638,7 @@ function setFocus(P) {
   $('#tbTitle').textContent = shortPath(P.cwd) + '  ·  ' + nomeDoMotor(P.engine);
   const pn = $('#projName'); if (pn) pn.textContent = nomePasta(P.cwd);
   pintarCorFoco();
+  marcarAbertas();   // a conversa selecionada da lista é a do chat em foco: muda junto com ele
 }
 /* A borda das abas do topo segue a cor da IA do chat em foco (laranja no Claude, azul no
    Codex, verde no Gemini). Le o --accent ja resolvido do chat, entao tema novo vale sozinho. */
@@ -6697,7 +6698,10 @@ function pintarBlocoDeUso(cx, engine, c) {
   bloco.innerHTML = '<div class="cv-uso-cab">' + logo + '<span class="cv-uso-nome"></span>'
     + (c.plano ? '<span class="cv-uso-plano"></span>' : '') + '</div>'
     + (janelas ? '<div class="cv-uso-janelas">' + janelas + '</div>' : '');
-  $('.cv-uso-nome', bloco).textContent = c.nome || c.email || motor;
+  /* 26/09 (desenho novo): a linha diz QUAL IA é ("Claude", "Codex"), como o título da coluna do
+     desenho; a conta (nome, e-mail) vai só na dica. Com o e-mail na tela, quatro linhas em
+     negrito de endereço pareciam lista de contatos e não diziam de relance de qual IA era o uso. */
+  $('.cv-uso-nome', bloco).textContent = motor;
   if (c.plano) $('.cv-uso-plano', bloco).textContent = c.plano;
   // o que antes era frase na coluna ("segurou as consultas", "não consegui ler") vai no title
   const semNumero = !c.sessao && !c.semana;
@@ -6705,7 +6709,8 @@ function pintarBlocoDeUso(cx, engine, c) {
     ? 'O ' + motor + ' segurou as consultas agora · tento de novo ' + (c.voltaEm ? quandoFuturo(c.voltaEm) : 'em alguns minutos')
     : semNumero && ['claude', 'codex'].includes(engine) ? 'Não consegui ler o uso agora'
     : c.velho ? 'Última leitura ' + haQuanto(c.velho) : '';
-  bloco.title = [motor, c.plano, c.email].filter(Boolean).join(' · ') + (porque ? '\n' + porque : '');
+  const conta = [c.nome, c.email].filter((x, i, a) => x && a.indexOf(x) === i);
+  bloco.title = [motor, c.plano, ...conta].filter(Boolean).join(' · ') + (porque ? '\n' + porque : '');
 }
 /* clicar no bloco abre a janela da conta daquela IA. A janelinha nasce DENTRO de um chat: tem
    de ser um que esteja na tela, senao o clique parece nao fazer nada. */
@@ -8249,6 +8254,20 @@ function trocarFavorita(s) {
   window.api.setConfig(cfg);
 }
 
+/* O trecho da busca "dentro da conversa" vem do main com ~45 letras ANTES da palavra achada. Na
+   coluna cabem umas 35 numa linha de 11px: as reticências cortavam antes da palavra e a marca
+   amarela nunca aparecia. Aqui a frente encolhe para as últimas palavras antes dela (até ~16
+   letras), para a marca cair no começo da linha. Sem achar a palavra, o trecho fica como veio. */
+function trechoPerto(trecho, termo) {
+  const t = String(trecho || '');
+  const i = termo ? t.toLowerCase().indexOf(termo) : -1;
+  if (i <= 18) return t;
+  // começa numa palavra inteira dentro das ~16 letras de antes; palavra comprida corta nela mesmo
+  let de = i - 16;
+  const sp = t.indexOf(' ', de);
+  if (sp >= 0 && sp < i) de = sp + 1;
+  return '…' + t.slice(de);
+}
 function marcarTermo(el, texto, termo) {
   el.textContent = '';
   const i = termo ? texto.toLowerCase().indexOf(termo) : -1;
@@ -8281,6 +8300,13 @@ function motorQueAbriu(id, arquivo) {
 function pintarAberta(d) {
   const eng = motorQueAbriu(d.dataset.sid, d.dataset.sfile);
   d.classList.toggle('aberta', !!eng);
+  /* 26/09: "selecionada" (fundo e negrito, como no desenho) é UMA só: a conversa do chat em
+     foco. Com o destaque em toda conversa aberta, três ou quatro chats na tela acendiam três ou
+     quatro linhas iguais e nenhuma dizia qual ele estava olhando. Mesma regra do motorQueAbriu
+     (número da conversa e, no Codex, o arquivo), só que olhando o chat em foco. */
+  const F = focusPane, sid = d.dataset.sid, arq = d.dataset.sfile;
+  d.classList.toggle('no-foco', !!eng && !!F && !!sid && (F.resumeId === sid || F.sessaoId === sid)
+    && !(F.sessaoFile && arq && F.sessaoFile !== arq));
   d.classList.toggle('ab-claude', eng === 'claude');
   d.classList.toggle('ab-codex', eng === 'codex');
   for (const e of ['gemini', 'grok']) d.classList.toggle('ab-' + e, eng === e);
@@ -8687,7 +8713,7 @@ function linhaConversa(s, termo, trecho) {
      repetir. Conversa de uma IA so mostra um logo. A cor de cada IA fica SO no logo. */
   const logos = logosDaConversa(s);
   if (logos) d.insertBefore(logos, $('.hi-t', d));
-  if (trecho) marcarTermo($('.hi-trecho', d), trecho, termo);
+  if (trecho) marcarTermo($('.hi-trecho', d), trechoPerto(trecho, termo), termo);
   $('.hi-edit', d).innerHTML = ico('pencil');
   const favorita = ehFavorita(s);
   const bf = $('.hi-fav', d);
@@ -9419,13 +9445,24 @@ function aplicarTema(t) {
   // um toque dele (e prenderia o celular numa escolha que ele nunca fez)
   if (!window.SEM_ELECTRON && cfg && cfg.tema !== undefined && cfg.tema !== escolha) cfg.tema = escolha;
   pintarCorFoco();
-  $$('.tema-bt').forEach(b => b.classList.toggle('on', b.dataset.aparencia === escolha));
+  pintarAparencia(escolha);
 }
-$$('.tema-bt').forEach(b => b.addEventListener('click', async () => {
-  cfg.tema = b.dataset.aparencia;
+/* Aparência é um pop-up (26/09, como no desenho): um <select> de verdade, invisível, por cima do
+   botão de 22. O clique abre o menu nativo do Mac (no iPhone, o seletor do sistema); o botão
+   só mostra o nome da escolha. Antes era um seletor de três segmentos que não cabia ao lado do
+   título e empurrava o cartão Geral para duas linhas. */
+function pintarAparencia(escolha) {
+  const sel = $('#selAparencia');
+  if (!sel) return;
+  sel.value = escolha;
+  const txt = $('#aparenciaTxt');
+  if (txt && sel.selectedIndex >= 0) txt.textContent = sel.options[sel.selectedIndex].textContent;
+}
+if ($('#selAparencia')) $('#selAparencia').addEventListener('change', async (e) => {
+  cfg.tema = e.target.value;
   aplicarTema(cfg.tema);
   await window.api.setConfig(cfg);
-}));
+});
 // o Mac (ou o iPhone) trocou de claro para escuro, ou ligou o contraste: a cor já resolvida
 // do chat em foco mudou junto, e a borda das abas lê essa cor
 window.addEventListener('cockpit:aparencia', () => pintarCorFoco());
@@ -9624,7 +9661,7 @@ function irAoChat(P) {
    estado com o sinal na frente — anel girando = trabalhando, círculo âmbar com "!" = esperando
    você. Parado não tem sinal. O nome da IA saiu do título (o logo já diz) e foi para a dica.
    Sessão de FORA (com `caminho`): o caminho em mono + há quanto tempo, e os botões embaixo. */
-function linhaDaTorre({ titulo, motor, estado, aoClicar, acoes, engine, foco, caminho, ha }) {
+function linhaDaTorre({ titulo, motor, estado, aoClicar, acoes, engine, foco, caminho, ha, nova }) {
   const d = document.createElement('div');
   d.className = 'torre-item ' + (estado.cls || '') + (foco ? ' foco' : '');
   d.innerHTML = '<span class="ti-logo"></span><span class="ti-txt"><span class="ti-cab"><span class="ti-tit"></span></span>'
@@ -9640,10 +9677,18 @@ function linhaDaTorre({ titulo, motor, estado, aoClicar, acoes, engine, foco, ca
   } else {
     tit.textContent = titulo;
     const txt = String(estado.txt || '');
+    /* A linha de estado usa as palavras curtas do desenho (26/09): esperando = "Esperando você"
+       (autorizar ou responder, o detalhe fica na dica), parado com o motor ligado = "Pronto".
+       O estadoDoPainel continua dizendo a frase inteira: a tarja da faixa de avisos usa ela. */
+    const curto = estado.cls === 'espera' ? 'esperando você' : txt === 'parado, motor ligado' ? 'pronto' : txt;
     // "trabalhando há 22s" vira "Trabalhando há 22s": a linha começa com maiúscula, como no desenho
-    $('.ti-est-txt', d).textContent = txt.charAt(0).toUpperCase() + txt.slice(1);
+    $('.ti-est-txt', d).textContent = curto.charAt(0).toUpperCase() + curto.slice(1);
+    if (curto !== txt) $('.ti-est', d).title = txt.charAt(0).toUpperCase() + txt.slice(1);
     const sinal = $('.ti-sinal', d);
-    sinal.className = 'ti-sinal' + (estado.cls === 'ocupado' ? ' rd-anel' : estado.cls === 'espera' ? ' rd-espera' : '');
+    /* ponto azul = resposta nova que ele ainda não viu (chegou com a aba dela no fundo). Pronto
+       sem novidade não tem sinal: a ausência é o estado de repouso (folha do Sistema). */
+    sinal.className = 'ti-sinal' + (estado.cls === 'ocupado' ? ' rd-anel' : estado.cls === 'espera' ? ' rd-espera'
+      : nova && estado.cls === 'parado' ? ' rd-nova' : '');
     // a torre repinta de 4 em 4 s: o giro nasce na fase do relógio, senão o anel pularia a cada repintura
     if (estado.cls === 'ocupado') sinal.style.animationDelay = -(Date.now() % 1000) + 'ms';
   }
@@ -9686,25 +9731,38 @@ async function pintarTorre(forcarAgentes) {
     sec.innerHTML = '<span class="torre-cor"></span><span class="torre-nome"></span><span class="torre-conta"></span>';
     $('.torre-cor', sec).style.background = NA_VPS(A.cwd) ? 'var(--green)' : 'var(--accent)';
     $('.torre-nome', sec).textContent = nomeProjeto(A.cwd) + (NA_VPS(A.cwd) ? ' · VPS' : '');
-    sec.title = shortPath(A.cwd);
-    $('.torre-conta', sec).textContent = daAba.length + (daAba.length === 1 ? ' chat' : ' chats');
+    // 26/09: o grupo é só o nome da aba, como no desenho; a contagem foi para a dica
+    sec.title = shortPath(A.cwd) + ' · ' + daAba.length + (daAba.length === 1 ? ' chat' : ' chats');
     blocos.push(sec);
     for (const P of daAba) {
       const e = estadoDoPainel(P);
       total++; if (e.cls === 'ocupado') ocupados++; if (e.cls === 'espera') esperando++;
       blocos.push(linhaDaTorre({
         titulo: P.titulo || 'sem título', motor: nomeMotor(P.engine), estado: e, aoClicar: () => irAoChat(P),
-        engine: P.engine, foco: P === focusPane,
+        engine: P.engine, foco: P === focusPane, nova: !!P.precisaRolar,
       }));
     }
   }
-  const resumo = document.createElement('div');
-  resumo.className = 'torre-resumo';
-  resumo.textContent = total
-    ? total + (total === 1 ? ' chat' : ' chats') + ' · ' + ocupados + ' trabalhando' + (esperando ? ' · ' + esperando + ' esperando você' : '')
-    : 'Nenhum chat aberto.';
+  /* A linha de resumo ("3 chats · 1 trabalhando · 1 esperando você") saiu da tela (26/09): o
+     desenho põe o primeiro grupo logo abaixo do título, e cada linha já mostra o próprio estado.
+     A conta foi para a dica do título. Sem chat aberto nenhum, a torre diz isso em vez de ficar
+     em branco. */
+  const cab = $('.side-view[data-view="torre"] .side-head > span');
+  if (cab) {
+    // no celular o título já tem uma dica própria: a conta entra embaixo dela, sem apagar
+    if (cab.dataset.dica === undefined) cab.dataset.dica = cab.title || '';
+    const conta = total
+      ? total + (total === 1 ? ' chat' : ' chats') + ' · ' + ocupados + ' trabalhando' + (esperando ? ' · ' + esperando + ' esperando você' : '')
+      : '';
+    cab.title = [cab.dataset.dica, conta].filter(Boolean).join('\n');
+  }
   box.innerHTML = '';
-  box.appendChild(resumo);
+  if (!total) {
+    const vazio = document.createElement('div');
+    vazio.className = 'torre-resumo';
+    vazio.textContent = 'Nenhum chat aberto';
+    box.appendChild(vazio);
+  }
   for (const b of blocos) box.appendChild(b);
 
   /* As sessões de FORA vêm pelo processo principal (`claude agents --json`), que já tem cache
@@ -9725,17 +9783,22 @@ async function pintarTorre(forcarAgentes) {
   const secFora = document.createElement('div');
   secFora.className = 'torre-aba torre-fora';
   secFora.innerHTML = '<span class="torre-nome"></span><span class="torre-conta"></span>';
-  $('.torre-nome', secFora).textContent = 'Fora do Cockpit';
-  secFora.title = 'Sessões do Claude rodando nesta máquina por fora daqui (Terminal, VS Code, robô agendado)';
+  $('.torre-nome', secFora).textContent = 'Fora do app';
   const vistos = new Set();
   const fora = torreAgentes.itens.filter((a) => {
     // o mesmo número aparece duas vezes quando há subprocesso
     if (!a || !a.sessionId || sessoesDaqui.has(a.sessionId) || vistos.has(a.sessionId)) return false;
     vistos.add(a.sessionId); return true;
   });
+  /* 26/09: com sessões na lista o grupo é só o nome, como no desenho, e a contagem vai para a
+     dica. O lado direito só fala quando há algo fora do normal: lista vazia, lista que não veio
+     ou lista velha (aí é estado, não contagem, e não pode ficar escondido). */
+  secFora.title = 'Sessões do Claude rodando nesta máquina por fora daqui (Terminal, VS Code, robô agendado)'
+    + (fora.length ? '\n' + fora.length + (fora.length === 1 ? ' sessão' : ' sessões') : '');
   $('.torre-conta', secFora).textContent = fora.length
-    ? fora.length + (fora.length === 1 ? ' sessão' : ' sessões') + (torreAgentes.velha ? ' (lista antiga: não consegui atualizar)' : '')
+    ? (torreAgentes.velha ? 'lista antiga' : '')
     : (torreAgentes.erro ? 'não consegui listar' : 'nenhuma');
+  if (fora.length && torreAgentes.velha) $('.torre-conta', secFora).title = 'Não consegui atualizar: é a última lista que veio';
   box.appendChild(secFora);
   const COMO = { interactive: 'terminal / VS Code', background: 'segundo plano', subagent: 'subagente', sdk: 'via SDK', headless: 'sem tela' };
   for (const a of fora) {
@@ -9817,15 +9880,26 @@ function linhaDaRotina(t) {
      com ele, "com.homero.ingresso-revisor" aparecia como "com.homero.ingresso-…" e não dava
      para saber de qual robô era a linha. Sai da tela, fica na dica e no aviso do disparo. */
   $('.ri-tit', d).textContent = t.dele ? t.nome.replace(/^com\.(homeromotti|homero|adsure)\./, '') : t.nome;
+  /* Duas linhas curtas, como no desenho (26/09): o ESTADO ("Rodou bem", "Parou: sem acesso à
+     pasta", "Rodando agora") e o HORÁRIO ("Última hoje 08:00 · próxima amanhã 08:00"). Antes o
+     horário ia dentro do estado ("Parou de funcionar em hoje 00:11: …") e a linha vermelha
+     quebrava em duas. */
   const ultima = quandoDaRotina(t.ultima);
-  $('.ri-est-txt', d).textContent = rodando
-    ? (t.residente ? 'ligada' : 'rodando') + (ultima ? ' desde ' + ultima : ' agora')
-    : t.falhou
-      ? 'parou de funcionar' + (ultima ? ' em ' + ultima : '') + ': ' + (t.motivo || 'motivo desconhecido')
-      : (ultima ? 'rodou ' + ultima : 'sem registro de execução') + (t.estado === 'desativada' ? ' · desativada' : '');
   const proxima = quandoDaRotina(t.proxima);
-  $('.ri-quando', d).textContent = proxima ? 'próxima: ' + proxima : (t.cadencia || 'sem hora marcada');
-  // a linha começa com maiúscula, como no desenho ("Rodou hoje 08:00", "Próxima: amanhã 08:00")
+  $('.ri-est-txt', d).textContent = rodando
+    ? (t.residente ? 'ligada' : 'rodando agora')
+    : t.falhou
+      ? 'parou: ' + (t.motivo || 'motivo desconhecido')
+      : t.estado === 'desativada' ? 'desativada'
+      : ultima ? 'rodou bem' : 'sem registro de execução';
+  const minuscula = (x) => x ? x.charAt(0).toLowerCase() + x.slice(1) : '';
+  const quando = [
+    ultima ? (rodando ? (t.residente ? 'desde ' : 'iniciou ') : 'última ') + ultima : '',
+    // a ligada o tempo todo já diz isso no estado: repetir "fica ligada o tempo todo" é ruído
+    proxima ? 'próxima ' + proxima : (rodando && t.residente) ? '' : minuscula(t.cadencia) || (ultima ? '' : 'sem hora marcada'),
+  ].filter(Boolean).join(' · ');
+  $('.ri-quando', d).textContent = quando;
+  // a linha começa com maiúscula, como no desenho ("Rodou bem", "Última hoje 08:00 · próxima …")
   for (const el of [$('.ri-est-txt', d), $('.ri-quando', d)]) el.textContent = el.textContent.charAt(0).toUpperCase() + el.textContent.slice(1);
   // nome comprido corta com reticências na coluna estreita: o inteiro fica na dica
   d.title = t.nome + (t.caminho ? '  ·  ' + t.caminho : '');
@@ -9944,19 +10018,28 @@ async function pintarRotinas(forcar) {
   const falhasDoSistema = doSistema.filter((t) => t.falhou).length;
   const total = rotinasCache.itens.length;
 
-  const resumo = document.createElement('div');
-  resumo.className = 'rot-resumo' + (falhas.length ? ' tem-falha' : '');
-  resumo.textContent = !total
-    ? (rotinasCache.erro ? 'Não consegui ler o launchd deste Mac.' : 'Nenhuma rotina agendada nesta máquina.')
+  /* 26/09 (desenho novo): a conta vai para o cabeçalho, ao lado de "Rotinas" (só o número das
+     DELE, que são as que a lista mostra), e o resumo por extenso ("… · nenhuma falha
+     identificada") saiu da tela para a dica desse número. Na tela fica só o que é exceção: lista
+     vazia, launchd que não respondeu, lista velha. */
+  const resumoTxt = !total ? ''
     : total + (total === 1 ? ' rotina' : ' rotinas') + ' · '
       + (falhas.length
         ? falhas.length + (falhas.length === 1 ? ' sua parou de funcionar' : ' suas pararam de funcionar')
         : (falhasDoSistema ? 'nenhuma falha identificada nas suas' : 'nenhuma falha identificada'))
-      + (falhasDoSistema ? ' · ' + falhasDoSistema + ' do sistema também' : '')
-      + (rotinasCache.velha ? ' · lista antiga: não consegui atualizar' : '');
+      + (falhasDoSistema ? ' · ' + falhasDoSistema + ' do sistema também' : '');
+  const conta = $('#rotConta');
+  if (conta) { conta.textContent = total ? String(minhas.length) : ''; conta.title = resumoTxt; }
 
   box.innerHTML = '';
-  box.appendChild(resumo);
+  if (!total || rotinasCache.velha) {
+    const resumo = document.createElement('div');
+    resumo.className = 'rot-resumo';
+    resumo.textContent = !total
+      ? (rotinasCache.erro ? 'Não consegui ler o launchd deste Mac' : 'Nenhuma rotina agendada nesta máquina')
+      : 'Lista antiga: não consegui atualizar';
+    box.appendChild(resumo);
+  }
   if (rotinasCache.erro && total) {
     const m = document.createElement('div');
     m.className = 'rot-resumo';
@@ -9973,7 +10056,9 @@ async function pintarRotinas(forcar) {
     box.appendChild(cx);
   }
   if (resto.length) {
-    box.appendChild(grupoDeRotinas(falhas.length ? 'As outras suas' : 'Em dia', resto.length));
+    /* sem nenhuma parada as dele vêm logo abaixo do título, sem cabeçalho "Em dia" (o desenho
+       não tem): o cabeçalho só existe para separar das que pararam, quando há alguma */
+    if (falhas.length) box.appendChild(grupoDeRotinas('As outras suas', resto.length));
     for (const t of resto) box.appendChild(linhaDaRotina(t));
   }
   // as do sistema ficam recolhidas: presentes, contadas, fora do destaque

@@ -87,7 +87,11 @@ test('Ajustes em cartões sem perder nenhum controle que o app.js liga', () => {
   assert.deepEqual(ids(web), [], 'celular: sumiu controle');
   for (const id of ['chkWeb', 'webInfo', 'chkAtalhosGlobais', 'atalhosAviso']) assert.ok(mac.includes('id="' + id + '"'), id);
   for (const html of [mac, web]) {
-    assert.equal((html.match(/class="tema-bt" data-aparencia="(auto|clara|escura)"/g) || []).length, 3);
+    // Aparência é pop-up (26/09): <select> com as três opções dentro do botão de 22
+    assert.match(html, /<label class="aj-pop aj-sel"><span class="path-box" id="aparenciaTxt">[^<]*<\/span>.*<select id="selAparencia"[^>]*><option value="auto">Automática<\/option><option value="clara">Clara<\/option><option value="escura">Escura<\/option><\/select><\/label>/);
+    assert.doesNotMatch(html, /class="tema-bt"/, 'o segmentado saiu');
+    // Versão sem (i): a explicação mora na dica da linha
+    assert.match(html, /<section class="aj" title="Acesso total ligado[^"]*">\s*<div class="aj-tit">Versão<\/div>/);
     // o caminho mora DENTRO do botão que troca/abre a pasta (pop-up), e a caixa de entrada fica
     // por último no cartão do celular: escondida no meio, sobraria um fio a mais em cima da vizinha
     assert.match(html, /<button class="aj-pop" id="btnDefCwd"[^>]*><span class="path-box" id="defCwd">/);
@@ -110,8 +114,11 @@ test('toggle verde, cartão fill-4 com raio 10, e nada de caixa alta espaçada',
   // coluna de 280 + 1 de borda; item de 28; conversa aberta = fill-1 e 600, sem contorno azul
   assert.match(c, /#sidebar\{width:281px;/);
   assert.match(c, /\.hist-item\{height:28px;/);
-  assert.match(c, /\.hist-item\.on,\.hist-item\.aberta\{background:var\(--fill-1\);outline:0\}/);
-  assert.match(c, /\.hist-item\.on \.hi-t,\.hist-item\.aberta \.hi-t\{font-weight:600\}/);
+  // selecionada é UMA: a do chat em foco (.no-foco); aberta em outro chat só ganha peso 500
+  assert.match(c, /\.hist-item\.on,\.hist-item\.aberta\{background:transparent;outline:0\}/);
+  assert.match(c, /\.hist-item\.no-foco\{background:var\(--fill-1\)\}/);
+  assert.match(c, /\.hist-item\.no-foco \.hi-t\{font-weight:600\}/);
+  assert.match(c, /\.aj \+ \.aj\{[^}]*min-height:37px/, '36 de linha + 1 de fio');
 });
 
 test('rotina com ▶ de 26 e torre com o logo da IA e o sinal de estado', () => {
@@ -126,4 +133,61 @@ test('rotina com ▶ de 26 e torre com o logo da IA e o sinal de estado', () => 
   assert.match(torre, /' rd-anel' : estado\.cls === 'espera' \? ' rd-espera'/, 'anel = trabalhando, "!" = esperando você');
   assert.match(pegar('pintarTorre'), /engine: P\.engine, foco: P === focusPane/);
   assert.match(css, /\.ri-acao\{flex:none;width:26px;height:26px;/);
+});
+
+test('a selecionada da lista segue o chat em foco', () => {
+  const pa = pegar('pintarAberta');
+  assert.match(pa, /d\.classList\.toggle\('no-foco'/);
+  assert.match(pa, /F\.resumeId === sid \|\| F\.sessaoId === sid/);
+  assert.match(pegar('setFocus'), /marcarAbertas\(\);/, 'trocar de chat repinta a selecionada');
+});
+
+test('torre e rotinas sem linha de resumo e com as palavras curtas do desenho', () => {
+  const torre = pegar('pintarTorre');
+  assert.match(torre, /textContent = 'Fora do app'/);
+  assert.doesNotMatch(torre, /Fora do Cockpit/);
+  assert.doesNotMatch(torre, /box\.appendChild\(resumo\)/, 'a contagem saiu da tela (foi para a dica)');
+  const lt = pegar('linhaDaTorre');
+  assert.match(lt, /estado\.cls === 'espera' \? 'esperando você'/);
+  assert.match(lt, /'parado, motor ligado' \? 'pronto'/);
+  assert.match(lt, /' rd-nova'/, 'resposta nova = ponto azul');
+  const rot = pegar('linhaDaRotina');
+  assert.match(rot, /'parou: ' \+ \(t\.motivo/);
+  assert.match(rot, /'rodou bem'/);
+  assert.match(rot, /'última '/);
+  assert.doesNotMatch(rot, /parou de funcionar' \+ \(ultima/, 'o horário saiu da linha vermelha');
+  const pr = pegar('pintarRotinas');
+  assert.match(pr, /\$\('#rotConta'\)/, 'a contagem vai para o cabeçalho');
+  assert.match(pr, /if \(falhas\.length\) box\.appendChild\(grupoDeRotinas\('As outras suas'/, 'sem parada não há cabeçalho "Em dia"');
+  for (const pagina of ['renderer/index.html', 'renderer/index-web.html'])
+    assert.match(ler(pagina), /<span class="sh-conta" id="rotConta"><\/span><button class="mini" id="btnRotinasAtualizar"/);
+  const c = semComentario(css);
+  // o ▶ desativado é o do botão normal da folha do Sistema (label-4 sobre fill-4 sumia no claro)
+  assert.match(c, /\.ri-acao:disabled,\.ri-acao:disabled:hover\{opacity:1;background:var\(--fill-3\);color:var\(--label-3\)/);
+  // os botões da sessão de fora QUEBRAM de linha na coluna estreita, em vez de sair cortados
+  assert.match(c, /\.ti-acoes\{[^}]*flex-wrap:wrap/);
+});
+
+test('busca: a palavra achada cai na parte visível do trecho', () => {
+  const ctx = {};
+  vm.runInNewContext(pegar('trechoPerto') + '\nthis.f = trechoPerto;', ctx);
+  const t = '…no Higgsfield com o seu Google pra ver se o checkout novo da página abre certo no celular';
+  const r = ctx.f(t, 'checkout');
+  assert.ok(r.startsWith('…'));
+  assert.ok(r.toLowerCase().indexOf('checkout') <= 20, 'a marca tem de ficar no começo da linha: ' + r);
+  assert.ok(r.endsWith('abre certo no celular'), 'o que vem depois fica igual');
+  assert.equal(ctx.f('o checkout abriu', 'checkout'), 'o checkout abriu', 'perto do começo não mexe');
+  assert.equal(ctx.f('nada a ver aqui com isso tudo junto', 'xyz'), 'nada a ver aqui com isso tudo junto');
+  assert.match(pegar('linhaConversa'), /marcarTermo\(\$\('\.hi-trecho', d\), trechoPerto\(trecho, termo\), termo\)/);
+});
+
+test('uso por IA: nome da IA na linha, conta na dica; ↻ só no hover do cabeçalho; busca 16px só no celular', () => {
+  const b = pegar('pintarBlocoDeUso');
+  assert.match(b, /\$\('\.cv-uso-nome', bloco\)\.textContent = motor;/);
+  const c = semComentario(css);
+  assert.match(c, /\.cv-uso-logo\{width:16px;height:16px\}/);
+  assert.match(c, /\.cv-uso-motor\{gap:12px;/);
+  assert.match(c, /@media \(hover:hover\)\{\s*\.side-head \.mini\{position:absolute;[^}]*opacity:0\}/);
+  assert.doesNotMatch(c, /\n\s*\.side-busca\{font-size:16px\}/, 'sem o guarda do celular a busca virava 16px numa janela estreita do Mac');
+  assert.match(c, /body:has\(#btnGaveta\) \.side-busca\{font-size:16px\}/);
 });

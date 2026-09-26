@@ -7,7 +7,7 @@
    Entrada e Avançado em cartão --fill-4, linhas de 36, (i) com a explicação no tooltip, toggle
    32×18 ligado em --status-ok; Aparência: Automática / Clara / Escura).
    Seletores de hoje: #sidebar, .side-*, .sc-*, .hist*, .hi-*, .new-chat, .grp-*, .aba-grupo, .torre*,
-   .ti-*, .rot*, .ri-*, .settings, .aj*, .chave, .temas, .tema-*, .info, .dica, #dragbar.
+   .ti-*, .rot*, .ri-*, .settings, .aj*, .chave, .info, .dica, .sh-conta, #dragbar.
    Carrega DEPOIS do style.css e do quadro.css (e do celular.css no iPhone): ganha deles sem
    !important. Usar os tokens (../cockpit-tokens.css) e as peças rd- do base.css.
    As medidas saem do "Cockpit Janela.dc.html" (estilo inline de cada elemento, telas 16 a 20) e
@@ -39,30 +39,54 @@
 .side-pastas::-webkit-scrollbar-thumb,
 .hist::-webkit-scrollbar-thumb:hover,.torre::-webkit-scrollbar-thumb:hover,.rot::-webkit-scrollbar-thumb:hover,
 .settings::-webkit-scrollbar-thumb:hover,.side-pastas::-webkit-scrollbar-thumb:hover{border-width:2px}
+/* Barra de rolagem como a do Mac: some quando o mouse não está na lista (o desenho não mostra
+   polegar nenhum). Com o mouse em cima, ou rolando com ele ali, o polegar de 4 aparece. Só com
+   mouse: no toque o sistema já esconde a barra sozinho. */
+@media (hover:hover){
+  :is(.hist,.torre,.rot,.settings,.side-pastas):not(:hover)::-webkit-scrollbar-thumb{background:transparent}
+}
 
-/* título Title 3 (15/20 600) com padding 14 16 12; o ↻ fica à direita como botão-ícone */
-.side-head{height:auto;flex:none;display:flex;align-items:center;justify-content:flex-start;gap:8px;
+/* título Title 3 (15/20 600) com padding 14 16 12 */
+.side-head{position:relative;height:auto;flex:none;display:flex;align-items:center;justify-content:flex-start;gap:8px;
   padding:14px 16px 12px;font:var(--f-title3);color:var(--label-1);text-transform:none;letter-spacing:0}
 .side-head > span:first-child{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* contagem ao lado do título (Rotinas "6"): 11/16, label-3, números tabulares, colada à direita */
+.sh-conta{flex:none;margin-left:auto;font:400 11px/16px var(--font-sans);color:var(--label-3);
+  font-variant-numeric:tabular-nums;transition:opacity var(--dur-fast) ease-out}
+.sh-conta:empty{display:none}
 .side-head .mini{flex:none;width:24px;height:24px;margin:-2px -6px -2px 0;padding:0;border:0;border-radius:6px;
   background:transparent;color:var(--label-2);font-size:0;
-  transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
+  transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out,opacity var(--dur-fast) ease-out}
 .side-head .mini:hover{background:var(--fill-3);color:var(--label-1)}
 .side-head .mini:active{background:var(--fill-2);color:var(--label-1)}
+.side-head .mini:focus-visible{outline:none;box-shadow:var(--anel-foco)}
 .side-head .mini .ic{width:var(--ic-botao);height:var(--ic-botao)}
+/* O ↻ (atualizar agora) não está no desenho: o cabeçalho é só o título (e a contagem). Com mouse
+   ele fica escondido no canto e aparece ao passar sobre o cabeçalho, como os botões de seção da
+   barra lateral do Mac; em cima da contagem, que sai enquanto ele está à vista. Pelo teclado
+   (Tab) ele aparece ao ganhar o foco. No toque não há passar por cima: lá ele fica sempre. */
+@media (hover:hover){
+  .side-head .mini{position:absolute;top:12px;right:10px;margin:0;opacity:0}
+  .side-head:hover .mini,.side-head .mini:focus-visible{opacity:1}
+  .side-head:hover .sh-conta,.side-head:focus-within .sh-conta{opacity:0}
+}
 
 /* ============================ CONVERSAS ============================ */
 
 /* uso do plano: um bloco por IA. Logo na cor da IA (SÓ o logo) + nome + plano; barras Sessão e
    Semana com rótulo 11, % 600 tabular, "zera …" em label-3, trilho de 3 em fill-1 e o
    preenchimento em label-2 (nada de azul: uso não é ação). */
+/* A linha da IA tem a geometria da linha de título do desenho (26/09): 20 de altura, logo de
+   16 e o nome 8pt depois dele, o plano à direita em 11/16 label-2, e 12 até a barra Sessão. O
+   nome da IA fica em 13/16 600 e não em Title 3: na lista única o título da coluna é
+   "Conversas", e quatro nomes de IA no mesmo corpo do título brigariam com ele. */
 .cv-uso{gap:12px;padding:0 16px 12px}
-.cv-uso-motor{gap:8px;border-radius:0}
-.cv-uso-cab{gap:8px;font:var(--f-body)}
-.cv-uso-logo{width:14px;height:14px}
-.cv-uso-logo svg{width:14px;height:14px}
+.cv-uso-motor{gap:12px;border-radius:0}
+.cv-uso-cab{min-height:20px;gap:8px;font:var(--f-body)}
+.cv-uso-logo{width:16px;height:16px}
+.cv-uso-logo svg{width:16px;height:16px}
 .cv-uso-nome{font:var(--f-headline);color:var(--label-1)}
-.cv-uso-plano{font:var(--f-sub);color:var(--label-2);text-transform:capitalize}
+.cv-uso-plano{font:400 11px/16px var(--font-sans);color:var(--label-2);text-transform:capitalize}
 .cv-uso-entrar{flex:none;height:22px;padding:0 10px;border:0;border-radius:6px;background:var(--fill-2);
   color:var(--label-1);font:var(--f-callout);transition:background-color var(--dur-fast) ease-out}
 .cv-uso-entrar:hover{background:var(--fill-1)}
@@ -148,7 +172,7 @@ html[data-theme$="-hc"] .side-pastas{box-shadow:var(--shadow-float),inset 0 0 0 
 /* o cabeçalho do grupo gruda no alto ao rolar: fundo da própria coluna, para o item passar por baixo.
    top:-10px = o padding de cima da lista: com 0 ele grudava 10pt abaixo da borda e o item que
    subia aparecia cortado por cima dele. */
-.hist-cab{position:sticky;top:-10px;z-index:2;margin-top:10px;padding:4px 8px 4px;font:600 11px/14px var(--font-sans);
+.hist-cab{position:sticky;top:-10px;z-index:2;margin-top:10px;margin-bottom:1px;padding:4px 8px 4px;font:600 11px/14px var(--font-sans);
   color:var(--label-2);text-transform:none;letter-spacing:0;
   background:linear-gradient(var(--bg-sidebar),var(--bg-sidebar)),var(--bg-window)}
 .hist-cab:first-child{margin-top:-4px}
@@ -156,11 +180,17 @@ html[data-theme$="-hc"] .side-pastas{box-shadow:var(--shadow-float),inset 0 0 0 
 .hist-cab::first-letter{text-transform:uppercase}
 .hist-item{height:28px;margin-bottom:1px;padding:0 8px;gap:8px;border-radius:6px;color:var(--label-1)}
 .hist-item:hover{background:var(--fill-3)}
-/* selecionada = a conversa aberta: fill-1 e peso 600. Antes era um contorno azul (borda colorida
-   o desenho não quer); a conversa aberta em algum chat ganha o mesmo destaque da clicada. */
-.hist-item.on,.hist-item.aberta{background:var(--fill-1);outline:0}
-.hist-item.on .hi-t,.hist-item.aberta .hi-t{font-weight:600}
-.hist-item:focus-visible{outline:none;box-shadow:var(--anel-foco)}
+/* selecionada = a conversa do chat EM FOCO (.no-foco, pintarAberta): fill-1 e peso 600, uma só.
+   Aberta em outro chat da tela: só o título em 500, sem fundo — com o fundo em todas, três chats
+   abertos acendiam três linhas iguais. A clicada por último (.on) não pinta mais nada: ela já é
+   a do chat em foco, e depois que ele troca de chat o destaque tem de ir junto. Antes era um
+   contorno azul (borda colorida o desenho não quer). */
+.hist-item.on,.hist-item.aberta{background:transparent;outline:0}
+.hist-item.aberta .hi-t{font-weight:500}
+.hist-item.no-foco{background:var(--fill-1)}
+.hist-item.no-foco .hi-t{font-weight:600}
+/* foco do teclado: anel de 2 em accent 45% (folha do Sistema, "Item da lista de conversas") */
+.hist-item:focus-visible{outline:none;box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 45%,transparent)}
 /* título + logos das IAs da conversa + tempo à direita. No HTML o tempo vem primeiro (a busca e os
    testes contam com essa ordem): o order põe cada peça no lugar do desenho sem mexer no DOM. */
 .hi-t{order:1;font:var(--f-body);color:var(--label-1)}
@@ -180,10 +210,21 @@ html[data-theme$="-hc"] .side-pastas{box-shadow:var(--shadow-float),inset 0 0 0 
 .hi-fav.on{color:var(--label-2)}
 .hi-fav.on .ic{fill:currentColor;stroke:currentColor}
 .hi-fav.on:hover{color:var(--label-1)}
-/* com o mouse em cima os botões aparecem e o tempo sai da frente: sem isso o título ficava com
-   metade da largura. Só com mouse; no toque os botões ficam sempre à vista (celular.css). */
+/* Os quatro botões da linha não estão no desenho (a folha do Sistema mostra o hover só com o
+   fundo fill-3): são funções da lista que só aparecem com o mouse em cima. Fora do hover eles
+   ficam com largura zero e o recuo cancela o vão INTEIRO do item (8): o style.css cancelava 7,
+   do vão antigo, e sobrava 1pt por botão, que empurrava o tempo 4pt para dentro da borda.
+   No hover o tempo sai da frente e os quatro entram juntos, com 2 entre eles (um grupo só): o
+   título fica com ~134pt em vez dos ~116 de antes. Só com mouse; no toque os botões ficam
+   sempre à vista (celular.css). */
 @media (hover:hover){
+  .hist-item:not(.com-trecho):not(.com-onde) .hi-fav:not(.on),
+  .hist-item:not(.com-trecho):not(.com-onde) .hi-edit,
+  .hist-item:not(.com-trecho):not(.com-onde) .hi-grupo:not(.on),
+  .hist-item:not(.com-trecho):not(.com-onde) .hi-mais{margin-left:-8px}
   .hist-item:not(.com-trecho):not(.com-onde):hover .hi-w{display:none}
+  .hist-item:not(.com-trecho):not(.com-onde):hover .hi-fav{margin-left:0}
+  .hist-item:not(.com-trecho):not(.com-onde):hover :is(.hi-edit,.hi-grupo,.hi-mais){margin-left:-6px}
 }
 
 /* resultado da busca: título, "IA · cliente" em label-3 e o trecho achado com a marca amarela */
@@ -205,7 +246,12 @@ html[data-theme$="-hc"] .side-pastas{box-shadow:var(--shadow-float),inset 0 0 0 
 }
 .hist-item.com-onde .hi-fav,.hist-item.com-onde .hi-edit,.hist-item.com-onde .hi-grupo,.hist-item.com-onde .hi-mais,
 .hist-item.com-trecho .hi-fav,.hist-item.com-trecho .hi-edit,.hist-item.com-trecho .hi-grupo,.hist-item.com-trecho .hi-mais{top:4px}
-.hist-item.com-onde .hi-motores,.hist-item.com-trecho .hi-motores{margin:2px 6px 0 0}
+/* os logos das IAs ficam à DIREITA do título, como na lista (título, logos, tempo); o style.css
+   punha à esquerda. Com o mouse em cima os botões ocupam o canto e os logos saem da frente. */
+.hist-item.com-onde .hi-motores,.hist-item.com-trecho .hi-motores{float:right;margin:2px 0 0 8px}
+@media (hover:hover){
+  .hist-item.com-onde:hover .hi-motores,.hist-item.com-trecho:hover .hi-motores{display:none}
+}
 .pn-input{height:22px;padding:0 6px;border:0;border-radius:6px;background:var(--fill-2);color:var(--label-1);
   font:var(--f-body);box-shadow:var(--anel-foco)}
 
@@ -226,11 +272,13 @@ html[data-theme$="-hc"] .side-pastas{box-shadow:var(--shadow-float),inset 0 0 0 
 
 /* ============================ TORRE ============================ */
 .torre{padding:0 0 12px 8px;gap:1px;font:var(--f-body)}
+/* só aparece sem chat nenhum aberto ("Nenhum chat aberto"): o resumo com a contagem saiu da tela */
 .torre-resumo{padding:0 8px 10px;font:var(--f-sub);color:var(--label-3);font-variant-numeric:tabular-nums}
 /* grupo por aba: 11, 600, label-2; a bolinha azul saiu (azul é "resposta nova") */
 .torre-aba{margin-top:15px;padding:0 8px 4px;gap:8px;font:600 11px/14px var(--font-sans);color:var(--label-2);
   text-transform:none;letter-spacing:0}
-.torre-resumo + .torre-aba{margin-top:0}
+/* o primeiro grupo cola no título (y=46 no desenho) */
+.torre-aba:first-child,.torre-resumo + .torre-aba{margin-top:0}
 .torre-cor{display:none}
 .torre-conta{font-weight:400;color:var(--label-3);font-variant-numeric:tabular-nums}
 .torre-fora{padding-top:12px;border-top:1px solid var(--separator)}
@@ -256,15 +304,20 @@ html[data-theme$="-hc"] .side-pastas{box-shadow:var(--shadow-float),inset 0 0 0 
 .ti-est{display:flex;align-items:center;gap:6px;min-width:0;font:var(--f-sub);color:var(--label-2);
   font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
 .ti-est-txt{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.ti-sinal:not(.rd-anel):not(.rd-espera){display:none}
+.ti-sinal:not(.rd-anel):not(.rd-espera):not(.rd-nova){display:none}
+/* resposta nova: ponto azul de 6 (na linha de estado da torre o desenho usa 6, não os 7 da aba) */
+.ti-sinal.rd-nova{width:6px;height:6px}
 .ti-sinal.rd-anel{width:9px;height:9px}
 .ti-sinal.rd-espera{width:12px;height:12px;font-size:9px}
 .torre-item.espera .ti-est{color:var(--status-wait-text)}
 .torre-item.vazio .ti-est{color:var(--label-3)}
-/* sessão de fora: caminho em mono + tempo; embaixo "Copiar comando" e "Abrir pasta" (22, fill-2) */
-/* numa linha só, como no desenho (os dois somam 227 num vão de 226: quebrar jogava o "Abrir pasta"
-   para uma terceira linha) */
-.ti-acoes{flex:1 0 100%;flex-wrap:nowrap;gap:6px;padding:6px 0 0 22px}
+/* sessão de fora: caminho em mono + tempo; embaixo "Copiar comando" e "Abrir pasta" (22, fill-2).
+   Os dois somam 227 e o vão é de 226: o próprio desenho passa 1pt da borda do item (o "Abrir pasta"
+   termina em x=266). O recuo de -2 à direita (1 do desenho + 1 de folga para o arredondamento
+   do texto) mantém os dois lado a lado nos 280;
+   com a coluna mais estreita (a alça deixa ir até 220) o segundo DESCE para a linha de baixo em
+   vez de sair da coluna cortado ("Abri"). */
+.ti-acoes{flex:1 0 calc(100% + 2px);flex-wrap:wrap;gap:6px;margin-right:-2px;padding:6px 0 0 22px}
 .ti-acao{flex:none;height:22px;padding:0 8px;display:flex;align-items:center;gap:5px;border:0;border-radius:6px;
   background:var(--fill-2);color:var(--label-1);font:400 12px/15px var(--font-sans);white-space:nowrap;align-self:auto;
   transition:background-color var(--dur-fast) ease-out}
@@ -275,10 +328,12 @@ html[data-theme$="-hc"] .side-pastas{box-shadow:var(--shadow-float),inset 0 0 0 
 /* ============================ ROTINAS ============================ */
 .rot{padding:0 0 12px 8px;gap:2px;font:var(--f-body)}
 .rot-carregando{padding:0 8px;font:var(--f-sub);color:var(--label-3)}
+/* só para exceção (lista vazia, launchd que não respondeu, lista velha): a contagem foi para o
+   cabeçalho (.sh-conta) e o resumo por extenso para a dica dela */
 .rot-resumo{padding:0 8px 10px;font:var(--f-sub);color:var(--label-3);font-variant-numeric:tabular-nums}
-.rot-resumo.tem-falha{color:var(--status-error);font-weight:500}
 .rot-grupo{margin-top:12px;padding:0 8px 4px;gap:8px;font:600 11px/14px var(--font-sans);color:var(--label-2);
   text-transform:none;letter-spacing:0}
+.rot > .rot-grupo:first-child,.rot > .rot-caixa:first-child > .rot-grupo:first-child,
 .rot-resumo + .rot-grupo,.rot-resumo + .rot-caixa > .rot-grupo:first-child{margin-top:0}
 .rot-conta{font-weight:400;color:var(--label-3);font-variant-numeric:tabular-nums}
 .rot-grupo.clicavel{height:24px;padding:0 8px;border-radius:6px}
@@ -313,7 +368,9 @@ html[data-theme$="-hc"] .side-pastas{box-shadow:var(--shadow-float),inset 0 0 0 
 .ri-acao .rd-anel{width:10px;height:10px}
 .ri-acao:hover{background:var(--fill-2);color:var(--label-1);border-color:transparent}
 .ri-acao:active{background:var(--fill-1)}
-.ri-acao:disabled,.ri-acao:disabled:hover{opacity:1;background:var(--fill-4);color:var(--label-4);cursor:default}
+/* desativado = o do botão normal da folha do Sistema: fill-3 + label-3 (label-4 sobre fill-4
+   sumia no claro) */
+.ri-acao:disabled,.ri-acao:disabled:hover{opacity:1;background:var(--fill-3);color:var(--label-3);cursor:default}
 
 /* ============================ AJUSTES ============================
    Grupos Geral, Entrada e Avançado: rótulo 11/600 em label-2 e o cartão em fill-4, raio 10,
@@ -326,7 +383,9 @@ html[data-theme$="-hc"] .side-pastas{box-shadow:var(--shadow-float),inset 0 0 0 
 .aj{display:flex;flex-wrap:wrap;align-items:center;column-gap:8px;min-height:36px;padding:0 10px;
   border-top:1px solid var(--separator)}
 .aj:first-child{border-top:0}
-.aj + .aj{border-top:1px solid var(--separator)}
+/* 36 de linha + o fio de 1 em cima = 37 a partir da segunda (o cartão Geral mede 110, como no
+   desenho); o fio é borda, então sem isto ele comia 1pt da linha */
+.aj + .aj{border-top:1px solid var(--separator);min-height:37px}
 .aj-tit{flex:1;min-width:0;min-height:0;margin:0;display:flex;align-items:center;justify-content:space-between;gap:8px;
   font:var(--f-body);color:var(--label-1);text-transform:none;letter-spacing:0}
 .aj-txt{flex:none;font:400 12px/15px var(--font-sans);color:var(--label-2);font-variant-numeric:tabular-nums}
@@ -359,19 +418,13 @@ html[data-theme$="-hc"] .dica{box-shadow:var(--shadow-float),inset 0 0 0 1px var
 html[data-theme$="-hc"] .chave input:not(:checked){box-shadow:inset 0 0 0 1px var(--separator-strong)}
 html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inset 0 0 0 1px var(--separator-strong),var(--anel-foco)}
 
-/* Aparência: seletor segmentado (fora 8, dentro 6, recuo de 2) na largura da linha. Numa linha de
-   36 os três nomes não cabem ao lado do título (a coluna tem 280): o seletor desce para baixo dele. */
-.aj-aparencia{padding-bottom:10px}
-.aj-aparencia .aj-tit{flex:1 0 100%;min-height:36px}
-.temas{flex:1 0 100%;display:flex;gap:0;padding:2px;border-radius:8px;background:var(--fill-3)}
-.tema-bt{flex:1;height:22px;padding:0 8px;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:0;
-  border:0;border-radius:6px;background:transparent;color:var(--label-2);font:500 12px/15px var(--font-sans);
-  transition:color var(--dur-fast) ease-out}
-.tema-bt:hover{background:transparent;color:var(--label-1)}
-.tema-bt.on{background:var(--control-selected);color:var(--label-1);border-color:transparent;
-  box-shadow:0 1px 2px rgba(0,0,0,.18),0 0 0 .5px var(--separator-strong)}
-.tema-bt:focus-visible{box-shadow:var(--anel-foco)}
-.tema-am{display:none}
+/* Aparência: pop-up de 22 em fill-2 à direita, como a Pasta inicial ("Automática ⇅"). O <select>
+   de verdade fica invisível por cima do botão inteiro: o clique abre o menu do sistema, e o anel
+   de foco do teclado aparece no botão. Os seletores velhos (.temas, .tema-bt) saíram do HTML. */
+.aj-sel{position:relative;cursor:default}
+.aj-sel select{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:0;opacity:0;
+  font:400 12px/15px var(--font-sans);cursor:default;-webkit-appearance:none;appearance:none}
+.aj-sel:focus-within{box-shadow:var(--anel-foco)}
 
 /* Foto: círculo de 22 + botões small (22, fill-2, raio 6) */
 .foto-linha{flex:none;gap:6px}
@@ -379,6 +432,12 @@ html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inse
 .foto-prev .ic{width:12px;height:12px}
 .foto-btns{flex:none;flex-direction:row;gap:6px}
 .foto-btns .btn-wide,.foto-btns .btn-wide:hover{width:auto}
+/* "Remover" não está no desenho (só "Alterar…"): com mouse ele aparece ao passar sobre a linha
+   da Foto (ou ao chegar nela pelo Tab); fora disso a linha fica igual ao desenho, com o (i) perto
+   do controle. No toque, sem passar por cima, ele fica sempre. */
+@media (hover:hover){
+  .aj:not(:hover):not(:focus-within) #btnFotoTirar{display:none}
+}
 .foto-btns .btn-wide,.aj-pop{height:22px;margin:0;padding:0 8px;border:0;border-radius:6px;background:var(--fill-2);
   color:var(--label-1);font:400 12px/15px var(--font-sans);white-space:nowrap;
   transition:background-color var(--dur-fast) ease-out}
@@ -404,7 +463,7 @@ html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inse
   body:has(#btnGaveta) .hist-cab{position:static;background:none}
   body:has(#btnGaveta) :is(.side-filtro,.side-busca-cx){height:32px}
   body:has(#btnGaveta) .side-filtro{max-width:150px}
-  .side-busca{font-size:16px}
+  body:has(#btnGaveta) .side-busca{font-size:16px}
   body:has(#btnGaveta) .new-chat{height:40px}
   body:has(#btnGaveta) .hist-item{height:auto;min-height:40px;padding:10px 9px}
   body:has(#btnGaveta) .sp-item{height:36px}

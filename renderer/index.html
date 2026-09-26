@@ -100,7 +100,7 @@
     </div>
     <!-- leva 11: a lista é desenhada por pintarRotinas() -->
     <div class="side-view hidden" data-view="rotinas">
-      <div class="side-head"><span>Rotinas</span><button class="mini" id="btnRotinasAtualizar" title="Atualizar agora"></button></div>
+      <div class="side-head"><span>Rotinas</span><span class="sh-conta" id="rotConta"></span><button class="mini" id="btnRotinasAtualizar" title="Atualizar agora"></button></div>
       <div class="rot" id="rotinas"></div>
     </div>
     <div class="side-view hidden" data-view="settings">
@@ -114,11 +114,9 @@
           <div class="aj-cartao">
             <section class="aj aj-aparencia">
               <div class="aj-tit">Aparência<button class="info" type="button" aria-label="Como funciona" data-dica="Automática segue o claro e o escuro do Mac. Com Aumentar contraste ou Reduzir transparência ligados no Mac, o Cockpit reforça o contraste sozinho."></button></div>
-              <div class="temas" role="group" aria-label="Aparência">
-                <button class="tema-bt" data-aparencia="auto">Automática</button>
-                <button class="tema-bt" data-aparencia="clara">Clara</button>
-                <button class="tema-bt" data-aparencia="escura">Escura</button>
-              </div>
+              <!-- pop-up (26/09, como no desenho): o <select> invisível por cima abre o menu do
+                   sistema; o botão mostra a escolha (pintarAparencia no app.js) -->
+              <label class="aj-pop aj-sel"><span class="path-box" id="aparenciaTxt">Automática</span><span class="aj-seta"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 6L8 3.5 10.5 6M5.5 10L8 12.5 10.5 10"></path></g></svg></span><select id="selAparencia" aria-label="Aparência"><option value="auto">Automática</option><option value="clara">Clara</option><option value="escura">Escura</option></select></label>
             </section>
             <section class="aj">
               <div class="aj-tit">Foto<button class="info" type="button" aria-label="Como funciona" data-dica="Aparece nas suas mensagens."></button></div>
@@ -165,8 +163,8 @@
               <div class="aj-tit">Mostrar robôs<button class="info" type="button" aria-label="Como funciona" data-dica="Ligado, a lista mostra também as conversas do robô do WhatsApp e dos robôs agendados. Desligado, mostra só as suas."></button></div>
               <label class="chave"><input type="checkbox" id="chkRobos"><span>Mostrar robôs</span></label>
             </section>
-            <section class="aj">
-              <div class="aj-tit">Versão<button class="info" type="button" aria-label="Sobre" data-dica="Acesso total ligado: os chats enxergam o Mac inteiro. A pasta escolhida é só o ponto de partida. O Codex usa a sua conta do ChatGPT. O Claude usa o Claude Code já instalado, com suas skills e memória."></button></div>
+            <section class="aj" title="Acesso total ligado: os chats enxergam o Mac inteiro. A pasta escolhida é só o ponto de partida. O Codex usa a sua conta do ChatGPT. O Claude usa o Claude Code já instalado, com suas skills e memória.">
+              <div class="aj-tit">Versão</div>
               <span class="aj-txt" id="verLine">Cockpit</span>
             </section>
           </div>

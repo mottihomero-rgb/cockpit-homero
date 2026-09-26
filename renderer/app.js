@@ -1004,7 +1004,9 @@ function newPane(opts = {}) {
   const btEnvio = $('.p-modoenvio', el);
   const pintarEnvio = () => {
     const entra = P.envio === 'entra';
-    btEnvio.innerHTML = ico(entra ? 'zap' : 'queue')   // 'queue' = o desenho de "modo de envio" do redesenho + '<span>' + (entra ? 'Entra' : 'Fila') + '</span>';
+    // 'queue' = o desenho de "modo de envio" do redesenho. O rótulo (Entra/Fila) continua: com
+    // um chat só na aba é ele que diz o modo; com vários (#panes.multi) e no celular o CSS o esconde.
+    btEnvio.innerHTML = ico(entra ? 'zap' : 'queue') + '<span>' + (entra ? 'Entra' : 'Fila') + '</span>';
     btEnvio.title = entra
       ? 'Se ele estiver trabalhando, sua mensagem chega na hora e ELE decide: atende agora ou assim que terminar'
       : 'Se ele estiver trabalhando, sua mensagem espera ele terminar para só então começar';

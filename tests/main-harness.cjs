@@ -65,6 +65,7 @@ function loadMain() {
     return proc;
   }
   const forbidden = name => () => { violations.push(name); throw new Error('Efeito externo proibido no teste: ' + name); };
+  const nativeTheme = { themeSource: 'system', shouldUseDarkColors: true, on() {}, removeListener() {} };
   const electron = {
     app: {
       getPath: () => HOME + '/app-data', isPackaged: false,
@@ -75,6 +76,9 @@ function loadMain() {
     ipcMain: { handle(name, fn) { ipc.set(name, fn); } },
     BrowserWindow: forbidden('BrowserWindow'),
     dialog: {}, Menu: {}, shell: {}, clipboard: {}, powerSaveBlocker: {}, Notification: {},
+    // redesenho 25/09: o main acerta a Aparencia nativa (themeSource) a cada config:set. Sem
+    // isto o codigo so passava pelo `nativeTheme &&` e nenhum teste via a escolha chegar ao Mac.
+    nativeTheme,
   };
   const platform = {
     EH_WIN: false, acharBin: value => value, spawnBin: fakeSpawn,
@@ -142,7 +146,7 @@ function loadMain() {
   }
   ctx.__replyTransport = evaluate('codexIncoming');
   return {
-    HOME, files, ipc, events, wire, spawned, timers, violations, appEvents,
+    HOME, files, ipc, events, wire, spawned, timers, violations, appEvents, nativeTheme,
     attachCodex, evaluate,
     onAgyUso(fn) { ctx.__agyUso = fn; },
     // `resto` leva os argumentos extras de um handler que recebe mais de um (ex.: o

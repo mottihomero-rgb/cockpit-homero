@@ -87,6 +87,32 @@ test('Se o Mac trocou a mesma preferencia depois, quem manda e o Mac', async () 
   assert.deepEqual(guardado(gaveta), {}, 'a copia velha do telefone e jogada fora');
 });
 
+test('Mac regravou o tema com o nome novo (redesenho): a escolha do telefone continua', async () => {
+  /* O app novo, no Mac, troca 'escuro' por 'escura' (e 'claro'/'jornal' por 'clara') e grava
+     sozinho. Ninguem mexeu no tema do Mac: o telefone nao pode achar que o Mac trocou e jogar
+     fora a escolha dele. Gaveta como a versao antiga deixava: base com o nome antigo. */
+  const gaveta = gavetaDeMentira();
+  gaveta.setItem('cockpit:ajustes-do-telefone', JSON.stringify({ tema: { meu: 'claro', base: 'escuro' } }));
+  const t = telefone(gaveta, { tema: 'escura', abas: [] });
+  assert.equal((await t.api.getConfig()).tema, 'claro', 'o celular voltou para Escura sozinho');
+  assert.deepEqual(guardado(gaveta), { tema: { meu: 'claro', base: 'escuro' } });
+
+  // o Jornal virou Clara: mesma coisa
+  const g2 = gavetaDeMentira();
+  g2.setItem('cockpit:ajustes-do-telefone', JSON.stringify({ tema: { meu: 'auto', base: 'jornal' } }));
+  assert.equal((await telefone(g2, { tema: 'clara', abas: [] }).api.getConfig()).tema, 'auto');
+
+  // mas se o Mac trocou DE VERDADE (escuro -> Clara), quem manda continua sendo o Mac
+  const g3 = gavetaDeMentira();
+  g3.setItem('cockpit:ajustes-do-telefone', JSON.stringify({ tema: { meu: 'auto', base: 'escuro' } }));
+  assert.equal((await telefone(g3, { tema: 'clara', abas: [] }).api.getConfig()).tema, 'clara');
+  assert.deepEqual(guardado(g3), {});
+  // e sem tema no Mac antes, escolher Automática la tambem conta como troca
+  const g4 = gavetaDeMentira();
+  g4.setItem('cockpit:ajustes-do-telefone', JSON.stringify({ tema: { meu: 'escura', base: null } }));
+  assert.equal((await telefone(g4, { tema: 'auto', abas: [] }).api.getConfig()).tema, 'auto');
+});
+
 test('Gaveta trancada (Safari anonimo) nao quebra a tela', async () => {
   const trancada = { dados: new Map(),
     getItem: () => { throw new Error('sem espaco'); },

@@ -1431,8 +1431,12 @@ function menuMotores(P) {
   m.classList.add('menu-motor');
   m.setAttribute('aria-label', 'Escolher assistente');
   for (const engine of MOTORES_VISIVEIS) {
-    const item = elItem({ nome: nomeDoMotor(engine), on: P.engine === engine,
-      desc: motorIndisponivelNaPasta(engine, P.cwd) }, () => trocarMotor(P, engine));
+    // redesenho 26/09: o motivo de não dar (frase inteira) sai da tela e vai para o balão; o item
+    // fica com cara de desativado, mas o clique continua dando o aviso com o motivo, como antes
+    const motivo = motorIndisponivelNaPasta(engine, P.cwd);
+    const item = elItem({ nome: nomeDoMotor(engine), on: P.engine === engine, dica: motivo },
+      () => trocarMotor(P, engine));
+    if (motivo) { item.classList.add('mi-off'); item.setAttribute('aria-disabled', 'true'); }
     item.dataset.motor = engine;
     const logo = $('.mi-ic', item);
     logo.classList.add('mi-logo');
@@ -2168,20 +2172,26 @@ function menuVoltarNoTempo(P, d, texto) {
   m.classList.add('menu-voltar');
   m.appendChild(tituloPopup('Voltar até aqui'));
   m.appendChild(subPopup('"' + texto.slice(0, 60).replace(/\s+/g, ' ') + (texto.length > 60 ? '…' : '') + '"'));
+  // redesenho 26/09: na tela, só uma linha curta como no design ("Pergunta antes de cada ação");
+  // a explicação inteira continua no balão do mouse
   m.appendChild(elItem({
     ic: 'rotate-cw',
     nome: 'Desfazer o código feito depois daqui',
-    desc: feitas.length ? feitas.length + ' edição(ões) para desfazer' : 'nada foi editado depois desta mensagem',
+    desc: !feitas.length ? 'Nada foi editado depois daqui'
+      : feitas.length === 1 ? '1 edição para desfazer' : feitas.length + ' edições para desfazer',
+    dica: 'aplica o contrário de cada edição feita depois desta mensagem, da última para a primeira',
   }, () => desfazerDaqui(P, feitas)));
   m.appendChild(elItem({
     ic: 'sparkles',
     nome: 'Ramificar a conversa a partir daqui',
-    desc: 'abre um chat novo levando só o que foi dito até este ponto',
+    desc: 'Chat novo com o que foi dito até aqui',
+    dica: 'abre um chat novo levando só o que foi dito até este ponto',
   }, () => ramificarDaqui(P, d)));
   m.appendChild(elItem({
     ic: 'git-branch',
     nome: 'Ramificar levando a conversa inteira',
-    desc: 'chat novo que lembra de TUDO, não de um resumo. O de origem fica intacto',
+    desc: 'Chat novo com a conversa toda',
+    dica: 'chat novo que lembra de TUDO, não de um resumo. O de origem fica intacto',
   }, () => ramificarInteiro(P)));
 }
 
@@ -4514,17 +4524,19 @@ const MODOS = {
      agente (default/autoEdit/plan/yolo no Gemini) quando ele os tem; "sem pedir permissão"
      vale sempre, porque quem aprova ali é o próprio Cockpit. */
   acp: [
-    { id: 'manual',    ic: 'hand', nome: 'Manual',                 desc: 'O agente pergunta antes de cada ação' },
-    { id: 'auto-edit', ic: 'code-xml', nome: 'Editar automaticamente', desc: 'Mexe nos arquivos sozinho e pergunta o resto (se o agente tiver esse modo)' },
-    { id: 'plan',      ic: 'clipboard-list', nome: 'Plano',                  desc: 'Só estuda e mostra o plano (se o agente tiver esse modo)' },
-    { id: 'bypass',    ic: 'unlock', nome: 'Sem pedir permissão',    desc: 'O Cockpit aprova todo pedido do agente sozinho' },
+    { id: 'manual',    ic: 'hand', nome: 'Manual',                 desc: 'O agente pergunta antes de cada ação', curta: 'Pergunta antes de cada ação' },
+    { id: 'auto-edit', ic: 'code-xml', nome: 'Editar automaticamente', desc: 'Mexe nos arquivos sozinho e pergunta o resto (se o agente tiver esse modo)', curta: 'Edita arquivos sem perguntar' },
+    { id: 'plan',      ic: 'clipboard-list', nome: 'Plano',                  desc: 'Só estuda e mostra o plano (se o agente tiver esse modo)', curta: 'Só planeja, não executa' },
+    { id: 'bypass',    ic: 'unlock', nome: 'Sem pedir permissão',    desc: 'O Cockpit aprova todo pedido do agente sozinho', curta: 'Faz tudo sem perguntar' },
   ],
 };
+/* redesenho 26/09: `curta` também no ACP e no Gemini. Sem ela, o menu mostrava a explicação
+   inteira cortada no meio ("Ferramentas que exigem confirmação são rec…") */
 MODOS.gemini = [
-  { id: 'manual', ic: 'hand', nome: 'Manual', desc: 'Ferramentas que exigem confirmação são recusadas. Para aprovar na tela, use Gemini pelo ACP.' },
-  { id: 'auto', ic: 'code-xml', nome: 'Editar automaticamente', desc: 'Permite editar arquivos; outras ações seguem as regras do Gemini' },
-  { id: 'plan', ic: 'clipboard-list', nome: 'Plano', desc: 'Pede o modo de planejamento do Gemini' },
-  { id: 'bypass', ic: 'unlock', nome: 'Sem pedir permissão', desc: 'Libera as ferramentas do Gemini automaticamente' },
+  { id: 'manual', ic: 'hand', nome: 'Manual', desc: 'Ferramentas que exigem confirmação são recusadas. Para aprovar na tela, use Gemini pelo ACP.', curta: 'Recusa o que pede confirmação' },
+  { id: 'auto', ic: 'code-xml', nome: 'Editar automaticamente', desc: 'Permite editar arquivos; outras ações seguem as regras do Gemini', curta: 'Edita arquivos sem perguntar' },
+  { id: 'plan', ic: 'clipboard-list', nome: 'Plano', desc: 'Pede o modo de planejamento do Gemini', curta: 'Só planeja, não executa' },
+  { id: 'bypass', ic: 'unlock', nome: 'Sem pedir permissão', desc: 'Libera as ferramentas do Gemini automaticamente', curta: 'Faz tudo sem perguntar' },
 ];
 MODOS.grok = [MODOS.acp[0], MODOS.acp[3]];
 const esforcoDe = (P) => P.effort;
@@ -5169,12 +5181,15 @@ function posicionarMenu(P, modal, cx, padrao) {
   if (esquerda) s.setProperty('--menu-l', Math.max(10, naCaixa ? 10 : Math.round(ar.left - mr.left - 8)) + 'px');
   else s.setProperty('--menu-r', Math.max(16, naCaixa ? 16 : Math.round(mr.right - ar.right - 8)) + 'px');
   const sobe = naCaixa || (ar.top + ar.height / 2) > (mr.top + mr.height * 0.55);
+  /* vão até o que abriu o menu, medido no design: os menus da caixa de escrever param 28 acima
+     dela (/ a 29, Permissão a 27) e o do nome do chat fica 4 abaixo da linha do nome */
+  const vao = naCaixa ? 28 : sobe ? 8 : 4;
   if (sobe) {
-    s.setProperty('--menu-b', Math.round(mr.bottom - base.top + 8) + 'px');
-    s.setProperty('--menu-alt', Math.max(120, Math.round(base.top - mr.top - 18)) + 'px');
+    s.setProperty('--menu-b', Math.round(mr.bottom - base.top + vao) + 'px');
+    s.setProperty('--menu-alt', Math.max(120, Math.round(base.top - mr.top - vao - 10)) + 'px');
   } else {
-    s.setProperty('--menu-t', Math.round(base.bottom - mr.top + 8) + 'px');
-    s.setProperty('--menu-alt', Math.max(120, Math.round(mr.bottom - base.bottom - 18)) + 'px');
+    s.setProperty('--menu-t', Math.round(base.bottom - mr.top + vao) + 'px');
+    s.setProperty('--menu-alt', Math.max(120, Math.round(mr.bottom - base.bottom - vao - 10)) + 'px');
   }
   s.setProperty('--menu-oy', sobe ? '100%' : '0%');
   s.setProperty('--menu-ox', esquerda ? '0%' : '100%');
@@ -5191,10 +5206,16 @@ function posicionarMenu(P, modal, cx, padrao) {
 /* Fechar em 120ms sem atrasar o fechamento de verdade: uma cópia inerte do menu esmaece no mesmo
    lugar e se apaga sozinha. Sem animação no "Reduzir movimento" e no celular (lá o menu é outro). */
 const MQ_CELULAR = '(max-width: 820px), (pointer: coarse) and (max-width: 1100px)';
+/* O menus.css diz em --menus-mac se o menu está no desenho de popover (sempre no Mac, em qualquer
+   largura; no navegador do celular só com tela larga). Sem a variável, vale a consulta do celular. */
+function menuEhPopover() {
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--menus-mac').trim();
+  return v ? v === '1' : !matchMedia(MQ_CELULAR).matches;
+}
 function menuSaindo(cx, pai) {
   try {
     if (!cx || !pai || !cx.firstChild || !cx.cloneNode || !window.matchMedia) return;
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches || matchMedia(MQ_CELULAR).matches) return;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches || !menuEhPopover()) return;
     const r = cx.getBoundingClientRect(), pr = pai.getBoundingClientRect();
     if (!r.width || !r.height) return;
     const f = cx.cloneNode(true);
@@ -5213,6 +5234,15 @@ function menuSaindo(cx, pai) {
     setTimeout(tirar, 400);
   } catch {}
 }
+/* Barra de rolagem do / e do @ como a do Mac: invisível parada, aparece enquanto a lista rola
+   (o menus.css só pinta o polegar com a classe .rolando). Scroll não sobe na árvore: ouvir em captura. */
+document.addEventListener('scroll', (e) => {
+  const el = e.target;
+  if (!el || !el.classList || !el.classList.contains('menu-corpo')) return;
+  el.classList.add('rolando');
+  clearTimeout(el._rolandoT);
+  el._rolandoT = setTimeout(() => el.classList.remove('rolando'), 900);
+}, true);
 /* "⌘⇧F" escondido no fim da explicação vira o atalho à direita do item, na ordem do Mac (⌃⌥⇧⌘) */
 function atalhoDoTexto(t) {
   const m = /(?:^|·\s*)([⌃⌥⇧⌘]+)([A-Z0-9,./]|F\d{1,2})\s*$/.exec(String(t || ''));
@@ -5223,9 +5253,11 @@ function atalhoDoTexto(t) {
 /* Item de menu. A marca ✓ vai numa coluna de 12 À ESQUERDA (sempre presente, vazia quando não é o
    atual), e o valor/atalho à direita. O ícone continua no DOM, mas o menus.css só mostra logo de
    assistente e cor de grupo: o design não põe ícone nos menus. */
-function elItem({ ic, nome, desc, tag, on }, aoClicar) {
+/* `dica`: a explicação comprida vai SÓ para o balão do mouse (nenhuma frase explicativa na tela).
+   `off`: item desativado do Mac (--label-4, sem destaque, o clique não faz nada nem fecha o menu). */
+function elItem({ ic, nome, desc, tag, on, off, dica }, aoClicar) {
   const d = document.createElement('div');
-  d.className = 'mi' + (on ? ' on' : '');
+  d.className = 'mi' + (on ? ' on' : '') + (off ? ' mi-off' : '');
   d.innerHTML = '<div class="mi-ck">' + (on ? ico('check') : '') + '</div>'
     + '<div class="mi-ic"></div><div class="mi-txt"><div class="mi-n"></div></div>'
     + (!on && tag ? '<div class="mi-tag"></div>' : '');
@@ -5238,6 +5270,8 @@ function elItem({ ic, nome, desc, tag, on }, aoClicar) {
     d.title = nome + ' — ' + desc;
   }
   if (tag && !on) $('.mi-tag', d).textContent = tag;
+  if (dica) d.title = nome + ' — ' + dica;
+  if (off) { d.setAttribute('aria-disabled', 'true'); return d; }
   d.addEventListener('click', () => { fecharMenus(); aoClicar && aoClicar(); });
   return d;
 }
@@ -5553,13 +5587,14 @@ async function menuSkills(P, filtroInicial, focar) {
      menu. Agora vem tudo junto por secao, com Modelo e Conta no topo — que e o que ele mais
      abre o menu para mexer. */
   const acoes = [
-    { sec: 'Modelo', ic: 'brain', nome: 'Trocar modelo…', tag: modeloAtual(P).nome, act: () => menuModelos(P) },
+    // nomes do design: o item diz O QUE é (Modelo, Modo de permissão), o valor atual fica à direita
+    { sec: 'Modelo', ic: 'brain', nome: 'Modelo', tag: modeloAtual(P).nome, act: () => menuModelos(P) },
     { sec: 'Modelo', ic: 'sliders-horizontal', nome: 'Esforço', tag: EF_PT[P.effort] || P.effort, act: () => menuModelos(P) },
-    { sec: 'Modelo', ic: 'lock', nome: 'Modos de permissão', tag: modoDe(P).nome, act: () => menuModos(P) },
-    { sec: 'Modelo', ic: 'arrow-left-right', nome: 'Trocar de motor', tag: nomeDoMotor(P.engine), desc: 'escolher Claude, Codex, Gemini ou Grok', act: () => menuMotores(P) },
+    { sec: 'Modelo', ic: 'lock', nome: 'Modo de permissão', tag: modoDe(P).nome, act: () => menuModos(P) },
+    { sec: 'Modelo', ic: 'arrow-left-right', nome: 'Assistente', tag: nomeDoMotor(P.engine), desc: 'escolher Claude, Codex, Gemini ou Grok', act: () => menuMotores(P) },
     // Eram cinco linhas aqui (trocar conta, entrar com codigo, logout, conta, ver conta) e as
     // cinco levavam ao mesmo lugar. Ficou UMA: a janela da conta ja tem todos esses botoes.
-    { sec: 'Conta', ic: 'user', nome: 'conta', desc: 'quem está entrado, limite de uso, trocar ou sair' + (NA_VPS(P.cwd) ? ' · na VPS' : ''), act: () => janelaConta(P) },
+    { sec: 'Conta', ic: 'user', nome: 'Conta', tag: (contaCache[P.engine] && contaCache[P.engine].email) || '', desc: 'quem está entrado, limite de uso, trocar ou sair' + (NA_VPS(P.cwd) ? ' · na VPS' : ''), act: () => janelaConta(P) },
     /* Linha NOVA, e o nome dela nao pode ser "Trocar de conta": esse botao ja existe na janela
        da Conta e faz OUTRA coisa (sai e entra pelo CLI, com navegador). Aqui e' so alternar
        entre contas ja logadas, trocando o arquivo de credencial guardado. */
@@ -5592,10 +5627,10 @@ async function menuSkills(P, filtroInicial, focar) {
     // dizer que nao conseguiu ler. Fora da lista, como o "Recortar a tela".
     ...(window.SEM_ELECTRON ? [] : [{ sec: 'Painel', ic: 'sliders-horizontal', nome: 'Configurar o Claude', desc: 'memória, agentes, hooks e permissões', act: () => janelaConfiguracao(P) }]),
     // terminal abre um shell de verdade no Mac: term:run é bloqueado do celular, então o item some de lá (R3-024)
-    ...(window.SEM_ELECTRON ? [] : [{ sec: 'Painel', ic: 'terminal', nome: 'terminal', desc: 'rodar comandos aqui dentro, sem abrir o Terminal do Mac', act: () => janelaTerminal(P, 'cd ' + JSON.stringify(P.cwd) + ' 2>/dev/null; exec ${SHELL:-/bin/zsh} -l', 'Terminal — ' + nomePasta(P.cwd)) }]),
+    ...(window.SEM_ELECTRON ? [] : [{ sec: 'Painel', ic: 'terminal', nome: 'Terminal', desc: 'rodar comandos aqui dentro, sem abrir o Terminal do Mac', act: () => janelaTerminal(P, 'cd ' + JSON.stringify(P.cwd) + ' 2>/dev/null; exec ${SHELL:-/bin/zsh} -l', 'Terminal — ' + nomePasta(P.cwd)) }]),
     /* Item NOVO, ao lado do terminal de sempre (que continua abrindo aqui no Mac). So aparece
        em painel da VPS. Quem monta a linha do ssh e o main: host e usuario nao saem de la. */
-    ...(window.SEM_ELECTRON || !NA_VPS(P.cwd) ? [] : [{ sec: 'Painel', ic: 'terminal', nome: 'terminal na VPS', desc: 'shell de verdade lá dentro, na pasta deste painel', act: () => abrirTerminalVps(P) }]),
+    ...(window.SEM_ELECTRON || !NA_VPS(P.cwd) ? [] : [{ sec: 'Painel', ic: 'terminal', nome: 'Terminal na VPS', desc: 'shell de verdade lá dentro, na pasta deste painel', act: () => abrirTerminalVps(P) }]),
     /* leva 10.5: branch isolada. Aparece SEMPRE — inclusive no Codex e na VPS, onde entrar é
        recusado com o motivo escrito, mas SAIR precisa continuar possível (ele pode ter
        trocado de motor depois de entrar). */
@@ -5604,7 +5639,7 @@ async function menuSkills(P, filtroInicial, focar) {
       desc: P.worktree ? 'volta a trabalhar na pasta principal deste chat'
         : 'branch isolada em .claude/worktrees: experimenta sem sujar a branch de verdade (só Claude)',
       act: () => alternarWorktree(P) },
-    { sec: 'Conectores', ic: 'plug', nome: 'conectores', desc: 'ver, reconectar ou adicionar um conector', act: () => janelaConectores(P) },
+    { sec: 'Conectores', ic: 'plug', nome: 'Conectores', desc: 'ver, reconectar ou adicionar um conector', act: () => janelaConectores(P) },
     /* As duas ultimas de propósito: a seção nasce quando o nome muda, então grudadas aqui no
        FIM elas viram uma seção "Prompts" própria, sem quebrar nenhuma das de cima. */
     { sec: 'Prompts', ic: 'star', nome: 'Salvar o texto do campo como prompt…', desc: 'para reaproveitar pedidos longos (fica em ~/.claude/cockpit-prompts.json)', act: () => salvarPromptDoCampo(P) },
@@ -6959,10 +6994,11 @@ async function menuContas(P, motorPedido) {
 
   const m = novoMenu(P);
   m.appendChild(tituloPopup('Contas guardadas', 'Contas do ' + nomeEng + ' já logadas neste Mac. Clicar troca na hora, sem passar pelo navegador.'));
+  // a que está em uso ganha o ✓ à esquerda: "em uso agora"/"trocar para esta" saíram da tela
   for (const g of guardadas) {
     m.appendChild(elItem({
       ic: 'user', nome: g.apelido, on: g.atual,
-      desc: g.atual ? 'em uso agora' : 'trocar para esta',
+      dica: g.atual ? 'em uso agora' : 'trocar para esta',
     }, () => { if (!g.atual) trocarParaConta(P, eng, g.apelido); }));
   }
   if (guardadas.length) m.appendChild(elLinha());
@@ -6971,11 +7007,13 @@ async function menuContas(P, motorPedido) {
     m.appendChild(elItem({ ic: 'plus', nome: 'Guardar a conta de agora…', desc: (c && c.email) || '' },
       () => guardarContaAtual(P, eng)));
   } else {
-    // dizer POR QUE em vez de simplesmente nao mostrar o item: some sem explicacao parece defeito
-    m.appendChild(elItem({ ic: 'lock', nome: 'Não dá para guardar a conta de agora', desc: porqueNao }));
+    /* O item continua na lista, DESATIVADO, como o Mac faz: sumir sem explicação parece defeito.
+       O porquê (ex.: "no Mac a conta do Claude fica no Chaveiro…") vai no balão do mouse. */
+    m.appendChild(elItem({ ic: 'lock', nome: 'Guardar a conta de agora…', off: true,
+      dica: porqueNao || 'não dá para guardar a conta de agora' }));
   }
   if (guardadas.length) m.appendChild(elItem({ ic: 'eraser', nome: 'Esquecer uma conta guardada…',
-    desc: 'apaga só a cópia guardada aqui; o login continua onde está' }, () => menuEsquecerConta(P, eng)));
+    dica: 'apaga só a cópia guardada aqui; o login continua onde está' }, () => menuEsquecerConta(P, eng)));
 }
 
 async function guardarContaAtual(P, eng) {
@@ -6999,7 +7037,8 @@ async function menuEsquecerConta(P, eng) {
   const m = novoMenu(P);
   m.appendChild(tituloPopup('Esquecer conta guardada', 'Esquecer apaga só a cópia guardada aqui — não desconecta a conta nem faz logout.'));
   for (const g of lista) {
-    m.appendChild(elItem({ ic: 'eraser', nome: g.apelido, desc: g.atual ? 'em uso agora' : 'guardada' }, async () => {
+    // "Em uso" é o estado (valor à direita, como no design); "guardada" era óbvio e saiu
+    m.appendChild(elItem({ ic: 'eraser', nome: g.apelido, tag: g.atual ? 'Em uso' : '' }, async () => {
       const r = await window.api.contasEsquecer({ engine: eng, apelido: g.apelido });
       if (!r || r.error) { note(P, 'Não consegui esquecer: ' + ((r && r.error) || 'erro'), true); return; }
       avisoTemp(P, 'Conta “' + g.apelido + '” esquecida aqui. O login em si continua onde estava.');
@@ -7674,10 +7713,23 @@ async function menuArquivos(P, termo) {
     corpo.className = 'menu-corpo';
     m.appendChild(corpo);
     let sel = 0;
+    /* A linha de baixo mostra a PASTA do arquivo a partir da pasta do painel ("renderer/redesign"),
+       que é o que separa dois arquivos de mesmo nome. Com o caminho inteiro, os 40 itens
+       começavam iguais ("~/Desktop/Projetos-claude/…") e o corte escondia justo a parte que muda.
+       Arquivo na raiz mostra o nome da pasta do painel. O caminho inteiro fica no balão do mouse. */
+    const raizBusca = String(pastaDoWorktree(P) || '').replace(/\/+$/, '');
+    const pastaDoItem = (caminho) => {
+      const c = String(caminho || '');
+      const rel = raizBusca && c.startsWith(raizBusca + '/') ? c.slice(raizBusca.length + 1) : shortPath(c);
+      const i = rel.lastIndexOf('/');
+      // o corte fica à ESQUERDA (menus.css: direction rtl), para o fim do caminho aparecer; as
+      // marcas LRM seguram "~", "." e ")" das pontas no lugar certo dentro do texto da direita
+      return '\u200E' + (i > 0 ? rel.slice(0, i) : (nomePasta(raizBusca) || shortPath(raizBusca))) + '\u200E';
+    };
     const pintar = () => {
       corpo.innerHTML = '';
       itens.slice(0, 40).forEach((x, i) => {
-        const d = elItem({ ic: 'file', nome: x.nome, desc: shortPath(x.path) }, () => {
+        const d = elItem({ ic: 'file', nome: x.nome, desc: pastaDoItem(x.path), dica: shortPath(x.path) }, () => {
           soltarNavArquivos(P);          // escolheu no mouse: solta o atalho tambem
           const inp = $('.p-input', P.el);
           const v = inp.value;
@@ -8594,9 +8646,12 @@ function menuDaConversa(bt, s, d) {
   const pop = abrirPopGlobal(bt);
   // 25/09: na conversa costurada, basta UMA parte morar na VPS para o Apagar daqui não alcançar
   if (s.remoto || (Array.isArray(s.partes) && s.partes.some(p => p.remoto))) {
-    // o .jsonl dela mora no disco da VPS: apagar daqui não alcança o arquivo de lá
-    const av = popItem({ nome: 'Conversa do servidor: apagar só pela VPS', ic: 'server' }, () => {});
-    av.style.opacity = '.7';
+    // o .jsonl dela mora no disco da VPS: apagar daqui não alcança o arquivo de lá.
+    // Redesenho 26/09: o item fica DESATIVADO (--label-4), com o porquê no balão do mouse
+    const av = popItem({ nome: 'Apagar conversa', ic: 'x' }, () => {});
+    av.classList.add('mi-off');
+    av.setAttribute('aria-disabled', 'true');
+    av.title = 'Conversa do servidor: apagar só pela VPS';
     pop.appendChild(av);
     return;
   }

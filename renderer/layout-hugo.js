@@ -143,10 +143,13 @@ function separarPainel(P) {
 }
 
 function abrirMenuLayout(P, evento, itens) {
-  document.querySelector('.layout-menu')?.remove();
+  // :not(.menu-fantasma): a cópia que esmaece ao fechar também tem .layout-menu e some sozinha
+  document.querySelector('.layout-menu:not(.menu-fantasma)')?.remove();
   const menu = document.createElement('div'); menu.className = 'pop-global layout-menu';
   menu.setAttribute('role', 'menu');
   const fechar = () => {
+    // some em 120ms como os outros menus (redesenho 26/09): a cópia do app.js esmaece no lugar
+    if (menu.isConnected && typeof menuSaindo === 'function') menuSaindo(menu, document.body);
     menu.remove(); document.removeEventListener('mousedown', fora); document.removeEventListener('keydown', teclado, true);
   };
   const fora = e => { if (!menu.contains(e.target)) fechar(); };

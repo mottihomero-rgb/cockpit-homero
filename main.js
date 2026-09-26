@@ -2630,7 +2630,8 @@ function varrerConversas(dir, achados, nivel) {
 function fichaConversa(it) {
   const ind = lerIndice();
   const salvo = ind[it.f];
-  if (salvo && salvo.mtime === it.mtime && salvo.size === it.size) return salvo;
+  // 26/09: ficha sem a hora da última fala (índice de antes) é lida de novo, uma vez
+  if (salvo && salvo.mtime === it.mtime && salvo.size === it.size && salvo.ultima !== undefined) return salvo;
 
   const head = headRead(it.f, 64 * 1024);
   const em = head.match(/"entrypoint":"([^"]*)"/);
@@ -2658,7 +2659,7 @@ function fichaConversa(it) {
       } catch {}
     }
   }
-  const ficha = { mtime: it.mtime, size: it.size, title, cwd, entrada };
+  const ficha = { mtime: it.mtime, size: it.size, title, cwd, entrada, ultima: horaDaUltimaFala(it.f, it.mtime, head.slice(0, 4096) + '\n' + tail) };
   ind[it.f] = ficha;
   return ficha;
 }
@@ -2682,9 +2683,11 @@ function claudeSessions(limit, incluirRobos) {
     if (!incluirRobos && (CONVERSA_DE_ROBO.test(it.f) || PASTA_DE_ROBO.test(fi.cwd || ''))) continue;
     let title = nomesMeus[it.id] || fi.title;
     if (!title) continue;
-    out.push({ engine: 'claude', id: it.id, title, cwd: fi.cwd || HOME, when: it.mtime, file: it.f, entrada: fi.entrada });
+    // 26/09: a hora da última fala, não a da última gravação do arquivo (ver hora-da-fala.js)
+    out.push({ engine: 'claude', id: it.id, title, cwd: fi.cwd || HOME, when: fi.ultima || it.mtime, file: it.f, entrada: fi.entrada });
   }
   if (lidos) gravarIndice();
+  out.sort((a, b) => b.when - a.when);
   return out;
 }
 
@@ -2886,7 +2889,7 @@ function semResumoDaSessao(t) {
 function fichaCodex(it) {
   const ind = lerIndice();
   const salvo = ind[it.f];
-  if (salvo && salvo.mtime === it.mtime && salvo.size === it.size) return salvo;
+  if (salvo && salvo.mtime === it.mtime && salvo.size === it.size && salvo.ultima !== undefined) return salvo;
 
   let head = headRead(it.f, 96 * 1024);
   let id = '', cwd = '', origem = '', title = '', doAssistente = '';
@@ -2916,7 +2919,7 @@ function fichaCodex(it) {
   if (!varrer(head) && it.size > 96 * 1024) varrer(fs.readFileSync(it.f, 'utf8'));   // arquivo grande: le tudo
   if (!title) title = doAssistente;                       // ao menos a primeira resposta
   if (!title) title = 'Conversa de ' + new Date(it.mtime).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-  const ficha = { mtime: it.mtime, size: it.size, title, cwd, entrada: origem, sid: id };
+  const ficha = { mtime: it.mtime, size: it.size, title, cwd, entrada: origem, sid: id, ultima: horaDaUltimaFala(it.f, it.mtime) };
   ind[it.f] = ficha;
   return ficha;
 }
@@ -2936,9 +2939,10 @@ function codexSessions(incluirRobos, nomesDoApp) {
     const id = fi.sid || it.id;
     const title = meus[id] || (nomesDoApp && nomesDoApp[id]) || fi.title;
     if (!title) continue;
-    out.push({ engine: 'codex', id, title: title.slice(0, 120), cwd: fi.cwd || HOME, when: it.mtime, file: it.f, entrada: fi.entrada });
+    out.push({ engine: 'codex', id, title: title.slice(0, 120), cwd: fi.cwd || HOME, when: fi.ultima || it.mtime, file: it.f, entrada: fi.entrada });
   }
   if (lidos) gravarIndice();
+  out.sort((a, b) => b.when - a.when);
   return out;
 }
 
@@ -5502,6 +5506,7 @@ function matarGrupoExtra(proc) {
   matarProcesso(proc);
   return Promise.resolve();
 }
+const { horaDaUltimaFala, horaNoTexto } = require('./hora-da-fala');
 const cli = require('./cli-motors').criarCli({ HOME, emit: (paneId, kind, data) => {
   if (kind === 'sessao' && data && data.id) marcarDonoDoFio(paneId, data.id, 'gemini');
   emit(paneId, kind, data);

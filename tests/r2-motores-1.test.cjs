@@ -26,7 +26,7 @@ function montarAcp(t) {
   let seq = 0;
   const mod = { exports: {} };
   const eventos = [];
-  const ctx = vm.createContext({ require, module: mod, Buffer, console,
+  const ctx = vm.createContext({ require: require('node:module').createRequire(path.join(__dirname, '../acp.js')), module: mod, Buffer, console,
     setTimeout(fn, ms) { const id = ++seq; timers.set(id, { fn, ms }); return id; },
     clearTimeout(id) { timers.delete(id); },
   });

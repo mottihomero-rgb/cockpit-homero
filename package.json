@@ -41,6 +41,7 @@
       "plataforma.js",
       "nomes-conversa.js",
       "nomes-agentes.js",
+      "hora-da-fala.js",
       "servidor-web.js",
       "package.json",
       "renderer/**/*",

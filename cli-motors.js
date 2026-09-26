@@ -1,6 +1,7 @@
 'use strict';
 // Leitura de sessões/comandos portada do fork ohugomotti/cockpit (52dee0f).
 const fs = require('fs');
+const { horaDaUltimaFala } = require('./hora-da-fala');
 const path = require('path');
 const crypto = require('crypto');
 const { StringDecoder } = require('string_decoder');
@@ -121,6 +122,7 @@ function cliSessions(engine) {
       if (/[\\/]logs[\\/]/i.test(p)) continue;   // log do desenvolvedor nao e' conversa
       let quando = 0;
       try { quando = fs.statSync(p).mtimeMs; } catch { continue; }
+      quando = horaDaUltimaFala(p, quando);   // 26/09: a última fala, não a última gravação do arquivo
       const { meta, msgs } = cliLerConversa(p, CLI_TETO_TITULO);
       const id = meta && meta.sessionId;
       if (!id) continue;
@@ -196,7 +198,8 @@ const paineis = new Map();
 const arquivo = id => path.join(pastaDados(), 'gemini', String(id).replace(/[^\w-]/g, '') + '.jsonl');
 const anotar = (st, msg) => {
   fs.mkdirSync(path.dirname(st.file), { recursive: true });
-  fs.appendFileSync(st.file, JSON.stringify(msg) + '\n', 'utf8');
+  // 26/09: cada linha leva a hora ("t"): a lista usa a da última fala, não a da gravação do arquivo
+  fs.appendFileSync(st.file, JSON.stringify(msg && typeof msg === 'object' && msg.t === undefined ? { ...msg, t: Date.now() } : msg) + '\n', 'utf8');
 };
 function motivo(erro) {
   const s = String(erro || '').replace(/\x1b\[[0-9;]*m/g, '');
@@ -457,7 +460,7 @@ function sessoes() {
     const retomada = linhas.filter(m => m.retomada).pop()?.retomada;
     const existente = out.findIndex(s => s.id === retomada || s.id === meta.id);
     if (existente >= 0) out.splice(existente, 1);
-    out.push({ engine: 'gemini', id: meta.id, file, cwd: meta.cwd, when: fs.statSync(file).mtimeMs, title: String(user.text).replace(/\s+/g, ' ').slice(0, 120) });
+    out.push({ engine: 'gemini', id: meta.id, file, cwd: meta.cwd, when: horaDaUltimaFala(file, fs.statSync(file).mtimeMs), title: String(user.text).replace(/\s+/g, ' ').slice(0, 120) });
     } catch { /* Uma sessão ilegível não esconde as demais. */ }
   } } catch {}
   return out.sort((a, b) => b.when - a.when).slice(0, 300);

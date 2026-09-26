@@ -23,7 +23,7 @@ function carregar() {
 // um "elemento" que responde ao matches pelos seletores simples da lista
 function elemento({ classes = [], dados = {}, titulo = '', texto = '', aria = {} }) {
   return {
-    classList: { contains: (c) => classes.includes(c) }, dataset: dados, innerText: texto,
+    classList: { contains: (c) => classes.includes(c) }, dataset: dados, innerText: texto, querySelector: () => null,
     getAttribute: (k) => (k === 'title' ? titulo : aria[k] || null),
     matches(sel) {
       return sel.split(',').some((s) => {

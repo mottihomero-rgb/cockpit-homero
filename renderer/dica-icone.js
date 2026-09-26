@@ -44,9 +44,18 @@
       return 'Onde este chat trabalha.' + (atual ? ' Agora: ' + atual.trim() + '.' : '') + ' Clique para trocar.';
     }],
     ['.p-quadro', 'Quadro', 'Desenhe um fluxo para explicar o que você quer. ⌘⇧E'],
-    ['.p-agentes', 'Agentes', 'O time de agentes, quando vários trabalham juntos.'],
+    ['.p-agentes', 'Agentes', (el) => {
+      const n = ((el.querySelector('.pa-n') || {}).textContent || '').trim();
+      const vivo = el.classList.contains('vivo');
+      return (n ? (vivo ? n + (n === '1' ? ' trabalhando agora. ' : ' trabalhando agora. ') : n + ' neste chat. ') : '')
+        + 'O time de agentes, quando vários trabalham juntos.';
+    }],
     ['.p-mais', 'Mais', 'Entra ou Fila, plano, quadro e time de agentes.'],
     ['.p-modo', 'Permissão', 'O que ele pode fazer sem perguntar.'],
+    ['.p-model', 'Modelo', (el) => {
+      const atual = ((el.querySelector('span') || {}).textContent || '').trim();
+      return (atual ? 'Agora: ' + atual + '. ' : '') + 'Clique para trocar o modelo e o esforço.';
+    }],
     ['.p-send', 'Enviar', 'Manda a mensagem. Enter'],
     ['.p-stop', 'Parar', 'Interrompe o que ele está fazendo agora.'],
     ['.bt-copiar.da-msg', 'Copiar', 'Copia esta resposta.'],

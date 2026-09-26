@@ -28,6 +28,7 @@
         arquivo que nao existe devolve conteudo vazio (o Zed faz igual). */
 
 const fs = require('fs');
+const { horaDaUltimaFala } = require('./hora-da-fala');
 const path = require('path');
 const { StringDecoder } = require('string_decoder');
 
@@ -355,6 +356,8 @@ function listarSessoes(pastaDados) {
     try { when = fs.statSync(f).mtimeMs; } catch { continue; }
     const guardado = cacheLista.get(f);
     if (guardado && guardado.mtime === when) { if (guardado.item) out.push(guardado.item); continue; }
+    const gravado = when;
+    when = horaDaUltimaFala(f, gravado);   // 26/09: a última fala ("t"), não a última gravação do arquivo
     let { meta, msgs } = linhasDoTranscrito(lerCabeca(f));
     let primeira = msgs.find((m) => m.role === 'user' && String(m.text || '').trim());
     // 1a fala sua maior que a cabeca (um log colado): le o arquivo inteiro UMA vez
@@ -368,7 +371,7 @@ function listarSessoes(pastaDados) {
       cwd: meta.cwd || '', comando: meta.comando || COMANDO_PADRAO, agente: meta.agente || '',
       title: String(primeira.text).replace(/\s+/g, ' ').trim().slice(0, 120),
     } : null;
-    cacheLista.set(f, { mtime: when, item });
+    cacheLista.set(f, { mtime: gravado, item });
     if (item) out.push(item);
   }
   if (cacheLista.size > 2000) cacheLista.clear();

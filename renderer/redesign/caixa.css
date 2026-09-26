@@ -286,11 +286,17 @@
   .pane-cmp .p-cwd{color:var(--label-2)}
   .cwd-wt{right:1px;bottom:1px;width:9px;height:9px;display:grid;color:var(--accent-text)}
   .cwd-wt .ic{width:9px;height:9px}
-  /* time de agentes: o ícone normal mesmo sem agente; trabalhando = o número ao lado */
+  /* time de agentes: o ícone normal mesmo sem agente. 26/09 (pedido dele): o número descia para
+     baixo do ícone e saía da linha — agora é um selinho no canto de cima do próprio botão (26×26,
+     igual aos outros); cinza com o time parado, azul com agente trabalhando */
   .p-agentes.vazio{opacity:1}
   .p-agentes.vivo{color:var(--label-1)}
-  .p-agentes.tem-n{width:auto;min-width:26px;padding:0 6px;gap:3px}
-  .p-agentes .pa-n{font:600 11px/14px var(--font-sans);letter-spacing:0;font-variant-numeric:tabular-nums}
+  .p-agentes{position:relative}
+  .p-agentes .pa-n{position:absolute;top:0;right:-1px;min-width:13px;height:13px;padding:0 3px;border-radius:7px;
+    display:grid;place-items:center;box-sizing:border-box;background:var(--label-2);color:var(--bg-content);
+    font:700 9px/13px var(--font-sans);letter-spacing:0;font-variant-numeric:tabular-nums;pointer-events:none}
+  .p-agentes .pa-n:empty{display:none}
+  .p-agentes.vivo .pa-n{background:var(--accent);color:var(--on-accent)}
 
   /* "sessão 24% · semana 43%": 11, --label-3, tabular. Só com painel ≥ 560 (ver @container) */
   .p-limite{display:none;margin-right:6px;font:400 11px/14px var(--font-sans);color:var(--label-3);font-variant-numeric:tabular-nums}
@@ -298,7 +304,7 @@
   /* pop-up de modelo: "Opus 5.5 ⇅" em 12, --label-1, setinhas de 12 em --label-3 */
   /* é o único que encolhe quando o painel aperta (nome longo como "Padrão do Gemini"): o nome
      ganha "…" e o Enviar nunca sai da caixa */
-  .cmp-bar .p-model{flex:0 1 auto;min-width:44px}
+  .cmp-bar .p-model{flex:none;min-width:26px}
   .p-model{height:26px;max-width:170px;padding:0 4px 0 8px;gap:1px;border:0;border-radius:6px;
     display:flex;align-items:center;font:400 12px/15px var(--font-sans);color:var(--label-1);
     transition:background-color var(--dur-fast) ease-out}
@@ -308,6 +314,11 @@
   .p-model > svg:first-child{display:none}              /* o cérebro é só do celular */
   .p-model > svg:last-child{flex:none;width:12px;height:12px;color:var(--label-3)}
   .p-model.pendente::after{top:3px;right:2px}
+  /* 26/09 (pedido dele): o modelo virou SÓ o ícone (o cérebro), 26×26 como os vizinhos; o nome do
+     modelo e o esforço vão na janelinha de dica (dica-icone.js) */
+  .p-model{width:26px;padding:0;justify-content:center;color:var(--label-2)}
+  .p-model > span,.p-model > svg:last-child{display:none}
+  .p-model > svg:first-child{display:block;width:16px;height:16px;flex:none}
 
   /* permissão: cadeado de 14 + nome (o nome só em painel ≥ 560) */
   .modo-btn.p-modo{height:26px;min-width:24px;padding:0 5px;gap:4px;border:0;border-radius:6px;

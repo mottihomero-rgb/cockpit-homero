@@ -37,28 +37,31 @@ const LOGOS_MARCA = {
     "conteudo": "<path d=\"M210.484 312.759L343.465 210.383C349.984 205.364 359.302 207.322 362.408 215.117C378.758 256.231 371.454 305.64 338.925 339.563C306.397 373.487 261.137 380.927 219.768 363.983L174.577 385.803C239.394 432.008 318.104 420.581 367.289 369.251C406.303 328.564 418.386 273.104 407.088 223.091L407.19 223.198C390.807 149.726 411.218 120.359 453.03 60.3072C454.02 58.8833 455.01 57.4595 456 56L400.978 113.382V113.204L210.45 312.794\" /><path d=\"M183.042 337.641C136.519 291.294 144.54 219.567 184.236 178.203C213.59 147.59 261.683 135.096 303.666 153.464L348.755 131.75C340.632 125.627 330.221 119.042 318.275 114.414C264.277 91.2407 199.63 102.774 155.735 148.516C113.513 192.549 100.236 260.254 123.036 318.027C140.069 361.206 112.148 391.748 84.0229 422.575C74.0561 433.503 64.0553 444.431 56 456L183.007 337.677\" />"
   }
 };
-const ICONES = {"hand": "<path d=\"M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2\" /> <path d=\"M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2\" /> <path d=\"M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8\" /> <path d=\"M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15\" />", "code-xml": "<path d=\"m18 16 4-4-4-4\" /> <path d=\"m6 8-4 4 4 4\" /> <path d=\"m14.5 4-5 16\" />", "clipboard-list": "<rect width=\"8\" height=\"4\" x=\"8\" y=\"2\" rx=\"1\" ry=\"1\" /> <path d=\"M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2\" /> <path d=\"M12 11h4\" /> <path d=\"M12 16h4\" /> <path d=\"M8 11h.01\" /> <path d=\"M8 16h.01\" />", "zap": "<path d=\"M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z\" />", "unlock": "<rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\" /> <path d=\"M7 11V7a5 5 0 0 1 9.9-1\" />", "upload": "<path d=\"M12 3v12\" /> <path d=\"m17 8-5-5-5 5\" /> <path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\" />", "image": "<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" ry=\"2\" /> <circle cx=\"9\" cy=\"9\" r=\"2\" /> <path d=\"m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21\" />", "folder": "<path d=\"M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z\" />", "map-pin": "<path d=\"M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0\" /> <circle cx=\"12\" cy=\"10\" r=\"3\" />", "eraser": "<path d=\"M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21\" /> <path d=\"m5.082 11.09 8.828 8.828\" />", "sparkles": "<path d=\"M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z\" /> <path d=\"M20 2v4\" /> <path d=\"M22 4h-4\" /> <circle cx=\"4\" cy=\"20\" r=\"2\" />", "brain": "<path d=\"M12 18V5\" /> <path d=\"M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4\" /> <path d=\"M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5\" /> <path d=\"M17.997 5.125a4 4 0 0 1 2.526 5.77\" /> <path d=\"M18 18a4 4 0 0 0 2-7.464\" /> <path d=\"M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517\" /> <path d=\"M6 18a4 4 0 0 1-2-7.464\" /> <path d=\"M6.003 5.125a4 4 0 0 0-2.526 5.77\" />", "sliders-horizontal": "<path d=\"M10 5H3\" /> <path d=\"M12 19H3\" /> <path d=\"M14 3v4\" /> <path d=\"M16 17v4\" /> <path d=\"M21 12h-9\" /> <path d=\"M21 19h-5\" /> <path d=\"M21 5h-7\" /> <path d=\"M8 10v4\" /> <path d=\"M8 12H3\" />", "lock": "<rect width=\"18\" height=\"11\" x=\"3\" y=\"11\" rx=\"2\" ry=\"2\" /> <path d=\"M7 11V7a5 5 0 0 1 10 0v4\" />", "arrow-left-right": "<path d=\"M8 3 4 7l4 4\" /> <path d=\"M4 7h16\" /> <path d=\"m16 21 4-4-4-4\" /> <path d=\"M20 17H4\" />", "folder-open": "<path d=\"m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2\" />", "plus": "<path d=\"M5 12h14\" /> <path d=\"M12 5v14\" />", "plug": "<path d=\"M12 22v-5\" /> <path d=\"M15 8V2\" /> <path d=\"M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z\" /> <path d=\"M9 8V2\" />", "key-round": "<path d=\"M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z\" /> <circle cx=\"16.5\" cy=\"7.5\" r=\".5\" fill=\"currentColor\" />", "log-out": "<path d=\"m16 17 5-5-5-5\" /> <path d=\"M21 12H9\" /> <path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4\" />", "user": "<path d=\"M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2\" /> <circle cx=\"12\" cy=\"7\" r=\"4\" />", "file-code": "<path d=\"M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z\" /> <path d=\"M14 2v5a1 1 0 0 0 1 1h5\" /> <path d=\"M10 12.5 8 15l2 2.5\" /> <path d=\"m14 12.5 2 2.5-2 2.5\" />", "file-text": "<path d=\"M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z\" /> <path d=\"M14 2v5a1 1 0 0 0 1 1h5\" /> <path d=\"M10 9H8\" /> <path d=\"M16 13H8\" /> <path d=\"M16 17H8\" />", "braces": "<path d=\"M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1\" /> <path d=\"M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1\" />", "terminal": "<path d=\"M12 19h8\" /> <path d=\"m4 17 6-6-6-6\" />", "file": "<path d=\"M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z\" /> <path d=\"M14 2v5a1 1 0 0 0 1 1h5\" />", "refresh-cw": "<path d=\"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8\" /> <path d=\"M21 3v5h-5\" /> <path d=\"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16\" /> <path d=\"M8 16H3v5\" />", "circle-help": "<circle cx=\"12\" cy=\"12\" r=\"10\" /> <path d=\"M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3\" /> <path d=\"M12 17h.01\" />", "x": "<path d=\"M18 6 6 18\" /> <path d=\"m6 6 12 12\" />", "check": "<path d=\"M20 6 9 17l-5-5\" />", "panel-left": "<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" /> <path d=\"M9 3v18\" />", "chevron-right": "<path d=\"m9 18 6-6-6-6\" />", "chevron-down": "<path d=\"m6 9 6 6 6-6\" />", "arrow-up": "<path d=\"m5 12 7-7 7 7\" /> <path d=\"M12 19V5\" />", "square": "<rect width=\"18\" height=\"18\" x=\"3\" y=\"3\" rx=\"2\" />", "rotate-cw": "<path d=\"M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8\" /> <path d=\"M21 3v5h-5\" />", "circle": "<circle cx=\"12\" cy=\"12\" r=\"10\" />", "minus": "<path d=\"M5 12h14\" />", "pencil": "<path d=\"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z\" /> <path d=\"m15 5 4 4\" />", "search": "<path d=\"m21 21-4.34-4.34\" /> <circle cx=\"11\" cy=\"11\" r=\"8\" />", "server": "<rect width=\"20\" height=\"8\" x=\"2\" y=\"2\" rx=\"2\" /> <rect width=\"20\" height=\"8\" x=\"2\" y=\"14\" rx=\"2\" /> <path d=\"M6 6h.01\" /> <path d=\"M6 18h.01\" />", "star": "<path d=\"M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z\" />"};
-/* icones que faltavam para as coisas novas (copiar, ditar, mandar nos dois, guardar no vault) */
-Object.assign(ICONES, {
-  'copy': '<rect width="14" height="14" x="8" y="8" rx="2" ry="2" /> <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />',
-  'mic': '<path d="M12 19v3" /> <path d="M19 10v2a7 7 0 0 1-14 0v-2" /> <rect x="9" y="2" width="6" height="13" rx="3" />',
-  'columns-2': '<rect width="18" height="18" x="3" y="3" rx="2" /> <path d="M12 3v18" />',
-  'book': '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20" />',
-  // um no em cima que se abre em tres embaixo: e o desenho do time de agentes
-  'agentes': '<circle cx="12" cy="4" r="2" /> <circle cx="5" cy="20" r="2" /> <circle cx="12" cy="20" r="2" /> <circle cx="19" cy="20" r="2" /> <path d="M12 6v4" /> <path d="M5 18v-2a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v2" /> <path d="M12 15v3" />',
-  // quadro branco de pe (a lousa + os pes) com uma seta de fluxo dentro: e o unico icone
-  // do app que fala de DESENHAR um caminho. Nao se confunde com 'image' (moldura quadrada
-  // com sol e montanha), com 'agentes' (bolinhas) nem com 'pencil' (lapis).
-  'quadro': '<rect width="20" height="14" x="2" y="3" rx="2" /> <path d="M12 17v4" /> <path d="M8 21h8" /> <path d="M6 13V9h6" /> <path d="m10 7 2 2-2 2" />',
-  // duas entradas visuais novas. 'crop' sao os dois cantos do recorte (nada a ver com a
-  // moldura do 'image'); 'camera' e a maquininha com a lente, so dela.
-  'crop': '<path d="M6 2v14a2 2 0 0 0 2 2h14" /> <path d="M18 22V8a2 2 0 0 0-2-2H2" />',
-  // ramificar: o tronco que se abre em dois. Nao se confunde com 'sparkles' (a ramificacao
-  // por resumo, que ja existia) nem com 'copy' (duas folhas iguais).
-  'git-branch': '<path d="M6 3v12" /> <circle cx="18" cy="6" r="3" /> <circle cx="6" cy="18" r="3" /> <path d="M18 9a9 9 0 0 1-9 9" />',
-  'camera': '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /> <circle cx="12" cy="13" r="3" />',
-});
-const ico = (n) => '<svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + (ICONES[n] || '') + '</svg>';
+/* Ícones: os desenhos agora são os do redesenho (renderer/icones.js, grade de 16, traço 1,4).
+   Este mapa só traduz o NOME que o app sempre usou para o desenho novo — assim nenhum ponto do
+   app precisou mudar de nome. Os que o handoff não tinha foram desenhados no mesmo estilo lá no
+   icones.js. Ex.: 'hand' (modo Manual) virou o cadeado fechado porque no redesenho cadeado
+   fechado = "pede permissão" e aberto = "sem pedir".
+   Nome que não está aqui cai direto no icones.js (ico('xmark') também funciona). */
+const ICONE_NOVO = {
+  'x': 'xmark', 'plus': 'plus', 'minus': 'minus', 'check': 'check', 'circle': 'circle',
+  'chevron-down': 'chevron-down', 'chevron-right': 'chevron-right', 'arrow-up': 'arrow-up',
+  'pencil': 'pencil', 'copy': 'copy', 'search': 'search', 'eraser': 'eraser', 'mic': 'mic',
+  'folder': 'folder', 'folder-open': 'folder-open', 'file': 'doc', 'file-code': 'doc-code',
+  'file-text': 'doc-text', 'braces': 'braces', 'image': 'photo', 'terminal': 'terminal',
+  'hand': 'lock', 'lock': 'lock', 'unlock': 'lock-open', 'code-xml': 'code', 'clipboard-list': 'plan',
+  'zap': 'bolt', 'sparkles': 'sparkles', 'brain': 'brain', 'sliders-horizontal': 'sliders',
+  'arrow-left-right': 'arrows-lr', 'user': 'person', 'upload': 'upload', 'map-pin': 'pin',
+  'refresh-cw': 'retry', 'rotate-cw': 'retry', 'panel-left': 'sidebar', 'columns-2': 'columns',
+  'plug': 'plug', 'book': 'book', 'star': 'star', 'server': 'server', 'key-round': 'key',
+  'log-out': 'log-out', 'circle-help': 'question', 'square': 'stop', 'agentes': 'team',
+  'quadro': 'board', 'crop': 'crop', 'camera': 'camera', 'git-branch': 'branch',
+};
+// sem o icones.js carregado (os testes rodam o app.js solto) os ícones saem vazios, sem quebrar
+const CK_TRACOS = (typeof window !== 'undefined' && window.CK_ICONES) || {};
+const ICONES = {};
+for (const [velho, novo] of Object.entries(ICONE_NOVO)) ICONES[velho] = CK_TRACOS[novo] || '';
+const ico = (n) => '<svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICONES[n] || CK_TRACOS[n] || '') + '</svg>';
 let logoMotorSeq = 0;
 function conteudoLogoMotor(eng) {
   const marca = LOGOS_MARCA[eng];
@@ -1001,7 +1004,9 @@ function newPane(opts = {}) {
   const btEnvio = $('.p-modoenvio', el);
   const pintarEnvio = () => {
     const entra = P.envio === 'entra';
-    btEnvio.innerHTML = ico(entra ? 'zap' : 'clipboard-list') + '<span>' + (entra ? 'Entra' : 'Fila') + '</span>';
+    // 'queue' = o desenho de "modo de envio" do redesenho. O rótulo (Entra/Fila) continua: com
+    // um chat só na aba é ele que diz o modo; com vários (#panes.multi) e no celular o CSS o esconde.
+    btEnvio.innerHTML = ico(entra ? 'zap' : 'queue') + '<span>' + (entra ? 'Entra' : 'Fila') + '</span>';
     btEnvio.title = entra
       ? 'Se ele estiver trabalhando, sua mensagem chega na hora e ELE decide: atende agora ou assim que terminar'
       : 'Se ele estiver trabalhando, sua mensagem espera ele terminar para só então começar';
@@ -6199,8 +6204,10 @@ function agCaixa() {
 function abrirPainelAgentes(P) {
   agPaneAberto = P;
   const el = agCaixa();
-  // a cor viva do painel e a do motor daquele chat: laranja no Claude, azul no Codex
-  el.style.setProperty('--ag', P.engine === 'codex' ? 'var(--codex)' : 'var(--claude)');
+  // A cor viva do painel era a do motor (laranja no Claude, azul no Codex). Desde o redesenho
+  // (25/09) ela e o azul do sistema (--ag no style.css); o motor fica guardado em --motor, que
+  // e o que um logo dentro do painel deve usar.
+  el.style.setProperty('--motor', P.engine === 'codex' ? 'var(--codex)' : 'var(--claude)');
   el.classList.remove('hidden');
   agDesenhar();
   // o tempo de cada agente anda sozinho enquanto a janela esta aberta
@@ -7403,7 +7410,7 @@ async function verArquivo(P, caminho) {
   $('.visor-nome', v).textContent = caminho.split('/').pop();
   $('.visor-x', v).innerHTML = ico('x');
   $('.visor-x', v).onclick = () => fecharVisor(P);
-  $('.visor-abrir', v).innerHTML = ico('upload');
+  $('.visor-abrir', v).innerHTML = ico('external');   // no redesenho, "abrir no Mac" é a seta saindo da caixa
   $('.visor-abrir', v).onclick = () => window.api.openPath(caminho);
   // repoe o rotulo: ver um print do agente deixa aqui "nao e' um arquivo no Mac"
   $('.visor-abrir', v).title = 'Abrir no Mac';
@@ -8659,7 +8666,9 @@ function naPintar() {
         ? 'Ele começa dentro dessa pasta, mas continua enxergando o Mac inteiro.'
         : 'Sem pasta escolhida, ele abre no Mac inteiro.');
   $('#naDois').classList.toggle('hidden', true);   // ele pediu para tirar o "dois lado a lado" (11/09)
-  $('.na-cx').style.setProperty('--accent', 'var(--' + naEstado.motor + ')');
+  // a cor do assistente escolhido vale so para o logo dele (--motor); o "Começar" e o anel do
+  // cartão escolhido ficam no azul do sistema, igual em qualquer assistente (redesenho 25/09)
+  $('.na-cx').style.setProperty('--motor', 'var(--' + naEstado.motor + ')');
 }
 
 // atalhos das pastas que ele mais usa na VPS, para nao precisar digitar
@@ -8768,20 +8777,34 @@ $('#novaAba').addEventListener('mousedown', (e) => { if (e.target.id === 'novaAb
 // o + da barra de cima saiu: quem abre chat novo e o "+ chat" da barra de abas
 $('#btnNovaAba').addEventListener('click', () => telaNovaAba());
 $('#btnNovoChat').addEventListener('click', () => novoChatNaAba());
+/* Aparência (redesenho 25/09): Automática / Clara / Escura. Quem resolve o data-theme do <html>
+   (dark, light, dark-hc, light-hc) é o aparencia.js; aqui só entra a escolha salva. O que estava
+   gravado antes do redesenho (escuro, claro, jornal) vira a opção nova mais próxima, e a
+   escolha já migrada volta para o cfg, para a próxima gravação levar o nome novo ao disco.
+   No Mac, gravar o cfg faz o main.js acertar o nativeTheme (barra de rolagem nativa e semáforos
+   acompanham), e isso por sua vez dispara o evento 'cockpit:aparencia' logo abaixo. */
 function aplicarTema(t) {
-  document.documentElement.setAttribute('data-tema', t || 'escuro');
+  const escolha = window.Aparencia ? window.Aparencia.aplicar(t)
+    : (t === 'escura' || t === 'escuro' ? 'escura' : (t === 'clara' || t === 'claro' || t === 'jornal') ? 'clara' : 'auto');
+  if (!window.Aparencia) document.documentElement.setAttribute('data-theme', escolha === 'clara' ? 'light' : 'dark');
+  // so no Mac: no celular o web.js guarda o tema na gaveta do aparelho, e a migracao ali pareceria
+  // um toque dele (e prenderia o celular numa escolha que ele nunca fez)
+  if (!window.SEM_ELECTRON && cfg && cfg.tema !== undefined && cfg.tema !== escolha) cfg.tema = escolha;
   pintarCorFoco();
-  $$('.tema-bt').forEach(b => b.classList.toggle('on', b.dataset.tema === (t || 'escuro')));
+  $$('.tema-bt').forEach(b => b.classList.toggle('on', b.dataset.aparencia === escolha));
 }
 $$('.tema-bt').forEach(b => b.addEventListener('click', async () => {
-  cfg.tema = b.dataset.tema;
+  cfg.tema = b.dataset.aparencia;
   aplicarTema(cfg.tema);
   await window.api.setConfig(cfg);
 }));
+// o Mac (ou o iPhone) trocou de claro para escuro, ou ligou o contraste: a cor já resolvida
+// do chat em foco mudou junto, e a borda das abas lê essa cor
+window.addEventListener('cockpit:aparencia', () => pintarCorFoco());
 
 /* (i) dos Ajustes: um balão só, preso ao body, porque a coluna dos ajustes rola e cortaria
    um balão desenhado dentro dela. Mouse mostra; no celular (sem mouse) o toque liga e desliga. */
-const SVG_INFO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>';
+const SVG_INFO = ico('info');   // o (i) do redesenho (icones.js)
 let dicaEl = null, dicaDono = null;
 function mostrarDica(bt) {
   if (!dicaEl) {

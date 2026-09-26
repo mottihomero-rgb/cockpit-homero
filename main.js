@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, shell, clipboard, powerSaveBlocker, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, shell, clipboard, powerSaveBlocker, Notification, nativeTheme } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -4451,17 +4451,52 @@ handle('ocr:ler', async (_e, { arquivo } = {}) => {
   return { error: motivo };
 });
 
+/* ======================= aparência =======================
+   Redesenho de 25/09: os temas Escuro/Claro/Jornal viraram Aparência: Automática / Clara /
+   Escura (cfg.tema = 'auto' | 'clara' | 'escura'; o que estava salvo com o nome antigo vale
+   pelo mais proximo, e o Jornal, que era claro, vira Clara). Quem pinta a tela e o renderer
+   (aparencia.js). Aqui o que muda e o nativeTheme do Electron: com ele a barra de rolagem
+   nativa, os semaforos, os menus do sistema e o prefers-color-scheme da pagina acompanham a
+   escolha — Escura forca escuro mesmo com o Mac claro, Automatica devolve para o Mac. */
+function aparenciaDe(t) {
+  if (t === 'escura' || t === 'escuro') return 'escura';
+  if (t === 'clara' || t === 'claro' || t === 'jornal') return 'clara';
+  return 'auto';
+}
+const FONTE_DO_TEMA = { auto: 'system', clara: 'light', escura: 'dark' };
+function aplicarAparenciaNativa(t) {
+  try {
+    const fonte = FONTE_DO_TEMA[aparenciaDe(t)];
+    if (nativeTheme && nativeTheme.themeSource !== fonte) nativeTheme.themeSource = fonte;
+  } catch (e) { anota('nao consegui acertar a aparencia do Mac:', e && e.message); }
+}
+/* O fundo que a janela mostra ANTES da pagina pintar (e nas bordas ao redimensionar): o mesmo
+   --bg-content dos tokens do tema que vai abrir. Com o #1e1e1e fixo de antes, quem usa claro via
+   um clarao escuro a cada abertura. */
+function fundoDaJanela() {
+  try { return nativeTheme && !nativeTheme.shouldUseDarkColors ? '#FFFFFF' : '#161617'; } catch { return '#161617'; }
+}
+
 /* ======================= janela ======================= */
 function createWindow() {
+  // antes da janela nascer: assim o prefers-color-scheme da pagina ja chega certo no 1o quadro
+  try { aplicarAparenciaNativa(loadConfig().tema); } catch {}
   win = new BrowserWindow({
     width: 1500, height: 900, minWidth: 900, minHeight: 560,
-    backgroundColor: '#1e1e1e',
+    backgroundColor: fundoDaJanela(),
     titleBarStyle: 'hiddenInset',
     // os semaforos moram na faixa de abas (58px) desde que a barra de titulo saiu (10/09)
     trafficLightPosition: { x: 16, y: 17 },
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, spellcheck: false },
   });
   win.loadFile(path.join(__dirname, 'renderer/index.html'));
+  // Automatica e o Mac trocou de claro para escuro (ou ele trocou nos Ajustes): o fundo de
+  // reserva da janela acompanha. Um ouvinte por janela, solto quando ela fecha.
+  if (nativeTheme && nativeTheme.on) {
+    const fundoAcompanha = () => { try { if (win && !win.isDestroyed()) win.setBackgroundColor(fundoDaJanela()); } catch {} };
+    nativeTheme.on('updated', fundoAcompanha);
+    win.on('closed', () => { try { nativeTheme.removeListener('updated', fundoAcompanha); } catch {} });
+  }
   win.on('focus', zerarBadge);   // voltou para a janela: o numero no Dock nao serve mais
   // o ditado precisa do microfone; a pagina e o proprio app, entao o pedido e liberado
   win.webContents.session.setPermissionRequestHandler((_wc, _perm, cb) => cb(true));
@@ -4640,6 +4675,8 @@ handle('config:set', (_e, c, origem) => {
      e barrada. O numero de abas devolvidas volta pra tela poder dar o recado. */
   const devolvidas = saveConfig(novo, origem);
   if (devolvidas < 0) return { ok: false, error: 'Não consegui salvar as abas e preferências no disco. O arquivo anterior foi preservado.' };
+  // a Aparencia escolhida nos Ajustes vale tambem para o que e nativo (so troca se mudou)
+  aplicarAparenciaNativa(novo.tema);
   return { ok: true, abasDevolvidas: devolvidas };
 });
 handle('sys:home', () => HOME);

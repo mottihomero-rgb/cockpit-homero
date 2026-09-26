@@ -1,0 +1,13 @@
+/* ============================================================================
+   REDESENHO · COLUNA LATERAL (handoff do Claude Design, 25/09/2026 — README, "Telas e componentes")
+   Coluna lateral de 280pt (--bg-sidebar com vidro, borda redimensionável): título Title 3;
+   Conversas (logo + nome + plano, barras Sessão e Semana, pasta + busca, "Novo chat nesta aba",
+   grupos Hoje/Ontem/7 dias/30 dias, itens de 28); Torre (grupos por aba, logo + título + estado,
+   "Fora do app"); Rotinas (nome, estado, última/próxima, ▶ Disparar); Ajustes (grupos Geral,
+   Entrada e Avançado em cartão --fill-4, linhas de 36, (i) com a explicação no tooltip, toggle
+   32×18 ligado em --status-ok; Aparência: Automática / Clara / Escura).
+   Seletores de hoje: #sidebar, .side-*, .sc-*, .hist*, .hi-*, .new-chat, .grp-*, .aba-grupo, .torre*,
+   .ti-*, .rot*, .ri-*, .settings, .aj*, .chave, .temas, .tema-*, .info, .dica, #dragbar.
+   Carrega DEPOIS do style.css e do quadro.css (e do celular.css no iPhone): ganha deles sem
+   !important. Usar os tokens (../cockpit-tokens.css) e as peças rd- do base.css.
+   ============================================================================ */

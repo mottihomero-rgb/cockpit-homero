@@ -26,7 +26,7 @@ const pastas = (d) => (d.abas || []).map(a => a.cwd).join(',');
 function comAbasNoDisco(...cwds) {
   const h = loadMain();
   const arquivo = h.HOME + '/app-data/config.json';
-  h.put(arquivo, JSON.stringify({ abas: cwds.map(aba), abaAberta: 0, tema: 'escuro' }));
+  h.put(arquivo, JSON.stringify({ abas: cwds.map(aba), abaAberta: 0, tema: 'escura' }));
   return { h, arquivo, disco: () => JSON.parse(h.files.get(arquivo).toString()) };
 }
 
@@ -34,7 +34,7 @@ test('gravacao SEM a marca de que ele fechou nao pode comer aba', () => {
   const { h, arquivo, disco } = comAbasNoDisco('/p/a', '/p/b', '/p/c');
 
   // a tela manda um retrato pela metade: so uma das tres abas
-  const r = h.call('config:set', { abas: [aba('/p/a')], abaAberta: 0, tema: 'escuro' });
+  const r = h.call('config:set', { abas: [aba('/p/a')], abaAberta: 0, tema: 'escura' });
 
   assert.equal(pastas(disco()), '/p/a,/p/b,/p/c', 'as duas abas que faltavam tem de voltar');
   assert.equal(r.abasDevolvidas, 2, 'o retorno diz quantas foram guardadas, pro recado na tela');
@@ -44,10 +44,10 @@ test('gravacao SEM a marca de que ele fechou nao pode comer aba', () => {
 test('o RESTO do config da gravacao barrada entra assim mesmo', () => {
   const { h, disco } = comAbasNoDisco('/p/a', '/p/b');
 
-  h.call('config:set', { abas: [aba('/p/a')], abaAberta: 0, tema: 'jornal', prompts: ['oi'] });
+  h.call('config:set', { abas: [aba('/p/a')], abaAberta: 0, tema: 'clara', prompts: ['oi'] });
 
   const d = disco();
-  assert.equal(d.tema, 'jornal', 'so as abas sao devolvidas: o resto da gravacao vale');
+  assert.equal(d.tema, 'clara', 'so as abas sao devolvidas: o resto da gravacao vale');
   assert.deepEqual(d.prompts, ['oi']);
   assert.equal(pastas(d), '/p/a,/p/b');
 });

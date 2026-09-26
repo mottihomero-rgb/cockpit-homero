@@ -51,12 +51,12 @@ const daqui = (v) => JSON.parse(JSON.stringify(v));
 
 test('Ajuste feito no telefone continua la depois de recarregar', async () => {
   const gaveta = gavetaDeMentira();
-  const noMac = { tema: 'escuro', verRobos: false, favoritos: ['conversa-x'], abas: [{ cwd: '/pasta/a' }], abaAberta: 0 };
+  const noMac = { tema: 'escura', verRobos: false, favoritos: ['conversa-x'], abas: [{ cwd: '/pasta/a' }], abaAberta: 0 };
 
   const t1 = telefone(gaveta, noMac);
   const cfg = await t1.api.getConfig();
-  assert.equal(cfg.tema, 'escuro');
-  cfg.tema = 'jornal';                 // ele toca no tema
+  assert.equal(cfg.tema, 'escura');
+  cfg.tema = 'clara';                 // ele toca no tema
   cfg.verRobos = true;                 // e liga "mostrar robos"
   cfg.favoritos.unshift('conversa-y'); // e favorita uma conversa
   assert.equal(await t1.api.setConfig(cfg), true);
@@ -64,10 +64,10 @@ test('Ajuste feito no telefone continua la depois de recarregar', async () => {
   assert.deepEqual(Object.keys(guardado(gaveta)).sort(), ['favoritos', 'tema', 'verRobos']);
 
   // recarregou o Safari: o Mac mexeu nas abas nesse meio tempo, e elas sao dele
-  const depois = { tema: 'escuro', verRobos: false, favoritos: ['conversa-x'], abas: [{ cwd: '/pasta/b' }, { cwd: '/pasta/c' }], abaAberta: 1 };
+  const depois = { tema: 'escura', verRobos: false, favoritos: ['conversa-x'], abas: [{ cwd: '/pasta/b' }, { cwd: '/pasta/c' }], abaAberta: 1 };
   const t2 = telefone(gaveta, depois);
   const cfg2 = await t2.api.getConfig();
-  assert.equal(cfg2.tema, 'jornal');
+  assert.equal(cfg2.tema, 'clara');
   assert.equal(cfg2.verRobos, true);
   assert.deepEqual(daqui(cfg2.favoritos), ['conversa-y', 'conversa-x']);
   assert.deepEqual(daqui(cfg2.abas), depois.abas, 'as abas continuam sendo as do Mac');
@@ -76,25 +76,51 @@ test('Ajuste feito no telefone continua la depois de recarregar', async () => {
 
 test('Se o Mac trocou a mesma preferencia depois, quem manda e o Mac', async () => {
   const gaveta = gavetaDeMentira();
-  const noMac = { tema: 'escuro', abas: [] };
+  const noMac = { tema: 'escura', abas: [] };
 
   const cfg = await telefone(gaveta, noMac).api.getConfig();
-  cfg.tema = 'jornal';
-  await telefone(gaveta, noMac).api.setConfig(cfg);   // guarda "jornal" com base "escuro"
+  cfg.tema = 'clara';
+  await telefone(gaveta, noMac).api.setConfig(cfg);   // guarda "clara" com base "escura"
 
-  const t = telefone(gaveta, { tema: 'claro', abas: [] });
-  assert.equal((await t.api.getConfig()).tema, 'claro');
+  const t = telefone(gaveta, { tema: 'auto', abas: [] });
+  assert.equal((await t.api.getConfig()).tema, 'auto');
   assert.deepEqual(guardado(gaveta), {}, 'a copia velha do telefone e jogada fora');
+});
+
+test('Mac regravou o tema com o nome novo (redesenho): a escolha do telefone continua', async () => {
+  /* O app novo, no Mac, troca 'escuro' por 'escura' (e 'claro'/'jornal' por 'clara') e grava
+     sozinho. Ninguem mexeu no tema do Mac: o telefone nao pode achar que o Mac trocou e jogar
+     fora a escolha dele. Gaveta como a versao antiga deixava: base com o nome antigo. */
+  const gaveta = gavetaDeMentira();
+  gaveta.setItem('cockpit:ajustes-do-telefone', JSON.stringify({ tema: { meu: 'claro', base: 'escuro' } }));
+  const t = telefone(gaveta, { tema: 'escura', abas: [] });
+  assert.equal((await t.api.getConfig()).tema, 'claro', 'o celular voltou para Escura sozinho');
+  assert.deepEqual(guardado(gaveta), { tema: { meu: 'claro', base: 'escuro' } });
+
+  // o Jornal virou Clara: mesma coisa
+  const g2 = gavetaDeMentira();
+  g2.setItem('cockpit:ajustes-do-telefone', JSON.stringify({ tema: { meu: 'auto', base: 'jornal' } }));
+  assert.equal((await telefone(g2, { tema: 'clara', abas: [] }).api.getConfig()).tema, 'auto');
+
+  // mas se o Mac trocou DE VERDADE (escuro -> Clara), quem manda continua sendo o Mac
+  const g3 = gavetaDeMentira();
+  g3.setItem('cockpit:ajustes-do-telefone', JSON.stringify({ tema: { meu: 'auto', base: 'escuro' } }));
+  assert.equal((await telefone(g3, { tema: 'clara', abas: [] }).api.getConfig()).tema, 'clara');
+  assert.deepEqual(guardado(g3), {});
+  // e sem tema no Mac antes, escolher Automática la tambem conta como troca
+  const g4 = gavetaDeMentira();
+  g4.setItem('cockpit:ajustes-do-telefone', JSON.stringify({ tema: { meu: 'escura', base: null } }));
+  assert.equal((await telefone(g4, { tema: 'auto', abas: [] }).api.getConfig()).tema, 'auto');
 });
 
 test('Gaveta trancada (Safari anonimo) nao quebra a tela', async () => {
   const trancada = { dados: new Map(),
     getItem: () => { throw new Error('sem espaco'); },
     setItem: () => { throw new Error('sem espaco'); } };
-  const t = telefone(trancada, { tema: 'escuro', abas: [{ cwd: '/pasta/a' }] });
+  const t = telefone(trancada, { tema: 'escura', abas: [{ cwd: '/pasta/a' }] });
   const cfg = await t.api.getConfig();
-  assert.equal(cfg.tema, 'escuro');
-  cfg.tema = 'claro';
+  assert.equal(cfg.tema, 'escura');
+  cfg.tema = 'auto';
   assert.equal(await t.api.setConfig(cfg), true);
 });
 

@@ -4,7 +4,7 @@
 
    REGRA UNICA DESTE ARQUIVO: nada de cor cravada.
    Tudo que e "moldura" (janela, barras, botoes, textos, bordas) sai das
-   variaveis de tema do style.css, senao quebra no tema claro e no jornal.
+   variaveis de tema do style.css (apelidos dos tokens do redesenho), senao quebra no claro.
    As cores do TRACO nao moram aqui: quem guarda a paleta e o quadro.js
    (const PALETA), porque elas vao gravadas dentro do PNG e do JSON.
 
@@ -33,9 +33,7 @@
 
 .p-quadro{position:relative}
 /* pontinho: existe um desenho comecado que ainda nao foi mandado pro chat.
-   --accent e resolvida POR PAINEL (laranja no Claude, azul no Codex), entao o
-   pontinho nasce da cor do chat em que ele esta. Nao usar --qd aqui: aquela so
-   existe dentro do #qdPainel, que vive colado no <body>, longe deste botao. */
+   --accent e o azul do sistema (redesenho 25/09: a cor do motor ficou so no logo). */
 .p-quadro.tem-rascunho{color:var(--fg)}
 .p-quadro.tem-rascunho::after{content:'';position:absolute;top:2px;right:2px;
   width:5px;height:5px;border-radius:50%;
@@ -57,13 +55,11 @@
   background:var(--veu);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
   padding:18px;
 
-  /* cor viva do chat de destino: laranja no Claude, azul no Codex.
-     o quadro.js troca isto em abrir(P) com style.setProperty('--qd', ...) */
+  /* cor do assistente do chat de destino. O quadro.js troca isto em abrir(P).
+     Desde o redesenho (25/09) ela vale so para logo: ferramenta ligada, cursor do texto,
+     contorno de foco e o "Mandar pro chat" usam o --accent, o azul do sistema, em
+     qualquer assistente (README: a cor do assistente aparece so no logo). */
   --qd:var(--claude);
-  /* o painel mora no <body>, fora do .pane, entao nao herda o --accent do chat.
-     amarrando --accent em --qd, TODO o quadro (ferramenta ligada, cursor do
-     texto, contorno de foco) usa a cor do chat de destino. */
-  --accent:var(--qd);
 }
 #qdPainel.hidden,.qd-painel.hidden{display:none !important}
 
@@ -286,22 +282,20 @@
 .qd-rodape .qd-bt.perigo.confirmando{background:var(--erro-fundo);color:#fff;
   border-color:transparent;font-weight:650}
 
-/* botao principal: pintado com a cor do motor daquele chat.
-   a cor do texto e --sobre-accent (mesma regra do .p-send do app): fica branco no tema
-   claro e no jornal, e escuro no tema escuro, onde o azul do Codex e claro demais
-   para carregar texto branco. */
+/* botao principal: o azul do sistema (--accent), igual em qualquer assistente — antes era
+   pintado com a cor do motor. O texto e --sobre-accent (branco sobre o azul). */
 .qd-rodape .qd-mandar{
   padding:9px 17px;border:0;border-radius:10px;
-  background:var(--qd);color:var(--sobre-accent);
+  background:var(--accent);color:var(--sobre-accent);
   font:650 12.5px var(--sans);
-  box-shadow:0 6px 18px color-mix(in srgb,var(--qd) 30%,transparent)}
+  box-shadow:0 6px 18px color-mix(in srgb,var(--accent) 30%,transparent)}
 .qd-rodape .qd-mandar:hover{filter:brightness(1.07)}
 .qd-rodape .qd-mandar:active{transform:translateY(1px)}
 /* desligado continua sendo a pilula colorida, so que apagada: sem estas duas linhas
    ele perdia fundo e cor e sumia dentro do rodape */
 .qd-rodape .qd-mandar:disabled{
   opacity:.5;cursor:default;box-shadow:none;filter:none;
-  background:var(--qd);color:var(--sobre-accent)}
+  background:var(--accent);color:var(--sobre-accent)}
 
 /* enquanto gera o PNG e anexa no chat */
 .qd-mandar.ocupado{opacity:.7;cursor:progress}
@@ -327,7 +321,7 @@
   transition:opacity .2s,transform .2s}
 .qd-toast.some{opacity:0;transform:translateX(-50%) translateY(8px);pointer-events:none}
 .qd-toast-acao{flex:none;background:transparent;border:0;cursor:pointer;padding:0;
-  font:600 12.5px var(--sans);color:var(--qd);text-decoration:underline;text-underline-offset:3px}
+  font:600 12.5px var(--sans);color:var(--accent-text);text-decoration:underline;text-underline-offset:3px}
 .qd-toast-acao:hover{filter:brightness(1.15)}
 
 

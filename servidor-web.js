@@ -544,18 +544,19 @@ function paginaSenha(errou, detalhe = '') {
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cockpit">
-<meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#161617" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <link rel="manifest" href="/manifest.json"><link rel="apple-touch-icon" href="/icone-180.png">
 <title>Cockpit</title><style>
 /* As cores eram cravadas no escuro: quem usa o tema Claro tomava uma tela preta na cara e o
    app saltava para o branco logo depois. Agora a porta de entrada segue o aparelho, com a
-   mesma paleta clara do app (style.css). */
-:root{--fundo:#1e1e1e;--texto:#ccc;--tit:#e8e8e8;--fraco:#8b8b8b;--campo:#252526;
---borda:#474747;--laranja:#d97757;--erro:#e05252;--ajuda:#aaa}
+   mesma paleta do app (os tokens do redesenho de 25/09, renderer/cockpit-tokens.css).
+   O botao de entrar e a acao principal: azul do sistema, e nao mais a cor do Claude. */
+:root{--fundo:#161617;--texto:rgba(255,255,255,.92);--tit:rgba(255,255,255,.92);--fraco:rgba(235,235,245,.62);
+--campo:rgba(255,255,255,.075);--borda:rgba(255,255,255,.15);--acao:#0A84FF;--erro:#FF6961;--ajuda:rgba(235,235,245,.62)}
 @media (prefers-color-scheme: light){
-:root{--fundo:#ffffff;--texto:#3b3b40;--tit:#1c1c20;--fraco:#71717a;--campo:#f5f5f6;
---borda:#c8c8cb;--laranja:#c2521f;--erro:#c62828;--ajuda:#5f5f68}
+:root{--fundo:#ffffff;--texto:rgba(0,0,0,.88);--tit:rgba(0,0,0,.88);--fraco:rgba(40,40,48,.68);--campo:rgba(0,0,0,.055);
+--borda:rgba(0,0,0,.15);--acao:#0071E3;--erro:#D70015;--ajuda:rgba(40,40,48,.68)}
 }
 body{margin:0;height:100dvh;display:grid;place-items:center;background:var(--fundo);color:var(--texto);
 font:15px -apple-system,system-ui,sans-serif}
@@ -563,8 +564,8 @@ form{width:min(320px,86%);text-align:center}
 h1{font-size:19px;color:var(--tit);margin:0 0 6px}p{color:var(--fraco);font-size:13px;margin:0 0 18px}
 input{box-sizing:border-box;width:100%;padding:13px;border-radius:11px;border:1px solid var(--borda);background:var(--campo);
 color:var(--texto);font-size:16px;outline:none;text-align:center}
-input:focus{border-color:var(--laranja)}
-button{width:100%;margin-top:10px;padding:13px;border:0;border-radius:11px;background:var(--laranja);
+input:focus{border-color:var(--acao)}
+button{width:100%;margin-top:10px;padding:13px;border:0;border-radius:11px;background:var(--acao);
 color:#fff;font-size:15px;font-weight:600}
 .erro{color:var(--erro);font-size:12.5px;margin-top:10px}
 details{margin-top:28px;color:var(--ajuda);font-size:13px;line-height:1.6}summary{cursor:pointer}details p{margin-top:10px}

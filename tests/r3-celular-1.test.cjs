@@ -139,7 +139,7 @@ const guardado = (gaveta) => JSON.parse(gaveta.dados.get('cockpit:ajustes-do-tel
 
 test('R3-044 web.js: duas abas abertas juntas, cada uma muda UMA preferencia — as DUAS sobrevivem', async () => {
   const gaveta = gavetaDeMentira();
-  const noMac = { tema: 'escuro', verRobos: false, abas: [] };
+  const noMac = { tema: 'escura', verRobos: false, abas: [] };
 
   // duas abas "abertas ao mesmo tempo": as duas fazem getConfig ANTES de qualquer setConfig
   const abaA = telefone(gaveta, noMac);
@@ -147,27 +147,27 @@ test('R3-044 web.js: duas abas abertas juntas, cada uma muda UMA preferencia —
   const abaB = telefone(gaveta, noMac);
   const cfgB = await abaB.api.getConfig();
 
-  cfgA.tema = 'jornal';                 // aba A so mexe no tema
+  cfgA.tema = 'clara';                 // aba A so mexe no tema
   await abaA.api.setConfig(cfgA);
 
   cfgB.verRobos = true;                 // aba B, sem saber da mudanca de A, so mexe em verRobos
   await abaB.api.setConfig(cfgB);
 
   const g = guardado(gaveta);
-  assert.equal(g.tema && g.tema.meu, 'jornal',
+  assert.equal(g.tema && g.tema.meu, 'clara',
     'com o defeito, o setConfig da aba B recalcula TODAS as chaves pelo retrato do boot dela e apaga o tema que a aba A acabou de salvar');
   assert.equal(g.verRobos && g.verRobos.meu, true, 'a propria mudanca da aba B tem que ser salva tambem');
 });
 
 test('R3-044 web.js: aba unica revertendo pro valor do Mac continua limpando a gaveta', async () => {
   const gaveta = gavetaDeMentira();
-  const noMac = { tema: 'escuro', abas: [] };
+  const noMac = { tema: 'escura', abas: [] };
   const aba = telefone(gaveta, noMac);
   const cfg = await aba.api.getConfig();
-  cfg.tema = 'jornal';
+  cfg.tema = 'clara';
   await aba.api.setConfig(cfg);
-  assert.equal(guardado(gaveta).tema.meu, 'jornal');
-  cfg.tema = 'escuro';                  // ele volta pro tema original, na MESMA aba
+  assert.equal(guardado(gaveta).tema.meu, 'clara');
+  cfg.tema = 'escura';                  // ele volta pro tema original, na MESMA aba
   await aba.api.setConfig(cfg);
   assert.deepEqual(guardado(gaveta), {}, 'reverter pro valor do Mac, na mesma aba, tem que continuar limpando a chave');
 });

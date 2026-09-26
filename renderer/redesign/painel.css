@@ -1,0 +1,11 @@
+/* ============================================================================
+   REDESENHO · PAINEL DE CHAT (handoff do Claude Design, 25/09/2026 — README, "Telas e componentes")
+   O painel em si: divisor de 1pt entre painéis, cabeçalho em duas linhas (36pt: seletor de
+   assistente segmented, branch, "312k / 1000k", fechar; 28pt: sinal de estado + nome da conversa
+   com lápis no hover), o esmaecimento de 14pt abaixo do cabeçalho, o estado vazio (só o logo de
+   36 na cor do assistente) e a busca ⌘F flutuante (300×32, vidro).
+   Seletores de hoje: .pane, .pane-hd, .p-chave, .ch-lado, .p-git, .p-tokens, .p-close, .pane-nome,
+   .pn-*, .pane-empty, .pe-logo, .p-busca, .pb-*, .pane-split*.
+   Carrega DEPOIS do style.css e do quadro.css (e do celular.css no iPhone): ganha deles sem
+   !important. Usar os tokens (../cockpit-tokens.css) e as peças rd- do base.css.
+   ============================================================================ */

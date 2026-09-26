@@ -239,6 +239,16 @@
 
   const mesmoValor = (a, b) =>
     JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
+  /* Redesenho 25/09: o Mac regrava o tema com o nome novo (escuro -> escura, claro/jornal ->
+     clara) sem ninguem ter tocado nele. Comparado cru, 'escura' != 'escuro' pareceria "o Mac
+     trocou depois" e jogaria fora a escolha que o telefone guardou. Por isso o tema compara pelo
+     nome novo. O mapa e o mesmo do aparencia.js, repetido aqui porque o web.js nao pode depender
+     da ordem em que os <script defer> rodam. So troca nome antigo: tema vazio continua
+     diferente de 'auto' (o Mac escolher de fato continua valendo).
+     Sem isto, depois da atualizacao o celular voltava para Escura sozinho. */
+  const NOME_NOVO_DO_TEMA = { escuro: 'escura', claro: 'clara', jornal: 'clara' };
+  const temaNovo = (t) => (Object.prototype.hasOwnProperty.call(NOME_NOVO_DO_TEMA, t) ? NOME_NOVO_DO_TEMA[t] : t);
+  const mesmaBase = (k, a, b) => (k === 'tema' ? mesmoValor(temaNovo(a), temaNovo(b)) : mesmoValor(a, b));
   // copia de verdade: a tela mexe nas listas por dentro (splice/push), e sem copiar o retrato
   // do Mac mudaria junto — ai nunca daria pra saber o que foi o telefone que trocou.
   const copiar = (v) => (v && typeof v === 'object' ? JSON.parse(JSON.stringify(v)) : v);
@@ -267,7 +277,7 @@
       const vale = AJUSTES_DO_TELEFONE.includes(k) && meuAjuste && typeof meuAjuste === 'object'
         && Object.prototype.hasOwnProperty.call(meuAjuste, 'meu')
         // o Mac mexeu nesta preferencia depois de mim: quem manda e o Mac, minha copia vai fora
-        && mesmoValor(doMac[k], meuAjuste.base);
+        && mesmaBase(k, doMac[k], meuAjuste.base);
       if (!vale) { delete g[k]; limpou = true; continue; }
       doMac[k] = meuAjuste.meu;
     }

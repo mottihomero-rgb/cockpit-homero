@@ -26,7 +26,7 @@
   const NOTA_TINTA = '#23231f';
   const LIM_PNG = 2160;    // teto do lado maior: o WebSocket do telefone corta em 8MB
   /* 'tinta' e um sentinela, nao uma cor: vira o --fg-strong do tema na hora de pintar.
-     Sem isso, traco preto some no tema escuro e traco claro some no tema jornal. */
+     Sem isso, traco preto some no tema escuro e traco claro some no tema claro. */
   const PALETA = ['tinta', '#d97757', '#4a90e2', '#4f9d5d', '#c9922b', '#d9534f', '#9b7bd4'];
   /* hexes que versoes antigas gravavam no lugar de 'tinta' (um por tema) */
   const TINTAS_VELHAS = ['#e8e8e8', '#1c1c20', '#073642'];
@@ -35,33 +35,23 @@
     nota: { w: 180, h: 180 }, texto: { w: 220, h: 34 },
   };
 
-  /* ---------------- icones (mapa proprio, de proposito) ---------------- */
+  /* ---------------- icones ----------------
+     Mapa proprio de NOMES (o quadro fala "caneta", "borracha"...), mas o desenho agora e o do
+     redesenho (renderer/icones.js, grade de 16, traco 1,4), o mesmo do resto do app. Cada nome
+     daqui aponta para o desenho de la; os que o handoff nao tinha (preencher, frente, tras,
+     refazer, ajustar) foram desenhados no icones.js no mesmo estilo.
+     A busca no window.CK_ICONES e feita na HORA de desenhar o botao, e nao aqui em cima: os
+     testes rodam este arquivo sem o icones.js, e um mapa montado no carregamento quebraria. */
   const ICONES_QD = {
-    selecionar: '<path d="M3.688 3.037a.497.497 0 0 0-.651.651l6.5 15.999a.501.501 0 0 0 .947-.062l1.569-6.083a2 2 0 0 1 1.448-1.479l6.124-1.579a.5.5 0 0 0 .063-.947z"/>',
-    mao: '<path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" /> <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" /> <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" /> <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />',
-    retangulo: '<rect width="18" height="18" x="3" y="3" rx="2"/>',
-    elipse: '<circle cx="12" cy="12" r="9"/>',
-    losango: '<path d="M12 2 22 12 12 22 2 12z"/>',
-    nota: '<path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9l7-7V5a2 2 0 0 0-2-2z"/><path d="M15 21v-5a1 1 0 0 1 1-1h5"/>',
-    seta: '<path d="M5 19 19 5"/><path d="M12 5h7v7"/>',
-    linha: '<path d="M5 19 19 5"/>',
-    texto: '<path d="M4 6V4h16v2"/><path d="M12 4v16"/><path d="M9 20h6"/>',
-    caneta: '<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /> <path d="m15 5 4 4" />',
-    borracha: '<path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21" /> <path d="m5.082 11.09 8.828 8.828" />',
-    desfazer: '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>',
-    refazer: '<path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/>',
-    x: '<path d="M18 6 6 18" /> <path d="m6 6 12 12" />',
-    mandar: '<path d="m5 12 7-7 7 7" /> <path d="M12 19V5" />',
-    preencher: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/>',
-    frente: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16V4a1 1 0 0 1 1-1h11"/>',
-    tras: '<rect x="3" y="3" width="13" height="13" rx="2"/><path d="M20 8v12a1 1 0 0 1-1 1H8"/>',
-    apagar: '<path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
-    imagem: '<rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.5-3.5a2 2 0 0 0-2.8 0L6 20"/>',
-    copiar: '<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/>',
-    ajustar: '<path d="M3 9V5a2 2 0 0 1 2-2h4"/><path d="M15 3h4a2 2 0 0 1 2 2v4"/><path d="M21 15v4a2 2 0 0 1-2 2h-4"/><path d="M9 21H5a2 2 0 0 1-2-2v-4"/>',
+    selecionar: 'pointer', mao: 'move', retangulo: 'rect', elipse: 'circle', losango: 'diamond',
+    nota: 'note', seta: 'arrow', linha: 'line', texto: 'text', caneta: 'scribble', borracha: 'eraser',
+    desfazer: 'rewind', refazer: 'redo', x: 'xmark', mandar: 'arrow-up', preencher: 'fill',
+    frente: 'bring-front', tras: 'send-back', apagar: 'trash', imagem: 'download', copiar: 'copy',
+    ajustar: 'fit',
   };
-  const qico = (n) => '<svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" '
-    + 'stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + (ICONES_QD[n] || '') + '</svg>';
+  const qico = (n) => '<svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" '
+    + 'stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + (((typeof window !== 'undefined' && window.CK_ICONES) || {})[ICONES_QD[n] || n] || '') + '</svg>';
 
   const FERRAMENTAS = [
     { f: 'selecionar', ic: 'selecionar', t: 'Selecionar e mover (V)' },
@@ -2217,7 +2207,7 @@
 
     // trocar o tema com o quadro aberto repinta tudo com as cores novas
     new MutationObserver(() => { if (Q.aberto) { lerTema(); agendar(); } })
-      .observe(document.documentElement, { attributes: true, attributeFilter: ['data-tema', 'class'] });
+      .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class'] });
 
     return el;
   }

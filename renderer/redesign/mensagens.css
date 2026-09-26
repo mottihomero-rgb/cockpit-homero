@@ -1,0 +1,11 @@
+/* ============================================================================
+   REDESENHO · MENSAGENS (handoff do Claude Design, 25/09/2026 — README, "Telas e componentes")
+   Mensagem minha (à direita, "Você" em 11px, bolha --fill-3 raio 12, 14/21, copiar/editar/voltar
+   no hover) e resposta do assistente (logo de 14 + nome, texto 14/21, H2 17/22, listas, tabela,
+   bloco de código com barra de 28, caminho clicável em mono 12,5 --accent-text, miniatura
+   220×132). Fim do turno, cartão de erro, pergunta do assistente e o cartão do time de agentes.
+   Seletores de hoje: .msg*, .msg-body, .msg-acoes, .bt-copiar, .turno-*, .recibo, .cx-cartao,
+   .cxq-*, .cx-acao, .aviso-agente, .entrega-img, .note.
+   Carrega DEPOIS do style.css e do quadro.css (e do celular.css no iPhone): ganha deles sem
+   !important. Usar os tokens (../cockpit-tokens.css) e as peças rd- do base.css.
+   ============================================================================ */

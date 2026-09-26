@@ -553,3 +553,24 @@ html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inse
 .aj-cartao .aj-conta:first-child{border-radius:10px 10px 0 0}
 .aj-cartao .aj-conta:last-child{border-radius:0 0 10px 10px}
 .aj-cartao .aj-conta:only-child{border-radius:10px}
+
+/* ---- lateral do Mac (26/09): "+ Inicie um novo chat" em cima e, embaixo, só dois ícones ----
+   A lupa abre o campo de busca no lugar dela (a linha ganha .buscando); a pasta abre a lista
+   de pastas. Pasta filtrando = ícone em azul, o nome dela na dica. O celular segue com a linha
+   antiga (pop-up + campo), por isso tudo aqui mora em .icones. */
+.new-chat{margin-top:2px}
+.new-chat .ic{color:var(--label-1)}
+.side-ferramentas.icones{gap:2px;padding:0 12px 8px;align-items:center}
+.side-lupa,.side-ferramentas.icones .side-filtro{flex:none;width:28px;height:28px;max-width:none;padding:0;margin:0;
+  display:grid;place-items:center;border:0;border-radius:6px;background:transparent;color:var(--label-2);cursor:default;
+  transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
+.side-lupa .ic,.side-ferramentas.icones .sf-ic .ic{width:15px;height:15px}
+.side-lupa:hover,.side-ferramentas.icones .side-filtro:hover{background:var(--fill-3);color:var(--label-1)}
+.side-lupa:active,.side-ferramentas.icones .side-filtro:active{background:var(--fill-2)}
+.side-lupa:focus-visible,.side-ferramentas.icones .side-filtro:focus-visible{outline:none;box-shadow:var(--anel-foco)}
+.side-ferramentas.icones .side-filtro.on{color:var(--accent)}
+.side-ferramentas.icones :is(.sf-txt,.sf-seta){display:none}
+.side-ferramentas.icones .side-busca-cx{display:none;height:28px}
+.side-ferramentas.icones.buscando .side-lupa{display:none}
+.side-ferramentas.icones.buscando .side-busca-cx{display:flex;order:-1}
+.side-ferramentas.icones .side-pastas{top:32px;left:12px;right:12px}

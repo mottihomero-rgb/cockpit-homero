@@ -6344,7 +6344,7 @@ async function menuSkills(P, filtroInicial, focar) {
        do topo e a coluna lateral usam. Antes havia outra linha aqui em cima, na secao Contexto
        ("Comecar conversa nova"), que por dentro chamava esta mesma funcao: duas portas com
        nomes diferentes para a mesma coisa. */
-    { sec: 'Chat', ic: 'plus', nome: 'Novo chat nesta aba', desc: '⌘T', act: () => { novoChatNaAba(P.engine); } },
+    { sec: 'Chat', ic: 'plus', nome: 'Inicie um novo chat', desc: '⌘T', act: () => { novoChatNaAba(P.engine); } },
     { sec: 'Chat', ic: 'rotate-cw', nome: 'Reabrir o último chat fechado', desc: '⌘⇧W', act: () => reabrirUltimoFechado() },
     { sec: 'Chat', ic: 'columns-2', nome: 'Perguntar aos outros motores', desc: 'a mesma pergunta nos outros chats desta aba · ⌘D', act: () => perguntarAosOutros(P) },
     { sec: 'Painel', ic: 'folder-open', nome: 'Trocar a pasta deste painel', tag: nomePasta(P.cwd), act: () => $('.p-cwd', P.el).click() },
@@ -9608,6 +9608,8 @@ function pintarBotaoFiltro(engine) {
   const alvo = buscando ? '' : pastaDoFiltro(engine);
   $('.sf-txt', bt).textContent = alvo ? nomeProjeto(alvo) : 'Mac inteiro';
   bt.classList.toggle('on', !!alvo);
+  // no Mac a pasta é só o ícone (26/09): qual pasta está filtrando vai na dica
+  bt.title = 'Filtrar por pasta · ' + (alvo ? nomeProjeto(alvo) : 'Mac inteiro');
 }
 // a lista do filtro: Mac inteiro, acompanhar a aba, e um item por cliente
 async function pintarPastas(engine) {
@@ -10488,9 +10490,25 @@ $$('.side-busca').forEach(inp => {
   });
   inp.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.stopPropagation(); inp.value = ''; buscaAtual[inp.dataset.busca] = '';
-      pintarConversas(); }
+      pintarConversas(); inp.blur(); }
+  });
+  // linha só de ícones (Mac, 26/09): campo vazio que perde o foco volta a ser a lupa
+  inp.addEventListener('blur', () => {
+    const linha = inp.closest('.side-ferramentas.icones');
+    if (linha && !inp.value.trim()) linha.classList.remove('buscando');
   });
 });
+/* a lupa abre o campo de busca no lugar dela, já com o cursor */
+function abrirCampoDeBusca(linha) {
+  if (!linha) return;
+  linha.classList.add('buscando');
+  const inp = $('.side-busca', linha);
+  if (inp) setTimeout(() => { inp.focus(); inp.select(); }, 0);
+}
+$$('.side-lupa').forEach(bt => bt.addEventListener('click', (e) => {
+  e.stopPropagation();
+  abrirCampoDeBusca(bt.closest('.side-ferramentas'));
+}));
 
 $$('.side-filtro').forEach(bt => bt.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -10509,7 +10527,7 @@ document.addEventListener('click', (e) => {
 // cartão de conta que saiu, a conta de cada IA (no máximo uma vez por minuto, por causa do 429)
 document.querySelectorAll('[data-reload]').forEach(b =>
   b.addEventListener('click', () => { recarregarConversas(true); pintarUsoLateral(true); }));
-/* "Novo chat nesta aba" da lista unica: nasce na IA do chat em foco (ou na ultima usada),
+/* "Inicie um novo chat" da lista unica: nasce na IA do chat em foco (ou na ultima usada),
    o mesmo motor que o "+ chat" da barra de abas escolheria */
 document.querySelectorAll('[data-new]').forEach(b =>
   b.addEventListener('click', () => novaConversa((focusPane && focusPane.engine) || cfg.lastEngine)));
@@ -11769,6 +11787,8 @@ function abrirBuscaDeConversa() {
   recarregarConversas(); pintarUsoLateral();
   sincronizarIconesLaterais();
   const campo = $('.side-busca[data-busca="' + VISTA_CONVERSAS + '"]');
+  const linha = campo && campo.closest('.side-ferramentas.icones');
+  if (linha) linha.classList.add('buscando');
   if (campo) setTimeout(() => { campo.focus(); campo.select(); }, 60);
 }
 
@@ -11904,7 +11924,7 @@ window.addEventListener('resize', () => { for (const P of panes.values()) paintE
    ao lado dos outros dois compridos, e a tela fica 2 linhas mais baixa. */
 const ATALHOS = [
   ['Chats e abas', [
-    ['⌘T', 'Novo chat nesta aba'],
+    ['⌘T', 'Inicie um novo chat'],
     ['⌘⇧T', 'Nova aba de projeto'],
     ['⌘W', 'Fechar o chat (com janelinha aberta, fecha a janelinha primeiro)', 'Fechar o chat'],
     ['⌘⇧W', 'Reabrir o último chat fechado'],

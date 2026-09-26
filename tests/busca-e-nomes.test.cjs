@@ -127,7 +127,7 @@ test('perguntar aos outros motores nao tem mais o par Claude/Codex cravado', () 
 /* ---- 4. um nome so para "abrir chat novo" ---- */
 
 test('abrir chat novo tem UM nome, igual nos quatro lugares', () => {
-  const NOME = 'Novo chat nesta aba';
+  const NOME = 'Inicie um novo chat';
   const linhasDoMenu = app.split('\n').filter(l => /sec: '(Chat|Contexto)'/.test(l) && /novoChatNaAba|novaConversa\(P\.engine\)/.test(l));
   assert.equal(linhasDoMenu.length, 1, 'o menu do "/" tem de ter UMA linha de chat novo, nao duas');
   assert.match(linhasDoMenu[0], new RegExp("nome: '" + NOME + "'"));

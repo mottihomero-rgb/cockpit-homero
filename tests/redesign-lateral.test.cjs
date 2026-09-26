@@ -64,9 +64,14 @@ test('o tempo vai para a DIREITA do título sem mexer na ordem do HTML', () => {
 test('pasta e busca na mesma linha; a lista de pastas continua achável pelo app.js', () => {
   for (const pagina of ['renderer/index.html', 'renderer/index-web.html']) {
     const html = ler(pagina);
-    const i = html.indexOf('<div class="side-ferramentas">');
+    const i = html.indexOf('<div class="side-ferramentas');
     assert.ok(i > 0, pagina + ': sumiu a linha de pasta + busca');
     const linha = html.slice(i, html.indexOf('<div class="grp-abas"', i));
+    // Mac (26/09): "+ Inicie um novo chat" vem antes, e a linha é só lupa + pasta (ícones)
+    if (pagina.endsWith('index.html')) {
+      assert.ok(html.indexOf('class="new-chat"') < i, 'o novo chat fica em cima da lupa e da pasta');
+      assert.match(linha, /^<div class="side-ferramentas icones">\s*<button class="side-lupa"/);
+    }
     assert.match(linha, /<button class="side-filtro" data-filtro="todas"[^>]*>.*<span class="sf-txt">Mac inteiro<\/span>/);
     assert.match(linha, /<label class="side-busca-cx">.*<input class="side-busca" data-busca="todas"/);
     // presa na linha: o popover abre logo abaixo dela (position:absolute no lateral.css)

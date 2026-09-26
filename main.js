@@ -6627,7 +6627,7 @@ function menu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { role: 'appMenu' },
     { label: 'Painel', submenu: [
-      { label: 'Novo chat nesta aba', accelerator: 'CmdOrCtrl+T', click: () => win && win.webContents.send('menu', 'newPane') },
+      { label: 'Inicie um novo chat', accelerator: 'CmdOrCtrl+T', click: () => win && win.webContents.send('menu', 'newPane') },
       { label: 'Nova aba de projeto…', accelerator: 'CmdOrCtrl+Shift+T', click: () => win && win.webContents.send('menu', 'newTab') },
       { label: 'Fechar chat', accelerator: 'CmdOrCtrl+W', click: () => win && win.webContents.send('menu', 'closePane') },
       { label: 'Reabrir o último chat fechado', accelerator: 'CmdOrCtrl+Shift+W', click: () => win && win.webContents.send('menu', 'reabrirFechado') },

@@ -130,11 +130,15 @@ function requestResponse(request, data) {
     if (!['accept', 'decline', 'cancel'].includes(action)) throw new Error('Escolha confirmar ou cancelar.');
     return { action, ...(action === 'accept' && request.mode !== 'url' ? { content: validateContent(request.schema, data.content) } : { content: null }) };
   }
-  if (request.kind === 'perm') return { permissions: data.allow === true ? request.permissions || {} : {}, scope: 'turn' };
+  /* "Sempre permitir" (data.sempre): vale para a conversa inteira, nunca mais do que isso — o
+     escopo "session" do próprio Codex (acceptForSession; no protocolo antigo approved_for_session).
+     Sem o "sempre", tudo continua exatamente como era. */
+  const sempre = data.allow === true && data.sempre === true;
+  if (request.kind === 'perm') return { permissions: data.allow === true ? request.permissions || {} : {}, scope: sempre ? 'session' : 'turn' };
   if (request.kind === 'cmd' || request.kind === 'file') return {
     decision: request.legacy
-      ? (data.allow === true ? 'approved' : { denied: { rejection: 'Negado pelo usuário' } })
-      : (data.allow === true ? 'accept' : 'decline'),
+      ? (data.allow === true ? (sempre ? 'approved_for_session' : 'approved') : { denied: { rejection: 'Negado pelo usuário' } })
+      : (data.allow === true ? (sempre ? 'acceptForSession' : 'accept') : 'decline'),
   };
   throw new Error('Tipo de pedido não suportado.');
 }

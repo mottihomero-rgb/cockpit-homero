@@ -134,7 +134,10 @@ test('trocar de motor pergunta ANTES de mexer em qualquer coisa', () => {
 });
 
 test('trocar de modo pergunta antes de desligar o motor', () => {
-  const f = pegar('menuModos');
+  /* 26/09: o menu de Modos e o botão do plano (Claude, Gemini, ACP) trocam o modo pelo MESMO
+     escolherModo; a garantia continua a mesma, agora num lugar só */
+  assert.match(pegar('menuModos'), /escolherModo\(P, mo\)/, 'o menu troca o modo pelo caminho único');
+  const f = pegar('escolherModo');
   assert.ok(f.includes('confirmarCorte(P,'), 'o menu de modos tem de perguntar antes');
   assert.ok(f.indexOf('confirmarCorte(P,') < f.indexOf('desligarMotor(P)'),
     'a pergunta vem antes de desligar o motor');

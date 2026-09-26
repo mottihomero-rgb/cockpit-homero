@@ -498,20 +498,24 @@ function codexServerRequest(destino, m) {
       title: destino === 'local' ? 'Rodar comando no seu Mac' : 'Rodar comando na ' + destino.toUpperCase(),
       detail: (Array.isArray(params.command) ? params.command.join(' ') : params.command || '') + (params.cwd ? '\nem ' + params.cwd : ''),
       reason: params.reason || '',
+      // o Codex aceita "acceptForSession" (legado: approved_for_session): o mesmo comando não
+      // pergunta de novo nesta conversa. É o "Sempre permitir" do cartão.
+      allowAlways: true,
     };
     pendingApprovals.set(key, { ...base, kind: 'cmd', legacy: meth === 'execCommandApproval', evento: { tipo: 'approval', dados: dadosEvento } });
     emit(pane, 'approval', dadosEvento);
     return;
   }
   if (meth === 'item/fileChange/requestApproval' || meth === 'applyPatchApproval') {
-    const dadosEvento = { key, title: 'Alterar arquivos', detail: params.grantRoot ? 'em ' + params.grantRoot : '', reason: params.reason || '' };
+    const dadosEvento = { key, title: 'Alterar arquivos', detail: params.grantRoot ? 'em ' + params.grantRoot : '', reason: params.reason || '', allowAlways: true };
     pendingApprovals.set(key, { ...base, kind: 'file', legacy: meth === 'applyPatchApproval', evento: { tipo: 'approval', dados: dadosEvento } });
     emit(pane, 'approval', dadosEvento);
     return;
   }
   if (meth === 'item/permissions/requestApproval') {
     const dadosEvento = { key, title: 'Permitir acesso adicional neste trabalho',
-      detail: JSON.stringify(params.permissions || {}, null, 2), reason: params.reason || '' };
+      detail: JSON.stringify(params.permissions || {}, null, 2), reason: params.reason || '',
+      allowAlways: true };   // "sempre" = scope "session" em vez de "turn" (codex-protocol.js)
     pendingApprovals.set(key, { ...base, kind: 'perm', permissions: params.permissions || {}, evento: { tipo: 'approval', dados: dadosEvento } });
     emit(pane, 'approval', dadosEvento);
     return;
@@ -1241,8 +1245,24 @@ function claudeMessage(paneId, m) {
       detail: claudeToolArg(m.request.tool_name, m.request.input), reason: '',
       tool: m.request.tool_name || '', mudanca: dadosDaEdicao(m.request.tool_name, m.request.input),
     };
+    // o antes/depois do cartão ganha o número da linha quando dá para saber (arquivo no Mac)
+    if (dadosEvento.mudanca && !ehRemoto(claudeCwd.get(paneId))) numerarPedidoDeEdicao(m.request.tool_name, m.request.input, dadosEvento.mudanca);
+    /* "Sempre permitir" (README, "Pedido de autorização"): o botão só aparece quando o PRÓPRIO
+       Claude oferece a regra (permission_suggestions) e não pediu para esconder
+       (suppress_always_allow_rule). A resposta "sempre" devolve essas mesmas sugestões em
+       updatedPermissions: quem decide o alcance da regra é o Claude, igual ao terminal dele. */
+    const sugestoes = Array.isArray(m.request.permission_suggestions) ? m.request.permission_suggestions.filter(s => s && typeof s === 'object') : [];
+    const podeSempre = sugestoes.length > 0 && m.request.suppress_always_allow_rule !== true;
+    dadosEvento.allowAlways = podeSempre;
+    // "não aprovável por uma tecla perdida": o Enter não permite este pedido, só o clique
+    if (m.request.default_to_no === true) dadosEvento.semEnter = true;
+    /* a sugestão de "editar sem perguntar nesta sessão" é uma troca de modo: a tela precisa
+       saber, senão o botão de permissão continuava dizendo "Manual" com o Claude editando sozinho */
+    const trocaModo = podeSempre && sugestoes.find(s => s.type === 'setMode' && typeof s.mode === 'string');
+    const modoDaTela = trocaModo && Object.keys(CLAUDE_MODE).find(k => CLAUDE_MODE[k] === trocaModo.mode);
+    if (modoDaTela) dadosEvento.sempreModo = modoDaTela;
     // evento guardado igual ao emit: e o que 'pane:estado' devolve pro celular reconectar sem perder a tarja
-    pendingApprovals.set(key, { kind: 'claude', paneId, reqId: m.request_id, input: m.request.input, evento: { tipo: 'approval', dados: dadosEvento } });
+    pendingApprovals.set(key, { kind: 'claude', paneId, reqId: m.request_id, input: m.request.input, sugestoes: podeSempre ? sugestoes : null, evento: { tipo: 'approval', dados: dadosEvento } });
     emit(paneId, 'approval', dadosEvento);
     return;
   }
@@ -1403,6 +1423,28 @@ function dadosDaEdicao(name, inp) {
     return { arquivo, novo: !existia, partes: [{ antes: corta(antes), depois: corta(inp.content) }] };
   }
   return null;
+}
+
+/* Número da linha no antes/depois do PEDIDO de autorização (o diff do desenho tem a coluna do
+   número). O Claude não manda a linha; mas no pedido o arquivo ainda está como era, então dá
+   para achar o trecho nele. Só numera quando a conta é certa: o Write mostra o arquivo inteiro
+   (começa na 1) e o Edit acha o trecho UMA vez só. Trecho repetido, arquivo grande, texto
+   cortado ou MultiEdit (cada troca mexe no arquivo da seguinte): fica sem número, que é melhor
+   do que um número que não é o do arquivo. Mexe só no objeto do cartão, nunca no passo. */
+const NUMERAR_ATE = 2 * 1024 * 1024;
+function numerarPedidoDeEdicao(name, inp, mudanca) {
+  try {
+    const p = mudanca && mudanca.partes && mudanca.partes.length === 1 ? mudanca.partes[0] : null;
+    if (!p) return;
+    if (name === 'Write') { p.linha = 1; return; }
+    if (name !== 'Edit' || typeof inp.old_string !== 'string' || !inp.old_string || p.antes.endsWith(CORTADO_MARCA)) return;
+    const st = fs.statSync(mudanca.arquivo);
+    if (!st.isFile() || st.size > NUMERAR_ATE) return;
+    const texto = fs.readFileSync(mudanca.arquivo, 'utf8');
+    const i = texto.indexOf(inp.old_string);
+    if (i < 0 || texto.indexOf(inp.old_string, i + 1) >= 0) return;
+    p.linha = texto.slice(0, i).split('\n').length;
+  } catch {}
 }
 
 /* desfazer uma edicao: troca de volta o pedaco novo pelo antigo, no arquivo de verdade */
@@ -5508,6 +5550,9 @@ const acp = acpMod.criarAcp({
     const dadosEvento = {
       key, title: info.title || 'O agente quer usar uma ferramenta', detail: info.detail || '', reason: '',
       tool: info.tool || '', rotulo: info.rotulo || '', mudanca: edicaoDoAcp(info.mudanca),
+      // o agente oferece allow_always entre as opções: é o "Sempre permitir" dele, não um segundo
+      // sistema de liberação do Cockpit (a lembrança fica no agente, como no terminal dele)
+      allowAlways: !!info.sempre,
     };
     pendingApprovals.set(key, { kind: 'acp', paneId, rpcId, evento: { tipo: 'approval', dados: dadosEvento } });
     emit(paneId, 'approval', dadosEvento);
@@ -5876,26 +5921,33 @@ handle('pane:stop', async (_e, { paneId, engine }) => {
   return true;
 });
 
-handle('pane:approve', (_e, { key, allow, paneId }) => {
+handle('pane:approve', (_e, { key, allow, paneId, sempre }) => {
   const a = pendingApprovals.get(key);
   if (!a || (paneId !== undefined && a.paneId !== paneId) || typeof allow !== 'boolean') return false;
+  if (sempre !== undefined && typeof sempre !== 'boolean') return false;
+  /* "Sempre permitir" só vale se ESTE pedido ofereceu (allowAlways no evento que foi para a
+     tela): um "sempre" que chegasse para um pedido sem essa opção vira o permitir de uma vez. */
+  const ehSempre = allow && sempre === true && !!(a.evento && a.evento.dados && a.evento.dados.allowAlways);
   /* leva 12.2 — OBRIGATÓRIO: sem este ramo o clique caía no caminho do Codex, o cartão sumia
      da tela e o agente ACP ficava pendurado esperando a resposta para sempre. */
   if (a.kind === 'acp') {
-    const ok = acp.responderPermissao(a.paneId, a.rpcId, allow) !== false;
+    const ok = acp.responderPermissao(a.paneId, a.rpcId, allow, ehSempre) !== false;
     if (ok) pendingApprovals.delete(key);
     return ok;
   }
   if (a.kind === 'claude') {
+    // "sempre": devolve as regras que o próprio Claude sugeriu (é assim que o terminal dele faz)
+    const permitir = { behavior: 'allow', updatedInput: a.input };
+    if (ehSempre && Array.isArray(a.sugestoes) && a.sugestoes.length) permitir.updatedPermissions = a.sugestoes;
     const sent = escreverClaude(a.paneId, {
       type: 'control_response', response: { request_id: a.reqId, subtype: 'success',
-        response: allow ? { behavior: 'allow', updatedInput: a.input } : { behavior: 'deny', message: 'Negado por você' } },
+        response: allow ? permitir : { behavior: 'deny', message: 'Negado por você' } },
     });
     if (sent) pendingApprovals.delete(key);
     return sent;
   }
   try {
-    const result = codexProtocol.requestResponse(a, { allow });
+    const result = codexProtocol.requestResponse(a, { allow, sempre: ehSempre });
     if (!codexReply(a.destino, a.rpcId, result)) return false;
     pendingApprovals.delete(key);
     return true;

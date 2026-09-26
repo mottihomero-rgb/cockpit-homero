@@ -2,7 +2,7 @@
    REDESENHO · CAIXA DE ESCREVER E PILHA INFERIOR (handoff do Claude Design, 25/09/2026 — README, "Telas e componentes")
    Tudo que flutua no pé do painel, de cima para baixo: Plano ("Plano 1/3" + barra de 3px, itens
    feito/em andamento/pendente), pedido de autorização (vidro, contorno --status-wait-line,
-   Negar · Permitir), aviso de limite (30 de altura) e a caixa de escrever (vidro, raio 12, a 8pt
+   Sempre permitir … Negar esc · Permitir ↩), aviso de limite (30 de altura) e a caixa de escrever (vidro, raio 12, a 8pt
    das bordas; fichas de anexo; texto 14/21; barra de 28 com + / microfone modo plano pasta …
    uso quadro modelo time permissão anel de contexto parar enviar).
    Abaixo de 400pt: modo de envio, plano, quadro e time vão para o "…".
@@ -86,17 +86,34 @@
 .pp-diff{border-radius:8px;background:var(--code-bg);box-shadow:inset 0 0 0 1px var(--separator);
   padding:4px 0;font:400 11.5px/19px var(--font-mono);max-height:160px;overflow:auto;user-select:text}
 .ppd{display:flex;white-space:pre;padding-left:10px}
+/* com o número da linha (quando o pedido diz onde o trecho começa): a coluna de 30 + 6, à
+   direita, em --label-3, faz a margem da esquerda; sem ele fica o recuo de 10 de antes */
+.pp-diff.com-num .ppd{padding-left:0}
+.ppd-n{flex:none;box-sizing:content-box;width:30px;padding-right:6px;text-align:right;color:var(--label-3)}
 .ppd-s{flex:none;width:12px}
 .ppd-t{min-width:0;padding-right:8px;color:var(--label-1)}
 .ppd.mais{background:var(--diff-add-bg)} .ppd.mais .ppd-s{color:var(--diff-add-fg)}
 .ppd.menos{background:var(--diff-del-bg)} .ppd.menos .ppd-s{color:var(--diff-del-fg)}
 .ppd.igual .ppd-t{color:var(--label-2)}
 .ppd.pula .ppd-t{color:var(--label-3);font-family:var(--font-sans)}
-/* botões de 26 com raio 7, à direita: Negar (--fill-2) · Permitir (--accent, 600) */
+/* botões de 26 com raio 7: "Sempre permitir" (sem moldura, à esquerda, só quando o motor
+   oferece) … "Negar esc" (--fill-2) · "Permitir ↩" (--accent, 600). A tecla vai dentro do botão,
+   em 11: o esc em --label-3, o ↩ no branco do botão a 70%. */
 .pp-btns{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex:none}
-.pp-yes,.pp-no{height:26px;padding:0 12px;border:0;border-radius:7px;display:inline-flex;align-items:center;
+.pp-yes,.pp-no{height:26px;padding:0 12px;gap:6px;border:0;border-radius:7px;display:inline-flex;align-items:center;
   font:500 13px/16px var(--font-sans);white-space:nowrap;cursor:pointer;
   transition:background-color var(--dur-fast) ease-out}
+.pp-tecla{font-size:11px;font-weight:400}
+.pp-no .pp-tecla{color:var(--label-3)}
+.pp-yes .pp-tecla{opacity:.7}
+.pane-perm.pp-sem-enter .pp-yes .pp-tecla{display:none}   /* pedido que o Enter não aprova */
+.pp-sempre{height:26px;padding:0 10px;margin-right:auto;border:0;border-radius:7px;display:inline-flex;align-items:center;
+  background:transparent;color:var(--label-2);font:500 13px/16px var(--font-sans);white-space:nowrap;cursor:pointer;
+  transition:background-color var(--dur-fast) ease-out}
+.pp-sempre:hover{background:var(--fill-3)}
+.pp-sempre:active{background:var(--fill-2)}
+.pp-sempre:disabled{background:transparent;color:var(--label-3);cursor:default}
+.pp-sempre:focus-visible{outline:none;box-shadow:var(--anel-foco)}
 .pp-no{background:var(--fill-2);color:var(--label-1)}
 .pp-no:hover{background:var(--fill-1);border-color:transparent}
 .pp-no:active{background:var(--separator-strong)}
@@ -151,6 +168,9 @@
 /* modo de envio com o chat trabalhando: o style.css pintava de azul com moldura (ícone em
    caixinha e um segundo azul na área). Fica o ícone solto em --label-2, no Mac e no celular. */
 .pane.ocupado .p-modoenvio{color:var(--label-2);border-color:transparent}
+/* o desenho é sempre o "queue": "entrar na fila" ligado é o fundo de selecionado, igual ao
+   plano (um azul só por área: o Enviar). Nas duas telas: no celular o rótulo Entra/Fila some. */
+.pane .cmp-bar .p-modoenvio.ligado{background:var(--fill-1);color:var(--label-1)}
 
 /* "/" virou ícone: a moldura que ele tinha como texto em mono sai nas duas telas */
 .p-slash{border-color:transparent}
@@ -183,6 +203,9 @@
 @media (prefers-reduced-motion: reduce){
   .pane-perm.pp-chegando{animation:none}
   .pl-cheio{transition:none}
+  /* microfone gravando (pulsa), virando texto (gira) e o anel do Resumir conversa (gira): param,
+     como o anel de trabalhando (base.css). O estado continua à vista pela cor e pelo fundo. */
+  .p-mic.gravando,.p-mic.pensando,.p-compactar.rodando .an{animation:none}
 }
 
 /* ================================== 2. SÓ NO MAC ==================================
@@ -208,6 +231,12 @@
     background:var(--glass-regular);-webkit-backdrop-filter:var(--blur-glass);backdrop-filter:var(--blur-glass);
     box-shadow:var(--shadow-float)}
   .pane.focus .pane-cmp{border-color:transparent;box-shadow:var(--shadow-float),var(--anel-foco)}
+  /* ... só sem nada aberto por cima (Janela.dc.html: composerShadow = focus && !ov). Com menu,
+     visor, configuração, conta, terminal, atalhos, nova aba, quadro ou painel de agentes aberto o
+     foco está na camada da frente, e a caixa fica só com a sombra. */
+  body:has(.pane .p-modal:not(.hidden), .pane .p-visor:not(.hidden), #telaAtalhos:not(.hidden),
+    #novaAba:not(.hidden), #modalGrupo:not(.hidden), #popGrupo:not(.hidden), #qdPainel:not(.hidden),
+    #agPainel:not(.hidden)) .pane.focus .pane-cmp{box-shadow:var(--shadow-float)}
   .p-anexos{padding:0 4px 2px;gap:6px}
   .pane-cmp .p-sugs{padding:0 6px 2px}
 
@@ -349,4 +378,6 @@
   .cmp-bar .p-mais{display:none}
   /* o botão de modelo do celular é só ícone: fica o cérebro, saem as setinhas */
   .p-model > svg:last-child{display:none}
+  /* no telefone não há teclado: a dica esc / ↩ do pedido de autorização sai */
+  .pp-tecla{display:none}
 }

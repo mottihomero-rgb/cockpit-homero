@@ -904,7 +904,14 @@ function newPane(opts = {}) {
   const grow = () => { inp.style.height = 'auto'; inp.style.height = Math.min(inp.scrollHeight, 190) + 'px'; };
   inp.addEventListener('input', grow);
   inp.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(P); }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      /* campo vazio com pedido de autorização à vista: ↩ permite e ⌥↩ sempre permite (tela de
+         atalhos). Com texto escrito o Enter continua sendo mensagem. No meio do ditado, não:
+         campo vazio ali é falha de captação, não resposta. */
+      if (!inp.value.trim() && !(P.anexos || []).length && !P.quadroColado
+          && VIVO.P !== P && DITADO.P !== P && teclaDoPedido(P, e)) return;
+      e.preventDefault(); send(P);
+    }
     /* O Esc NAO e tratado aqui. Ele e do tratador do documento, que sobe a escada na ordem
        certa: quadro > painel de agentes > visor > popup > parar a IA. Quando este bloco
        existia, um unico Esc mandava DOIS pedidos de parar (3ms de diferenca) e, com um menu
@@ -1016,9 +1023,13 @@ function newPane(opts = {}) {
   const btEnvio = $('.p-modoenvio', el);
   const pintarEnvio = () => {
     const entra = P.envio === 'entra';
-    // 'queue' = o desenho de "modo de envio" do redesenho. O rótulo (Entra/Fila) continua: com
-    // um chat só na aba é ele que diz o modo; com vários (#panes.multi) e no celular o CSS o esconde.
-    btEnvio.innerHTML = ico(entra ? 'zap' : 'queue') + '<span>' + (entra ? 'Entra' : 'Fila') + '</span>';
+    /* 'queue' é o desenho de "modo de envio" do redesenho, nos dois modos: quem diz o modo é o
+       fundo (.ligado = "entrar na fila" ligado, como o plano), não um segundo desenho (o raio do
+       Entra não existe no desenho). O rótulo (Entra/Fila) continua: com um chat só na aba é ele
+       que diz o modo; com vários (#panes.multi) e no celular o CSS o esconde. */
+    btEnvio.innerHTML = ico('queue') + '<span>' + (entra ? 'Entra' : 'Fila') + '</span>';
+    btEnvio.classList.toggle('ligado', !entra);
+    btEnvio.setAttribute('aria-pressed', String(!entra));
     btEnvio.title = entra
       ? 'Se ele estiver trabalhando, sua mensagem chega na hora e ELE decide: atende agora ou assim que terminar'
       : 'Se ele estiver trabalhando, sua mensagem espera ele terminar para só então começar';
@@ -3478,6 +3489,16 @@ function numerarPatch(cru) {
   }
   return achou;
 }
+/* A mesma conta do numerarPatch quando só se sabe a linha onde o trecho começa (o pedido de
+   autorização: o main.js acha o trecho no arquivo). O antes e o depois começam nela. */
+function numerarDesde(cru, linha) {
+  let velho = linha, novo = linha;
+  for (const l of cru) {
+    if (l.t === '-') l.n = velho++;
+    else if (l.t === '+') l.n = novo++;
+    else if (l.t !== '@') { l.n = novo++; velho++; }
+  }
+}
 function cartaoDeDiff(P, ed) {
   const cx = document.createElement('div');
   cx.className = 'dif';
@@ -4452,17 +4473,29 @@ function pintarPedido(P, bar, ev) {
   if (dif) {
     dif.innerHTML = '';
     const m = ev.mudanca || null;
-    const pedacos = m ? (m.partes || ((m.antes != null || m.depois != null) ? [{ antes: m.antes, depois: m.depois }] : [])) : [];
+    const pedacos = m ? (m.partes || ((m.antes != null || m.depois != null) ? [{ antes: m.antes, depois: m.depois, linha: m.linha }] : [])) : [];
+    /* número da linha (coluna de 36 em --label-3, como o diff dos passos): só quando o pedido diz
+       onde o trecho começa (p.linha, do main.js). Sem isso a coluna fica de fora; número
+       inventado seria pior do que nenhum. */
+    const comNumero = pedacos.some(p => Number.isInteger(p.linha) && p.linha > 0);
     for (const p of pedacos) {
-      for (const l of comContexto(linhasDoDiff(p.antes, p.depois))) {
+      const cru = linhasDoDiff(p.antes, p.depois);
+      if (Number.isInteger(p.linha) && p.linha > 0) numerarDesde(cru, p.linha);
+      for (const l of comContexto(cru)) {
         const linha = document.createElement('div');
         linha.className = 'ppd ' + (l.t === '+' ? 'mais' : l.t === '-' ? 'menos' : l.t === '@' ? 'pula' : 'igual');
         const sinal = document.createElement('span'); sinal.className = 'ppd-s';
         sinal.textContent = l.t === '+' ? '+' : l.t === '-' ? '−' : '';
         const texto = document.createElement('span'); texto.className = 'ppd-t'; texto.textContent = l.txt;
+        if (comNumero) {
+          const num = document.createElement('span'); num.className = 'ppd-n';
+          num.textContent = l.n != null ? String(l.n) : '';
+          linha.append(num);
+        }
         linha.append(sinal, texto); dif.appendChild(linha);
       }
     }
+    dif.classList.toggle('com-num', comNumero);
     dif.classList.toggle('hidden', !dif.children.length);
   }
   pintarHaPedido(P);
@@ -4498,17 +4531,28 @@ function showApproval(P, ev) {
   bar.classList.remove('hidden');
   chegadaDoPedido(bar);
   marcarEspera(P);                    // a aba tem de mudar de cara AGORA, mesmo estando no fundo
-  const botoes = [$('.pp-yes', bar), $('.pp-no', bar)];
+  /* "Sempre permitir" (sem moldura, à esquerda) só aparece quando o motor oferece essa resposta
+     para ESTE pedido (allowAlways, que o main.js põe no evento). Pedido que não pode ser aprovado
+     por uma tecla perdida (semEnter, do Claude) perde o ↩: o Enter não vale para ele. */
+  const sempre = $('.pp-sempre', bar);
+  if (sempre) sempre.classList.toggle('hidden', ev.allowAlways !== true);
+  bar.classList.toggle('pp-sem-enter', ev.semEnter === true);
+  const botoes = [$('.pp-yes', bar), $('.pp-no', bar), sempre].filter(Boolean);
   botoes.forEach(b => { b.disabled = false; });
-  const done = async (allow) => {
+  const done = async (allow, ehSempre = false) => {
     if (P.aprovacaoAtual !== pedido || botoes[0].disabled) return;
     botoes.forEach(b => { b.disabled = true; });
     try {
-      const r = await window.api.approve({ key: ev.key, allow });
+      const r = await window.api.approve(ehSempre ? { key: ev.key, allow, sempre: true } : { key: ev.key, allow });
       if (r === false || r && (r.error || r.ok === false)) throw new Error(r && r.error || 'A resposta não chegou. Tente novamente.');
       if (P.aprovacaoAtual !== pedido) return;
       P.aprovacaoAtual = null;
       bar.classList.add('hidden'); marcarEspera(P);
+      /* o "sempre" do Claude para edição é o modo "Editar automaticamente" desta sessão: o motor já
+         trocou sozinho, então aqui só o botão de permissão acompanha (sem desligar o motor) */
+      if (ehSempre && ev.sempreModo && (MODOS[P.engine] || []).some(m => m.id === ev.sempreModo)) {
+        P.mode = ev.sempreModo; pintarModo(P); savePanes();
+      }
       const proximo = (P.aprovacoesPendentes || []).shift();
       if (proximo) showApproval(P, proximo);
     } catch (e) {
@@ -4519,6 +4563,25 @@ function showApproval(P, ev) {
   };
   $('.pp-yes', bar).onclick = () => done(true);
   $('.pp-no', bar).onclick = () => done(false);
+  if (sempre) sempre.onclick = () => done(true, true);
+}
+
+/* Teclas do pedido de autorização (tela de atalhos, grupo "Autorização"): ↩ Permitir, ⌥↩ Sempre
+   permitir, esc Negar. Só com o cartão à vista no chat em foco. Quem chama garante o resto: o
+   Enter só chega aqui com o campo vazio (texto escrito é mensagem, nunca resposta ao pedido) e o
+   Esc só depois de fechar o que estiver aberto por cima. Clica o botão de verdade: o que acontece
+   depois é o mesmo do clique. Devolve true quando a tecla foi usada. */
+function teclaDoPedido(P, e) {
+  if (!P || !P.aprovacaoAtual || e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.shiftKey) return false;
+  const bar = $('.pane-perm', P.el);
+  if (!bar || bar.classList.contains('hidden')) return false;
+  let bt = null;
+  if (e.key === 'Escape' && !e.altKey) bt = $('.pp-no', bar);
+  else if (e.key === 'Enter') bt = e.altKey ? $('.pp-sempre', bar) : (bar.classList.contains('pp-sem-enter') ? null : $('.pp-yes', bar));
+  if (!bt || bt.disabled || bt.classList.contains('hidden')) return false;
+  e.preventDefault();
+  bt.click();
+  return true;
 }
 
 /* O protocolo do Codex entrega escolhas, planos e perguntas separados da resposta. */
@@ -4528,8 +4591,39 @@ function criarControlesCodex(P) {
   // texto. Agora vivem dentro do cerebro, ao lado de modelo e esforco — que sao a mesma
   // familia de escolha ("como este chat vai pensar").
   const b = $('.p-plano', P.el); if (!b) return;
-  b.onclick = () => mudarEscolhasCodex(P, {
-    collaborationMode: P.collaborationMode === 'plan' ? 'default' : 'plan' });
+  /* Redesenho: o botão do plano está em todo chat que TEM plano (README: + / microfone modo de
+     envio plano pasta). No Codex ele é o collaborationMode; nos outros é o mesmo modo "Plano" do
+     menu de permissão, pelo mesmo caminho do menu (escolherModo). Clicar de novo volta para o
+     modo de antes. */
+  b.onclick = () => {
+    if (P.engine === 'codex') return mudarEscolhasCodex(P, {
+      collaborationMode: P.collaborationMode === 'plan' ? 'default' : 'plan' });
+    const modos = MODOS[P.engine] || [];
+    const plano = modos.find(m => m.id === 'plan');
+    if (!plano) return;
+    if (modoDe(P).id === 'plan') {
+      const antes = modos.find(m => m.id === P.modoAntesDoPlano && m.id !== 'plan') || modos[0];
+      return escolherModo(P, antes);
+    }
+    P.modoAntesDoPlano = modoDe(P).id;
+    return escolherModo(P, plano);
+  };
+}
+/* O botão do plano fora do Codex: aparece quando o motor tem o modo "Plano" (Claude, Gemini, ACP;
+   o Grok não tem) e fica .ligado com esse modo escolhido. Chamado por pintarControlesCodex e
+   pintarModo, que é quem repinta depois de trocar o modo. */
+function pintarPlano(P) {
+  const b = $('.p-plano', P.el); if (!b || P.engine === 'codex') return;
+  const tem = (MODOS[P.engine] || []).some(m => m.id === 'plan');
+  b.classList.toggle('hidden', !tem);
+  if (!tem) return;
+  const plano = modoDe(P).id === 'plan';
+  b.innerHTML = ico('clipboard-list');
+  b.classList.toggle('ligado', plano);
+  b.setAttribute('aria-pressed', String(plano));
+  b.disabled = false;
+  b.title = plano ? 'Modo Plano: ele só estuda e mostra o plano, não altera nada. Clique para voltar ao modo de antes.'
+    : 'Planejar antes de executar: ele só estuda e mostra o plano, sem alterar nada.';
 }
 /* Velocidade e Contexto por dentro do cerebro, em botoes pequenos lado a lado. Como item de
    lista (um por linha, com explicacao embaixo) eles empurravam o menu para 1200px de rolagem:
@@ -4573,7 +4667,7 @@ function pintarControlesCodex(P) {
   const b = $('.p-plano', P.el); if (!b) return;
   const codex = P.engine === 'codex', paid = modeloPorCreditos(P.model);
   b.classList.toggle('hidden', !codex);
-  if (!codex) return;
+  if (!codex) { pintarPlano(P); return; }
   const plano = P.collaborationMode === 'plan';
   // o desenho é sempre o do "plano" (README); ligado ou não quem diz é o fundo (.ligado)
   b.innerHTML = ico('clipboard-list');
@@ -5471,6 +5565,7 @@ function pintarModo(P) {
      pedir permissão), fechado = pede antes. O ícone próprio de cada modo continua no menu. */
   $('.modo-ic', P.el).innerHTML = ico(m.id === 'bypass' || m.id === 'auto' ? 'lock-open' : 'lock');
   $('.modo-nome', P.el).textContent = m.nome;
+  pintarPlano(P);   // o botão do plano (fora do Codex) é este mesmo modo
 }
 
 function fecharMenus() {
@@ -5517,11 +5612,26 @@ document.addEventListener('keydown', (e) => {
   if (abertoEm) { fecharVisor(abertoEm); return; }
   const popupAberto = [...panes.values()].some(P => !$('.p-modal', P.el).classList.contains('hidden'));
   if (popupAberto) { fecharMenus(); for (const P of panes.values()) fecharModal(P); return; }
+  /* sem popup, com pedido de autorização à vista no chat em foco: Esc é "Negar" (tela de
+     atalhos). Negar é o menor passo: o motor segue e tenta outro caminho, nada é interrompido. */
+  if (focusPane && teclaDoPedido(focusPane, e)) return;
   // sem popup: para o que a IA estiver fazendo
   // Esc nunca para chat que ele nao esta olhando: antes um Esc matava o trabalho de TODOS os
   // chats, inclusive os de outra aba, que ele nem via. Perda de trabalho em silencio.
   const alvo = (focusPane && focusPane.busy) ? [focusPane] : [];
   for (const P of alvo) window.api.paneInterrupt({ paneId: P.id, engine: P.engine });
+});
+/* ↩ / ⌥↩ do pedido com o foco FORA dos campos (clicou na conversa, por exemplo). Dentro do campo
+   de escrever quem trata é o keydown dele; em outro campo, botão ou link o Enter é deles; e com
+   qualquer coisa aberta por cima o Enter é da camada da frente. */
+const CAMADA_POR_CIMA = '#telaAtalhos:not(.hidden), #novaAba:not(.hidden), #qdPainel:not(.hidden), #agPainel:not(.hidden),'
+  + ' #modalGrupo:not(.hidden), #popGrupo:not(.hidden), .pane .p-modal:not(.hidden), .pane .p-visor:not(.hidden)';
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || e.defaultPrevented || !focusPane) return;
+  const t = e.target;
+  if (t && t.closest && t.closest('input, textarea, select, button, a[href], [contenteditable], .term-wrap')) return;
+  if (document.querySelector(CAMADA_POR_CIMA)) return;
+  teclaDoPedido(focusPane, e);
 });
 
 /* `padrao` (redesenho 26/09): o botão ao qual o menu se prende quando não veio de um clique —
@@ -5718,6 +5828,20 @@ function tituloPopup(txt, dica) {
 function elSecao(txt) { const d = document.createElement('div'); d.className = 'menu-secao'; d.textContent = txt; return d; }
 function elLinha() { const d = document.createElement('div'); d.className = 'menu-linha'; return d; }
 
+/* Trocar o modo de permissão: o menu de Modos e o botão do plano passam por aqui (um caminho só). */
+async function escolherModo(P, mo) {
+  // trocar de modo desliga o motor: com trabalho rodando, pergunta antes (igual ao fechar)
+  const estavaRodando = !!P.busy || agTrabalhando(P);
+  if (!confirmarCorte(P, 'Trocar de modo')) return;
+  P.mode = mo.id; cfg.defMode = mo.id; window.api.setConfig(cfg); pintarModo(P);
+  await desligarMotor(P);
+  /* era note(), que so aparece quando e erro: o recado nunca chegou na tela. E a frase
+     "parou aqui" so entra quando alguma coisa realmente parou. */
+  avisoTemp(P, 'Modo: ' + mo.nome + ' — ' + mo.desc.toLowerCase() + '.'
+    + (estavaRodando ? ' O que estava em andamento parou aqui.' : ''));
+  savePanes();
+}
+
 /* ---- menu de Modos ---- */
 function menuModos(P) {
   const m = novoMenu(P, '.p-modo');
@@ -5728,18 +5852,7 @@ function menuModos(P) {
     // "Sem pedir permissão" fica separado dos outros por uma linha (design): é o que não pergunta nada
     if (mo.id === 'bypass') m.appendChild(elLinha());
     // no menu vai a linha curta do design; a explicação inteira continua no balão do mouse
-    const item = elItem({ ic: mo.ic, nome: mo.nome, desc: mo.curta || mo.desc, on: mo.id === modoDe(P).id }, async () => {
-      // trocar de modo desliga o motor: com trabalho rodando, pergunta antes (igual ao fechar)
-      const estavaRodando = !!P.busy || agTrabalhando(P);
-      if (!confirmarCorte(P, 'Trocar de modo')) return;
-      P.mode = mo.id; cfg.defMode = mo.id; window.api.setConfig(cfg); pintarModo(P);
-      await desligarMotor(P);
-      /* era note(), que so aparece quando e erro: o recado nunca chegou na tela. E a frase
-         "parou aqui" so entra quando alguma coisa realmente parou. */
-      avisoTemp(P, 'Modo: ' + mo.nome + ' — ' + mo.desc.toLowerCase() + '.'
-        + (estavaRodando ? ' O que estava em andamento parou aqui.' : ''));
-      savePanes();
-    });
+    const item = elItem({ ic: mo.ic, nome: mo.nome, desc: mo.curta || mo.desc, on: mo.id === modoDe(P).id }, () => escolherModo(P, mo));
     item.title = mo.nome + ' — ' + mo.desc;
     m.appendChild(item);
   }
@@ -7129,11 +7242,13 @@ function menuMais(P) {
   const m = novoMenu(P);
   const bt = (s) => $(s, P.el);
   const envio = bt('.p-modoenvio');
-  if (envio) m.appendChild(elItem({ ic: P.envio === 'entra' ? 'zap' : 'queue', nome: 'Modo de envio',
+  if (envio) m.appendChild(elItem({ ic: 'queue', nome: 'Modo de envio',
     tag: P.envio === 'entra' ? 'Entra' : 'Fila' }, () => envio.click()));
   const plano = bt('.p-plano');
+  // o plano mora no Codex (collaborationMode) e nos outros no modo "Plano": quem diz se está
+  // ligado é o próprio botão (.ligado), pintado por pintarPlano
   if (plano && !plano.classList.contains('hidden') && !plano.disabled)
-    m.appendChild(elItem({ ic: 'clipboard-list', nome: 'Planejar antes de executar', on: P.collaborationMode === 'plan' }, () => plano.click()));
+    m.appendChild(elItem({ ic: 'clipboard-list', nome: 'Planejar antes de executar', on: plano.classList.contains('ligado') }, () => plano.click()));
   const quadro = bt('.p-quadro');
   if (quadro) m.appendChild(elItem({ ic: 'quadro', nome: 'Quadro branco', tag: '⌘⇧E' }, () => quadro.click()));
   const time = bt('.p-agentes');
@@ -11459,7 +11574,7 @@ const ATALHOS = [
     ['⌘A', 'Selecionar tudo do campo'],
     ['⌘Z / ⌘⇧Z', 'Desfazer / refazer (⌘Y também refaz)', 'Desfazer / refazer'],
     ['⌘⇧D', 'Ditar: falar em vez de digitar', 'Ditar'],
-    ['Esc', 'Fecha o que estiver aberto; sem nada aberto, para a IA deste chat', 'Fechar ou parar'],
+    ['Esc', 'Fecha o que estiver aberto; com pedido de autorização, nega; sem nada, para a IA deste chat', 'Fechar ou parar'],
     ['↑ / ↓', 'Com o campo vazio, traz de volta o que você já mandou (as 50 últimas)', 'Mensagens já enviadas'],
     ['letra solta', 'Digitar fora do campo joga o texto no campo deste chat', 'Escrever de qualquer lugar'],
   ]],
@@ -11490,6 +11605,12 @@ const ATALHOS = [
     ['⌘K', 'Limpar o terminal (não a conversa)', 'Limpar o terminal'],
     ['⌘A depois ⌘C', 'Selecionar e copiar o terminal', 'Copiar o terminal'],
     ['⌘W', 'Fechar a janelinha do terminal', 'Fechar o terminal'],
+  ]],
+  // pedido de autorização à vista no chat em foco (teclaDoPedido); o Enter só com o campo vazio
+  ['Autorização', [
+    ['Enter', 'Permitir (com o campo vazio)', 'Permitir'],
+    ['Esc', 'Negar'],
+    ['Alt+Enter', 'Sempre permitir (quando o pedido oferece)', 'Sempre permitir'],
   ]],
 ];
 

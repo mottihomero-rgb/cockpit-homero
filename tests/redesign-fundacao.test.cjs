@@ -105,18 +105,25 @@ test('todo ícone que o app e o quadro pedem existe no icones.js', () => {
   assert.doesNotMatch(window.ckIcone('plus').match(/^<svg[^>]*>/)[0], /\s(width|height)=/, 'o tamanho do icone e do CSS');
 });
 
-test('o botão do modo de envio mostra o ícone E o nome (Entra / Fila)', () => {
+test('o botão do modo de envio mostra o ícone da fila E o nome (Entra / Fila); o modo é o fundo', () => {
   /* O redesenho trocou o ícone da Fila e um comentário no fim da linha engoliu o rótulo: com um
      chat só na aba (o uso mais comum no Mac) o botão ficava só com o raio, sem dizer o modo. */
   const app = ler('renderer/app.js');
   const corpo = app.match(/const pintarEnvio = \(\) => \{([\s\S]*?)\n  \};/);
   assert.ok(corpo, 'pintarEnvio mudou de forma: ajuste este teste');
-  const ctx = { P: { envio: 'entra' }, btEnvio: { innerHTML: '', title: '' }, ico: (n) => '<svg data-n="' + n + '"></svg>' };
+  /* 26/09 (conserto da caixa): o desenho é o "queue" nos DOIS modos; o raio do Entra não existe
+     no desenho. Quem diz o modo é o fundo (.ligado = entrar na fila), como o botão do plano. */
+  const cls = new Set(), attrs = {};
+  const btEnvio = { innerHTML: '', title: '', classList: { toggle: (c, on) => { if (on) cls.add(c); else cls.delete(c); } },
+    setAttribute: (k, v) => { attrs[k] = v; } };
+  const ctx = { P: { envio: 'entra' }, btEnvio, ico: (n) => '<svg data-n="' + n + '"></svg>' };
   vm.runInNewContext('{ const pintarEnvio = () => {' + corpo[1] + '\n}; pintarEnvio(); }', ctx);
-  assert.equal(ctx.btEnvio.innerHTML, '<svg data-n="zap"></svg><span>Entra</span>');
+  assert.equal(ctx.btEnvio.innerHTML, '<svg data-n="queue"></svg><span>Entra</span>');
+  assert.equal(cls.has('ligado'), false); assert.equal(attrs['aria-pressed'], 'false');
   ctx.P.envio = 'fila';
   vm.runInNewContext('{ const pintarEnvio = () => {' + corpo[1] + '\n}; pintarEnvio(); }', ctx);
   assert.equal(ctx.btEnvio.innerHTML, '<svg data-n="queue"></svg><span>Fila</span>');
+  assert.equal(cls.has('ligado'), true, 'fila ligada: fundo de selecionado'); assert.equal(attrs['aria-pressed'], 'true');
   assert.ok(ctx.btEnvio.title.length > 0, 'a explicação continua no title (tooltip)');
 });
 

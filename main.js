@@ -1224,6 +1224,7 @@ function imagensDoResultado(content) {
   return out;
 }
 
+const ultimoContexto = new Map();   // paneId → { total, modelo } da última chamada do chat principal
 function claudeMessage(paneId, m) {
   if (m.type === 'prompt_suggestion') {
     const raw = m.suggestion ?? m.prompt ?? m.text ?? m.value;
@@ -1274,6 +1275,13 @@ function claudeMessage(paneId, m) {
       else if (d.type === 'thinking_delta') emit(paneId, 'think-delta', { text: d.thinking || '' });
     }
     return;
+  }
+  /* tamanho da conversa = o que a ÚLTIMA chamada do chat principal mandou e recebeu (entrada +
+     cache criado + cache lido + saída). Mensagem de agente (parent_tool_use_id) é outra conversa. */
+  if (m.type === 'assistant' && m.message && m.message.usage && !m.parent_tool_use_id && m.message.model !== '<synthetic>') {
+    const us = m.message.usage;
+    const total = (us.input_tokens || 0) + (us.cache_creation_input_tokens || 0) + (us.cache_read_input_tokens || 0) + (us.output_tokens || 0);
+    if (total) ultimoContexto.set(paneId, { total, modelo: String(m.message.model || '') });
   }
   if (m.type === 'assistant' && m.message) {
     (m.message.content || []).forEach((c, i) => {
@@ -1372,12 +1380,20 @@ function claudeMessage(paneId, m) {
   }
   if (m.type === 'result') {
     const u = m.usage || {};
+    /* 26/09: a bolinha do contexto vivia vermelha. O usage do 'result' SOMA todas as chamadas do
+       turno — e o cache_read relê a conversa inteira a cada passo: 20 passos numa conversa de
+       100 mil davam "2 milhões" contra uma janela de 200 mil. O tamanho da conversa é o da
+       ÚLTIMA chamada do chat principal (guardado em ultimoContexto, no 'assistant'). E a janela
+       é a do modelo principal, não a do primeiro da lista (o Haiku dos bastidores vinha antes). */
+    const ult = ultimoContexto.get(paneId);
     let janela = 0;
-    try { const mu = m.modelUsage || {}; const k = Object.keys(mu)[0]; if (k) janela = mu[k].contextWindow || 0; } catch {}
-    emit(paneId, 'tokens', {
-      total: (u.input_tokens || 0) + (u.output_tokens || 0) + (u.cache_read_input_tokens || 0),
-      janela: janela || undefined,
-    });
+    try {
+      const mu = m.modelUsage || {};
+      const principal = ult && ult.modelo && Object.keys(mu).find(k => k === ult.modelo || k.startsWith(ult.modelo) || ult.modelo.startsWith(k));
+      if (principal) janela = mu[principal].contextWindow || 0;
+      else janela = Math.max(0, ...Object.values(mu).map(x => (x && x.contextWindow) || 0));
+    } catch {}
+    if (ult && ult.total) emit(paneId, 'tokens', { total: ult.total, janela: janela || undefined });
     if (m.is_error) emit(paneId, 'note', { text: String(m.result || m.subtype), error: true });
     /* quanto o TURNO consumiu (nao o tamanho da conversa, que ja saiu no 'tokens' acima): vai
        pro carimbo de fim de turno. cache_read fica de fora — e' releitura, nao consumo novo.

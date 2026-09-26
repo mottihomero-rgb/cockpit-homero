@@ -355,6 +355,7 @@
     donoNome: (o) => chamar('sessao:donoNome', o),
     // o nome simples dos agentes vem do Haiku do Mac: no iPhone o cartao do time fala igual
     agentesNomes: (o) => chamar('agentes:nomes', o),
+    detalhePerguntar: (o) => chamar('detalhe:perguntar', o),
     /* Apagar conversa manda arquivo do Mac para a Lixeira: o main nem expoe o canal ao Wi-Fi, e
        aqui a resposta sai na hora, com o tipo certo, para o toque nao ficar 2 minutos esperando.
        Sem esta linha o app.js (o MESMO arquivo nos dois) morreria num TypeError. */

@@ -10,6 +10,7 @@ const codexProtocol = require('./codex-protocol');
 const plataforma = require('./plataforma');
 const nomesConversa = require('./nomes-conversa');   // nome das conversas: instrucao e validacao
 const nomesAgentes = require('./nomes-agentes');     // nome simples de cada agente do time
+const maisDetalhes = require('./mais-detalhes');
 const { EH_WIN, acharBin, spawnBin, abrirPty, temBin, matarProcesso } = plataforma;
 
 /* R1-006: 2a copia do processo (app instalado + uma dev rodando por cima, por exemplo)
@@ -2264,6 +2265,18 @@ handle('sessao:nomeCurto', async (_e, o) => {
    nomes-agentes.js. Qualquer falha (sem Claude, prazo estourado, resposta que nao e JSON) devolve
    {}: o cartao fica com o nome local e ninguem tenta de novo. 45 s de prazo: o Haiku sem raciocinio
    responde em uns 5 s para 6 agentes (medido em 26/09). */
+/* "Mais detalhes" de um trecho (26/09): pergunta avulsa ao Claude, em paralelo ao chat (mais-detalhes.js) */
+handle('detalhe:perguntar', async (_e, o) => {
+  const d = (o && typeof o === 'object') ? o : {};
+  const pedido = maisDetalhes.montarPedido(d);
+  if (!pedido) return { error: 'Sem trecho.' };
+  if (!fs.existsSync(CLAUDE_BIN)) return { error: 'O Claude não está instalado neste Mac.' };
+  const r = await rodar(CLAUDE_BIN, maisDetalhes.argsDoDetalhe(pedido), 180000);
+  const texto = String(r.out || '').trim();
+  if (r.err || !texto) return { error: texto || String(r.errout || '').trim().split('\n').pop() || 'Não veio resposta.' };
+  return { texto };
+});
+
 handle('agentes:nomes', async (_e, o) => {
   const d = (o && typeof o === 'object') ? o : {};
   const lista = (Array.isArray(d.agentes) ? d.agentes : [])

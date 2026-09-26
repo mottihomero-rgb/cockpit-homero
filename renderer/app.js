@@ -5394,6 +5394,10 @@ function citarTrecho(P, trecho) {
   setFocus(P);
   const campo = $('.p-input', P.el); if (campo) campo.focus();
 }
+/* ---- selecionou um trecho da resposta: barrinha com 3 ações (26/09, pedido dele, igual ao app do
+   Codex) — Responder (o trecho vai preso à próxima fala), Mais detalhes (janelinha ao lado que explica
+   o ponto e aceita perguntas em paralelo ao trabalho do chat) e Perguntar no chat lateral (chat novo
+   ao lado, que lembra da conversa inteira, com o trecho já escrito na caixa). ---- */
 let botaoResponder = null;
 function esconderBotaoResponder() { if (botaoResponder) botaoResponder.classList.add('hidden'); }
 function selecaoNaResposta() {
@@ -5408,32 +5412,148 @@ function selecaoNaResposta() {
   const paneEl = resposta.closest('.pane');
   const P = paneEl && [...panes.values()].find(q => q.el === paneEl);
   if (!P) return null;
-  return { P, texto, caixa: r.getBoundingClientRect() };
+  const msg = resposta.closest('.msg.bot') || resposta;
+  return { P, texto, caixa: r.getBoundingClientRect(), resposta: (msg.innerText || '').trim() };
 }
 function mostrarBotaoResponder() {
   const sel = selecaoNaResposta();
   if (!sel) { esconderBotaoResponder(); return; }
   if (!botaoResponder) {
-    botaoResponder = document.createElement('button');
-    botaoResponder.type = 'button';
-    botaoResponder.className = 'bt-responder hidden';
-    botaoResponder.innerHTML = ico('reply') + '<span>Responder</span>';
-    // mousedown e não click: o clique tiraria a seleção antes de ler o trecho
-    botaoResponder.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      const agora = selecaoNaResposta() || botaoResponder._sel;
-      esconderBotaoResponder();
-      if (agora) { citarTrecho(agora.P, agora.texto); try { window.getSelection().removeAllRanges(); } catch {} }
-    });
+    botaoResponder = document.createElement('div');
+    botaoResponder.className = 'bt-responder sel-barra hidden';
+    botaoResponder.setAttribute('role', 'toolbar');
+    const acoes = [
+      ['Responder', (x) => citarTrecho(x.P, x.texto)],
+      ['Mais detalhes', (x) => abrirMaisDetalhes(x.P, x.texto, x.resposta)],
+      ['Perguntar no chat lateral', (x) => perguntarNoChatLateral(x.P, x.texto)],
+    ];
+    for (const [nome, fazer] of acoes) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'sb-op'; b.textContent = nome;
+      // mousedown e não click: o clique tiraria a seleção antes de ler o trecho
+      b.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const agora = selecaoNaResposta() || botaoResponder._sel;
+        esconderBotaoResponder();
+        if (agora) { fazer(agora); try { window.getSelection().removeAllRanges(); } catch {} }
+      });
+      botaoResponder.appendChild(b);
+    }
     document.body.appendChild(botaoResponder);
   }
   botaoResponder._sel = sel;
   botaoResponder.classList.remove('hidden');
   const w = botaoResponder.offsetWidth || 100;
   const x = Math.max(8, Math.min(sel.caixa.left + sel.caixa.width / 2 - w / 2, window.innerWidth - w - 8));
-  const y = sel.caixa.top - 36 > 8 ? sel.caixa.top - 36 : sel.caixa.bottom + 8;
+  const y = sel.caixa.top - 38 > 8 ? sel.caixa.top - 38 : sel.caixa.bottom + 8;
   botaoResponder.style.left = Math.round(x) + 'px';
   botaoResponder.style.top = Math.round(y) + 'px';
+}
+
+/* ---- Mais detalhes: janelinha ao lado do chat (26/09) ----
+   Presa à direita do chat de onde saiu o trecho, por cima dele (como a do app do Codex). Em cima: o
+   título, "Levar pro chat" (a última explicação vira o trecho citado da próxima fala do chat) e ×.
+   No meio: o trecho e as perguntas/respostas. Embaixo: a caixa para perguntar mais. Cada pergunta é
+   uma chamada avulsa (detalhe:perguntar) que NÃO entra na conversa do chat nem espera ele terminar. */
+let detalheAberto = null;
+function fecharMaisDetalhes() { if (detalheAberto) { detalheAberto.el.remove(); detalheAberto = null; } }
+function posicionarMaisDetalhes() {
+  const D = detalheAberto; if (!D) return;
+  const r = D.P.el.getBoundingClientRect();
+  const w = Math.min(440, Math.max(300, r.width - 48));
+  D.el.style.width = w + 'px';
+  D.el.style.left = Math.round(Math.max(8, r.right - w - 12)) + 'px';
+  D.el.style.top = Math.round(r.top + 44) + 'px';
+  D.el.style.height = Math.round(Math.max(260, r.height - 44 - 16)) + 'px';
+}
+function abrirMaisDetalhes(P, trecho, resposta) {
+  fecharMaisDetalhes();
+  const el = document.createElement('div');
+  el.id = 'maisDetalhes';
+  el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Mais detalhes');
+  el.innerHTML = '<div class="md-top"><span class="md-tit">Mais detalhes</span>'
+    + '<button class="md-levar" type="button" title="A última explicação vai presa à sua próxima mensagem no chat">' + ico('reply') + '<span>Levar pro chat</span></button>'
+    + '<button class="md-x" type="button" title="Fechar (esc)" aria-label="Fechar">' + ico('x') + '</button></div>'
+    + '<div class="md-corpo"><div class="md-trecho"></div></div>'
+    + '<div class="md-pe"><textarea class="md-in" rows="1" placeholder="Pergunte sobre este trecho"></textarea>'
+    + '<button class="md-ir" type="button" title="Perguntar (Enter)" aria-label="Perguntar">' + ico('arrow-up') + '</button></div>';
+  $('.md-trecho', el).textContent = trecho;
+  document.body.appendChild(el);
+  const D = { P, el, trecho, resposta, janela: [], ocupado: false };
+  detalheAberto = D;
+  posicionarMaisDetalhes();
+  const corpo = $('.md-corpo', el), inp = $('.md-in', el);
+  const bolha = (de, texto) => {
+    const b = document.createElement('div');
+    b.className = 'md-msg ' + (de === 'eu' ? 'md-eu' : 'md-ia');
+    if (de === 'eu') b.textContent = texto; else { b.innerHTML = marked.parse(texto); linkarArquivos(P, b); }
+    corpo.appendChild(b); corpo.scrollTop = corpo.scrollHeight;
+    return b;
+  };
+  const perguntar = async (pergunta) => {
+    if (D.ocupado || detalheAberto !== D) return;
+    D.ocupado = true; el.classList.add('ocupado');
+    if (pergunta) bolha('eu', pergunta);
+    const espera = document.createElement('div');
+    espera.className = 'md-msg md-ia md-pensando';
+    espera.innerHTML = '<span class="rd-anel"></span><span>Pensando</span>';
+    corpo.appendChild(espera); corpo.scrollTop = corpo.scrollHeight;
+    const conversa = (P.hist || []).slice(-12).map(h => ({ quem: h.quem, texto: h.texto }));
+    let r;
+    try { r = await window.api.detalhePerguntar({ conversa, resposta, trecho, janela: D.janela, pergunta }); }
+    catch (e) { r = { error: String((e && e.message) || e) }; }
+    espera.remove();
+    if (detalheAberto !== D) return;
+    D.ocupado = false; el.classList.remove('ocupado');
+    if (r && r.texto) {
+      if (pergunta) D.janela.push({ de: 'eu', texto: pergunta });
+      D.janela.push({ de: 'ia', texto: r.texto });
+      bolha('ia', r.texto);
+    } else {
+      const b = bolha('ia', 'Não consegui responder agora: ' + ((r && r.error) || 'sem resposta') + '. Tente de novo.');
+      b.classList.add('md-erro');
+    }
+    inp.focus();
+  };
+  const enviar = () => { const t = inp.value.trim(); if (!t || D.ocupado) return; inp.value = ''; inp.style.height = 'auto'; perguntar(t); };
+  inp.addEventListener('input', () => { inp.style.height = 'auto'; inp.style.height = Math.min(120, inp.scrollHeight) + 'px'; });
+  inp.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); enviar(); }
+    else if (e.key === 'Escape') { e.preventDefault(); fecharMaisDetalhes(); }
+  });
+  $('.md-ir', el).onclick = enviar;
+  $('.md-x', el).onclick = fecharMaisDetalhes;
+  $('.md-levar', el).onclick = () => {
+    const ult = [...D.janela].reverse().find(m => m.de === 'ia');
+    citarTrecho(P, ult ? ult.texto : trecho);
+    fecharMaisDetalhes();
+  };
+  perguntar('');
+  setTimeout(() => inp.focus(), 30);
+}
+window.addEventListener('resize', posicionarMaisDetalhes);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && detalheAberto && !e.defaultPrevented && !detalheAberto.el.contains(e.target)) fecharMaisDetalhes();
+});
+
+/* ---- Perguntar no chat lateral (26/09) ----
+   Chat novo AO LADO, que lembra da conversa inteira (o mesmo ramo do "Ramificar levando a conversa
+   inteira": no Claude --fork-session, no Codex thread/fork; sem isso, o resumo colado), com o trecho
+   já escrito na caixa. O chat de origem continua trabalhando, intacto. */
+async function perguntarNoChatLateral(P, trecho) {
+  const antes = new Set(panes.keys());
+  await ramificarInteiro(P);
+  const Q = [...panes.values()].find(q => !antes.has(q.id));
+  if (!Q) return;
+  Q.titulo = 'Lateral: ' + (P.titulo || 'conversa'); Q.nomeManual = true;
+  pintarNome(Q); savePanes();
+  const inp = $('.p-input', Q.el);
+  if (!inp) return;
+  inp.value = 'Sobre este trecho: "' + String(trecho || '').trim().slice(0, 1500) + '"\n\n';
+  inp.dispatchEvent(new Event('input'));
+  setFocus(Q); inp.focus();
+  inp.setSelectionRange(inp.value.length, inp.value.length);
 }
 document.addEventListener('mouseup', () => setTimeout(mostrarBotaoResponder, 0));
 document.addEventListener('keyup', (e) => { if (e.shiftKey || e.key === 'Shift') setTimeout(mostrarBotaoResponder, 0); });

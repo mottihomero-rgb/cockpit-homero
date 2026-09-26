@@ -568,7 +568,7 @@ html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inse
 .side-lupa:hover,.side-ferramentas.icones .side-filtro:hover{background:var(--fill-3);color:var(--label-1)}
 .side-lupa:active,.side-ferramentas.icones .side-filtro:active{background:var(--fill-2)}
 .side-lupa:focus-visible,.side-ferramentas.icones .side-filtro:focus-visible{outline:none;box-shadow:var(--anel-foco)}
-.side-ferramentas.icones .side-filtro.on{color:var(--accent)}
+.side-ferramentas.icones .side-filtro.on{color:var(--label-2)}
 .side-ferramentas.icones :is(.sf-txt,.sf-seta){display:none}
 .side-ferramentas.icones .side-busca-cx{display:none;height:28px}
 .side-ferramentas.icones.buscando .side-lupa{display:none}

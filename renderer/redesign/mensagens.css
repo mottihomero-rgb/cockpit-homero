@@ -463,3 +463,5 @@ textarea.cxq-input{min-height:26px;max-height:120px;resize:none;field-sizing:con
 .plano-pronto .plx-msg{margin:0;padding:0;max-width:none;background:transparent;box-shadow:none}
 .plano-pronto .plx-corpo :is(h1,h2){font:600 15px/20px var(--font-sans);margin:4px 0 6px}
 .plano-pronto .plx-corpo h3{font:600 13px/18px var(--font-sans);margin:8px 0 4px}
+/* Gemini no Plano: o plano é a resposta logo acima; o cartão fica só com o título e os botões */
+.plano-pronto.so-botoes .plx-msg{display:none}

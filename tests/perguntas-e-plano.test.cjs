@@ -85,3 +85,53 @@ test('as perguntas e o plano não viram passo de ferramenta, e fazem o chat espe
   assert.match(app, /if \(P\.perguntasAtual\) return \{ txt: 'esperando sua resposta', cls: 'espera' \};/);
   assert.match(app, /case 'perguntas': abrirPerguntas\(P, ev\); break;/);
 });
+
+/* ---- "tem que servir para as 4 IAs" ---- */
+const vm = require('node:vm');
+function pegar(nome) {
+  const m = new RegExp('^(?:async )?function ' + nome + '\\(', 'm').exec(app);
+  assert.ok(m, nome);
+  let n = 0, i = app.indexOf('{', m.index);
+  for (; i < app.length; i++) { if (app[i] === '{') n++; else if (app[i] === '}' && --n === 0) { i++; break; } }
+  return app.slice(m.index, i);
+}
+
+test('Codex no modo Plano: o plano proposto vira o cartão, e Executar sai do Plano e manda executar', async () => {
+  const chamadas = [];
+  const ctx = { Date, String, mostrarPlano: (P, ev, opts) => { chamadas.push(['cartao', ev.plano]); ctx.opts = opts; },
+    mudarEscolhasCodex: async (P, patch) => chamadas.push(['modo', patch.collaborationMode]),
+    enviarComoEle: (P, t) => chamadas.push(['envia', t]) };
+  vm.createContext(ctx);
+  vm.runInContext(pegar('planoDoCodex') + ';this.f = planoDoCodex;', ctx);
+  const P = { engine: 'codex', collaborationMode: 'plan' };
+  ctx.f(P, { id: 'i1', text: '1. fazer', complete: false });
+  assert.equal(chamadas.length, 0, 'plano ainda chegando não vira cartão');
+  ctx.f(P, { id: 'i1', text: '1. fazer', complete: true });
+  assert.deepEqual(chamadas[0], ['cartao', '1. fazer']);
+  assert.equal(ctx.opts.persiste, true, 'o cartão do Codex sobrevive ao fim do turno');
+  await ctx.opts.responder(true, '');
+  assert.deepEqual(chamadas.slice(1), [['modo', 'default'], ['envia', 'Plano aprovado. Pode executar.']]);
+  ctx.f({ engine: 'codex', collaborationMode: 'default' }, { id: 'i2', text: 'x', complete: true });
+  assert.equal(chamadas.filter(c => c[0] === 'cartao').length, 1, 'fora do Plano o Codex não ganha cartão');
+});
+
+test('Gemini no modo Plano: Executar no fim da resposta; fora do Plano, nada', () => {
+  let cartoes = 0;
+  const ctx = { Date, MODOS: { gemini: [{ id: 'manual' }, { id: 'plan' }] }, cfg: {}, mostrarPlano: () => { cartoes++; } };
+  vm.createContext(ctx);
+  vm.runInContext(pegar('planoAoFimDoTurno') + ';this.f = planoAoFimDoTurno;', ctx);
+  const chat = { querySelectorAll: () => [{}] };
+  ctx.f({ engine: 'gemini', mode: 'plan', chat });
+  assert.equal(cartoes, 1);
+  ctx.f({ engine: 'gemini', mode: 'manual', chat });
+  ctx.f({ engine: 'claude', mode: 'plan', chat });
+  assert.equal(cartoes, 1, 'o Claude tem o plano pronto dele; fora do Plano não aparece');
+});
+
+test('pergunta simples do Codex abre a mesma janelinha; formulário e senha ficam no cartão antigo', () => {
+  const f = pegar('perguntaCodex');
+  assert.match(f, /tipo === 'requestUserInput' && !schema/);
+  assert.match(f, /abrirPerguntas\(P, \{ key: ev\.key \?\? ev\.id, questions: qs \}/);
+  assert.match(f, /!q\.isSecret/);
+  assert.match(app, /case 'question-resolved': encerrarPerguntaCodex\(P, ev\.key\);\s*\n\s*if \(P\.perguntasAtual/);
+});

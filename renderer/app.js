@@ -4397,8 +4397,10 @@ function receberEventoPane(ev) {
     // 26/09: perguntas do Claude (janelinha, como no VS Code) e o plano pronto do modo Plano
     case 'perguntas': abrirPerguntas(P, ev); break;
     case 'plano-pronto': mostrarPlano(P, ev); break;
-    case 'question-resolved': encerrarPerguntaCodex(P, ev.key); break;
-    case 'plan': planoCodex(P, ev); break;
+    case 'question-resolved': encerrarPerguntaCodex(P, ev.key);
+      if (P.perguntasAtual && String(P.perguntasAtual.key) === String(ev.key)) fecharPerguntas(P);
+      break;
+    case 'plan': planoCodex(P, ev); planoDoCodex(P, ev); break;
     case 'generated-image': imagemGeradaCodex(P, ev); break;
     case 'waiting': esperaCodex(P, ev); break;
     case 'goal': metaCodex(P, ev); break;
@@ -4422,6 +4424,7 @@ function receberEventoPane(ev) {
       marcarRespostaNova(P);   // antes do setDot: ele repinta o ponto já com o "nova"
       setDot(P, 'idle'); P.blocks.clear(); pararTrabalho(P); limparPassos(P);
       mostrarContinuar(P);
+      planoAoFimDoTurno(P);   // Gemini/ACP no modo Plano: o "Executar" no fim da resposta
       atualizarGit(P);   // leva 10.4: o turno acabou; o chip mostra o que ele mexeu na pasta
       setTimeout(() => { if (!P.busy) { pararTrabalho(P); limparPassos(P); } }, 400);
       // nao zera mais o histCache aqui: zerar trocava a lista por "Carregando..." e derrubava
@@ -4485,8 +4488,8 @@ window.api.onPaneEvent(receberEventoPane);
 function escondePerm(P, encerrarTodas = true) {
   if (P) { P.aprovacaoAtual = null; P.aprovacoesPendentes = []; }
   // as perguntas e o plano do Claude também morrem com o turno (o motor não espera mais por eles)
-  if (P && P.perguntasAtual) fecharPerguntas(P);
-  if (P && P.planoPendente) fecharPlano(P);
+  if (P && P.perguntasAtual && (encerrarTodas || !P.perguntasAtual.persiste)) fecharPerguntas(P);
+  if (P && P.planoPendente && (encerrarTodas || !P.planoPendente.persiste)) fecharPlano(P);
   const bar = P && P.el && $('.pane-perm', P.el);
   if (bar) bar.classList.add('hidden');
   if (P && P.questions) for (const q of P.questions.values()) {
@@ -4916,6 +4919,24 @@ function perguntaCodex(P, ev, historico = false) {
   /* redesenho 26/09: pergunta ÚNICA vira o próprio título do cartão (em 600, ao lado do glifo
      de espera), como no design; o "Preciso da sua resposta" de cima era uma linha a mais. O
      <legend> continua no fieldset (leitor de tela), só escondido. */
+  /* 26/09 ("tem que servir para as 4 IAs"): pergunta simples do Codex (opções, sem formulário,
+     sem senha) abre a MESMA janelinha do Claude. A resposta volta por pane:respond, por id. */
+  if (!historico && tipo === 'requestUserInput' && !schema && perguntas.length
+      && perguntas.every(q => q && (q.question || q.header) && !q.isSecret)) {
+    const qs = perguntas.map((q, n) => ({ id: q.id || String(n), question: q.question || q.header, header: q.header || '',
+      multiSelect: !!q.isMultipleChoice, options: (q.options || []).map(o => ({ label: o.label || String(o), description: o.description || '' })) }));
+    abrirPerguntas(P, { key: ev.key ?? ev.id, questions: qs }, { persiste: ev.isBlocking === false, responder: (answers, pular) => {
+      if (pular) return window.api.paneRespond({ paneId: P.id, key: ev.key ?? ev.id, action: 'cancel', answers: {}, content: {} });
+      const porId = {};
+      for (const q of qs) {
+        const v = String(answers[q.question] || '');
+        // escolha múltipla vem junta com vírgula; resposta escrita fica inteira (pode ter vírgula)
+        porId[q.id] = { answers: q.multiSelect && q.options.some(o => v.includes(o.label)) ? v.split(/,\s*/).filter(Boolean) : [v] };
+      }
+      return window.api.paneRespond({ paneId: P.id, key: ev.key ?? ev.id, action: 'accept', answers: porId, content: {} });
+    } });
+    return;
+  }
   const soUma = tipo !== 'permissions' && !schema && tipo !== 'elicitation' && perguntas.length === 1
     && !!(perguntas[0].question || perguntas[0].header);
   const titulo = tipo === 'permissions' ? 'Pedido de permissão' : schema || tipo === 'elicitation' ? 'Pergunta do conector'
@@ -5002,7 +5023,10 @@ function respostaDaPergunta(r) {
   return [...r.sel].join(', ');
 }
 
-function abrirPerguntas(P, ev) {
+/* opts.responder(answers, pular): quem manda a resposta. Sem ele é o Claude (pane:perguntas);
+   o Codex passa o dele (pane:respond, com as respostas por id). opts.persiste: pergunta que não
+   segura o motor e sobrevive ao fim do turno. */
+function abrirPerguntas(P, ev, opts = {}) {
   fecharPerguntas(P);
   const qs = (ev.questions || []).filter(q => q && q.question);
   if (!qs.length) return;
@@ -5013,7 +5037,7 @@ function abrirPerguntas(P, ev) {
   el.setAttribute('aria-label', 'Perguntas da IA');
   el.tabIndex = -1;
   cmp.parentNode.insertBefore(el, cmp);
-  const estado = { key: ev.key, qs, i: 0, el, enviando: false,
+  const estado = { key: ev.key, qs, i: 0, el, enviando: false, persiste: !!opts.persiste,
     respostas: qs.map(() => ({ sel: new Set(), outra: '' })) };
   P.perguntasAtual = estado;
 
@@ -5101,7 +5125,10 @@ function abrirPerguntas(P, ev) {
     const answers = {};
     if (!pular) qs.forEach((q, n) => { answers[q.question] = respostaDaPergunta(estado.respostas[n]); });
     let r;
-    try { r = await window.api.panePerguntas(pular ? { key: estado.key, paneId: P.id, pular: true } : { key: estado.key, paneId: P.id, answers }); }
+    try {
+      r = opts.responder ? await opts.responder(answers, pular)
+        : await window.api.panePerguntas(pular ? { key: estado.key, paneId: P.id, pular: true } : { key: estado.key, paneId: P.id, answers });
+    }
     catch (e) { r = { error: String(e && e.message || e) }; }
     if (P.perguntasAtual !== estado) return;
     if (!r || r.error) { estado.enviando = false; pintar(); avisoTemp(P, (r && r.error) || 'A resposta não chegou. Tente de novo.', true); return; }
@@ -5149,7 +5176,11 @@ function resumoDasRespostas(P, qs, answers) {
 
 /* O plano pronto (ExitPlanMode): o texto do plano na conversa, em markdown, com "Executar" e
    "Ajustar". Liberar também vale escrevendo na caixa (ver planoPelaCaixa, no send). */
-function mostrarPlano(P, ev) {
+/* opts.responder(aprovar, texto): Codex e Gemini passam o deles (o plano chega no FIM do turno,
+   sem ninguém esperando resposta: aprovar = trocar o modo e mandar "pode executar"). Sem opts é o
+   Claude, que fica parado esperando (pane:plano). ev.plano vazio = o plano já está na resposta
+   acima (Gemini): o cartão fica só com o título e os botões. */
+function mostrarPlano(P, ev, opts = {}) {
   fecharPlano(P);
   clearEmpty(P);
   const d = document.createElement('div');
@@ -5162,7 +5193,8 @@ function mostrarPlano(P, ev) {
   try { corpo.innerHTML = marked.parse(ev.plano || ''); } catch { corpo.textContent = ev.plano || ''; }
   try { linkarArquivos(P, corpo); marcarLinksWeb(corpo); } catch {}
   P.chat.appendChild(d);
-  const estado = { key: ev.key, el: d, enviando: false };
+  if (!ev.plano) d.classList.add('so-botoes');
+  const estado = { key: ev.key, el: d, enviando: false, responder: opts.responder || null, persiste: !!opts.persiste };
   P.planoPendente = estado;
   $('.plx-executar', d).onclick = () => responderPlano(P, true);
   $('.plx-ajustar', d).onclick = () => {
@@ -5200,6 +5232,12 @@ async function responderPlano(P, aprovar, texto) {
   const modos = MODOS[P.engine] || [];
   const antes = [P.modoAntesDoPlano, cfg.defMode, 'bypass'].find(m => m && m !== 'plan' && modos.some(x => x.id === m)) || 'bypass';
   let r;
+  if (est.responder) {
+    // Codex / Gemini: o turno já acabou; o próprio responder troca o modo e manda a mensagem
+    fecharPlano(P, aprovar ? 'Liberado para executar' : 'Ajustando o plano');
+    try { await est.responder(!!aprovar, texto || ''); } catch (e) { avisoTemp(P, String(e && e.message || e), true); }
+    return true;
+  }
   try { r = await window.api.panePlano({ key: est.key, paneId: P.id, aprovar: !!aprovar, modo: antes, texto: texto || '' }); }
   catch (e) { r = { error: String(e && e.message || e) }; }
   if (P.planoPendente !== est) return false;
@@ -5217,9 +5255,44 @@ async function responderPlano(P, aprovar, texto) {
 function planoPelaCaixa(P, text) {
   if (!P.planoPendente || !text) return false;
   const liberar = PALAVRAS_DE_LIBERAR.test(text.trim());
-  userMsg(P, text);
+  // Codex/Gemini: o ajuste vira mensagem normal (o responder manda), então não duplica o balão
+  if (!P.planoPendente.responder || liberar) userMsg(P, text);
   responderPlano(P, liberar, liberar ? '' : text);
   return true;
+}
+
+/* manda um texto como se ele tivesse escrito (usado pelo "Executar" do Codex e do Gemini) */
+function enviarComoEle(P, texto) {
+  const inp = $('.p-input', P.el);
+  if (!inp) return;
+  inp.value = texto;
+  send(P);
+}
+
+/* Codex no modo Plano: o plano proposto chega inteiro no fim (item 'plan' completo). Vira o mesmo
+   cartão do Claude. Executar = sai do modo Plano (collaborationMode) e manda "pode executar". */
+function planoDoCodex(P, ev) {
+  if (P.engine !== 'codex' || P.collaborationMode !== 'plan' || !ev.complete || !String(ev.text || '').trim()) return;
+  mostrarPlano(P, { key: 'codex-' + (ev.id || Date.now()), plano: ev.text }, { persiste: true, responder: async (aprovar, texto) => {
+    if (!aprovar) { enviarComoEle(P, texto); return; }
+    await mudarEscolhasCodex(P, { collaborationMode: 'default' });
+    enviarComoEle(P, 'Plano aprovado. Pode executar.');
+  } });
+}
+
+/* Gemini (e ACP) no modo Plano: ele responde o plano em texto, sem um "plano pronto" separado.
+   No fim de cada resposta nesse modo aparece o Executar (o plano é a resposta logo acima). */
+function planoAoFimDoTurno(P) {
+  if (!['gemini', 'acp'].includes(P.engine) || P.mode !== 'plan' || P.planoPendente) return;
+  const ultima = [...P.chat.querySelectorAll('.msg.bot')].pop();
+  if (!ultima) return;
+  mostrarPlano(P, { key: 'fim-' + Date.now(), plano: '' }, { persiste: true, responder: async (aprovar, texto) => {
+    if (!aprovar) { enviarComoEle(P, texto); return; }
+    const modos = MODOS[P.engine] || [];
+    const antes = modos.find(m => m.id === P.modoAntesDoPlano && m.id !== 'plan') || modos.find(m => m.id === cfg.defMode && m.id !== 'plan') || modos.find(m => m.id !== 'plan');
+    if (antes) await escolherModo(P, antes);
+    enviarComoEle(P, 'Plano aprovado. Pode executar.');
+  } });
 }
 
 function renderizarHistorico(P, m) {

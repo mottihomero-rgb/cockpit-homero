@@ -186,9 +186,12 @@ test('visor conserva o arquivo mais recente quando a leitura anterior chega depo
   a.resolve({ nome: 'a', tipo: 'texto', dados: 'velho' }); await first;
   assert.equal(pre.textContent, 'novo'); assert.match(v.nodes['.visor-nome'].textContent, /^b/);
 });
+/* Redesenho 25/09: o pedido virou cartão com cabeçalho próprio. O título ("Primeiro") mora no
+   .pp-tit e o objeto (arquivo/comando) no .pp-txt; showApproval pinta pelo pintarPedido. */
 function approvalContext() {
-  const c = context(['showApproval']), P = pane(c), bar = element();
-  bar.nodes = Object.fromEntries(['.pp-txt', '.pp-yes', '.pp-no'].map(s => [s, element()]));
+  const c = context(['showApproval', 'pintarPedido', 'partesDoPedido', 'pintarHaPedido', 'duracaoCurta'],
+    { shortPath: p => p, linhasDoDiff: () => [], comContexto: l => l }), P = pane(c), bar = element();
+  bar.nodes = Object.fromEntries(['.pp-tit', '.pp-ha', '.pp-txt', '.pp-cam', '.pp-por', '.pp-diff', '.pp-yes', '.pp-no'].map(s => [s, element()]));
   P.el.nodes['.pane-perm'] = bar; return { c, P, bar };
 }
 test('aprovação que falha continua visível e permite tentar novamente', async () => {
@@ -207,8 +210,8 @@ test('dois pedidos de aprovação simultâneos são respondidos na ordem sem esc
   const { c, P, bar } = approvalContext(), keys = [];
   c.window.api.approve = async p => { keys.push(p.key); return true; };
   c.showApproval(P, { key: 'a', title: 'Primeiro' }); c.showApproval(P, { key: 'b', title: 'Segundo' });
-  assert.match(bar.nodes['.pp-txt'].textContent, /Primeiro/);
-  await bar.nodes['.pp-yes'].onclick(); assert.match(bar.nodes['.pp-txt'].textContent, /Segundo/);
+  assert.match(bar.nodes['.pp-tit'].textContent, /Primeiro/);
+  await bar.nodes['.pp-yes'].onclick(); assert.match(bar.nodes['.pp-tit'].textContent, /Segundo/);
   await bar.nodes['.pp-no'].onclick(); assert.deepEqual(keys, ['a', 'b']); assert.equal(bar.classList.contains('hidden'), true);
 });
 test('reposição do anexo guardado usa caminho, não o objeto de metadados', async () => {

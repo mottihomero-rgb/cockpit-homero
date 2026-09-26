@@ -341,36 +341,45 @@
         <div class="pe-txt">Escreva embaixo pra começar</div>
       </div>
     </div>
-    <div class="pane-perm hidden">
-      <div class="pp-txt"></div>
-      <div class="pp-btns"><button class="pp-yes">Permitir</button><button class="pp-no">Negar</button></div>
+    <!-- Pilha de baixo do painel (redesenho 25/09, ver redesign/caixa.css), de cima para baixo:
+         plano (entra aqui pelo layout-hugo.js) · pedido de autorização · aviso de limite · caixa. -->
+    <div class="pane-perm hidden" role="group" aria-label="Pedido de autorização">
+      <div class="pp-cab"><span class="rd-espera" aria-hidden="true"></span><span class="pp-tit"></span><span class="pp-ha"></span></div>
+      <div class="pp-obj"><div class="pp-txt"></div><div class="pp-cam"></div><div class="pp-por"></div></div>
+      <div class="pp-diff hidden"></div>
+      <div class="pp-btns"><button class="pp-no">Negar</button><button class="pp-yes">Permitir</button></div>
     </div>
+    <!-- aviso de limite do plano: linha própria entre a autorização e a caixa (antes era tarja grudada nela) -->
+    <div class="p-uso hidden"></div>
     <div class="pane-cmp">
-      <div class="p-uso hidden"></div>
       <div class="p-anexos hidden"></div>
       <div class="cmp-top">
-        <textarea class="p-input" rows="1" placeholder="Escreva aqui…"></textarea>
+        <textarea class="p-input" rows="1" placeholder="Mensagem para Claude"></textarea>
       </div>
       <div class="cmp-bar">
         <button class="cb p-plus" title="Anexar"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3v10M3 8h10"></path></g></svg></button>
-        <button class="cb p-slash" title="Ações e comandos">/</button>
+        <button class="cb p-slash" title="Ações e comandos"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M10.5 2.5l-5 11"></path></g></svg></button>
         <button class="cb p-modoenvio" title="O que fazer se ele já estiver trabalhando"></button>
         <!-- Plano/Executar do Codex: o app.js desenha o ícone e só mostra em chat do Codex -->
         <button class="cb p-plano hidden" aria-pressed="false" title="Planejar antes de executar"></button>
-        <button class="p-compactar hidden" title="Resumir a conversa para liberar espaço">
-          <svg class="an" viewBox="0 0 36 36">
-            <circle class="an-fundo" cx="18" cy="18" r="15"></circle>
-            <circle class="an-fio" cx="18" cy="18" r="15"></circle>
-          </svg>
-          <span class="cp-txt"></span>
-        </button>
+        <!-- a pasta do chat mora aqui como ícone; o nome aparece ao passar o mouse -->
         <button class="cb p-cwd" title="Trocar pasta deste painel"></button>
         <span class="cmp-gap"></span>
         <button class="p-model" title="Trocar o modelo e o esforço"></button>
         <button class="modo-btn p-modo" title="O que ele pode fazer sem perguntar">
           <span class="modo-ic"></span><span class="modo-nome">Sem pedir permissão</span>
         </button>
-        <button class="p-stop hidden" title="Parar"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="4.5" width="7" height="7" rx="1.5" fill="currentColor"></rect></svg></button>
+        <!-- painel estreito (menos de 400): modo de envio, plano, quadro e time moram aqui dentro -->
+        <button class="cb p-mais" title="Mais: modo de envio, plano, quadro e time" aria-haspopup="menu"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="currentColor" stroke="none"><circle cx="3.5" cy="8" r="1.1"></circle><circle cx="8" cy="8" r="1.1"></circle><circle cx="12.5" cy="8" r="1.1"></circle></g></svg></button>
+        <!-- o anel que enche conforme a conversa cresce; clicar resume e libera espaço -->
+        <button class="p-compactar" title="Resumir a conversa para liberar espaço">
+          <svg class="an" viewBox="0 0 16 16" aria-hidden="true">
+            <circle class="an-fundo" cx="8" cy="8" r="6"></circle>
+            <circle class="an-fio" cx="8" cy="8" r="6"></circle>
+          </svg>
+          <span class="cp-txt"></span>
+        </button>
+        <button class="p-stop hidden" title="Parar"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="4.5" width="7" height="7" rx="1.5" fill="currentColor" stroke="none"></rect></svg></button>
         <button class="p-send" title="Enviar"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12.5v-9M4.5 7L8 3.5 11.5 7"></path></g></svg></button>
       </div>
     </div>

@@ -1101,14 +1101,10 @@ html[data-theme^="light"] .ef-thumb{background:var(--puxador);border-color:var(-
 .p-compactar.cheio{color:var(--red)}
 .p-compactar.cheio:hover{color:var(--red)}
 
-/* ---------- vários painéis abertos: a barra de baixo fica só com os ícones ---------- */
-#panes.multi .p-modoenvio span,
-#panes.multi .p-model span,
-#panes.multi .modo-nome{display:none}
-#panes.multi .p-modoenvio{width:26px;padding:0;justify-content:center;gap:0}
-#panes.multi .p-model{width:26px;height:24px;padding:0;justify-content:center;gap:0;max-width:26px}
-#panes.multi .modo-btn{width:26px;height:24px;padding:0;justify-content:center;gap:0}
-#panes.multi .p-limite{display:none}
+/* ---------- vários painéis abertos ----------
+   O que some com o painel estreito agora é decidido pela LARGURA DO PAINEL (@container 560 e
+   400, em redesign/caixa.css), não pelo número de painéis: o modelo continua com o nome
+   ("Opus 5.5 ⇅") até em quatro chats, como no desenho. */
 /* quanto do plano ja foi usado, no rodape do painel: so rotulo e numero, sem cor e sem frase.
    Ele planejava o dia sem saber se dava pra comecar tarefa grande — abaixo de 90% a tela nao
    mostrava nada, e o numero ja estava pronto na memoria o tempo todo. A tarja de alarme dos

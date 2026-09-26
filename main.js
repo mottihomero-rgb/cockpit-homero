@@ -2707,13 +2707,17 @@ function cortarHistorico(msgs, maxFalas, maxTools) {
   return trecho.filter(m => !(m.role === 'tool' && sobra-- > 0));
 }
 
+/* teto da leitura do histórico ao reabrir: 64 MB cobre as conversas longas do Claude (a maior tem
+   59 MB) e lê em menos de 1 s; acima disso (Codex de 100 MB) só o final, para não travar a janela. */
+const HIST_TETO = 64 * 1024 * 1024;
 function claudeHistory(file, maxFalas, maxTools) {
   const msgs = [];
   let data = '';
   try {
     const st = fs.statSync(file);
-    // arquivos gigantes: le so o final
-    data = st.size > 6 * 1024 * 1024 ? tailRead(file, 6 * 1024 * 1024) : fs.readFileSync(file, 'utf8');
+    // 26/09 (pedido dele): reabrir traz a conversa INTEIRA. O corte de 6 MB mostrava só o fim das
+    // conversas longas (esta tinha 25 MB). Só arquivo acima de HIST_TETO ainda lê pelo final.
+    data = st.size > HIST_TETO ? tailRead(file, HIST_TETO) : fs.readFileSync(file, 'utf8');
   } catch { return msgs; }
   for (const line of data.split('\n')) {
     if (!line.startsWith('{')) continue;
@@ -2746,7 +2750,7 @@ function codexHistory(file, maxFalas, maxTools) {
     const st = fs.statSync(file);
     // R2-035: mesmo teto do claudeHistory. Sem isso, arquivo .jsonl grande do Codex
     // trava o processo principal (e todos os paineis) numa leitura sincrona.
-    data = st.size > 6 * 1024 * 1024 ? tailRead(file, 6 * 1024 * 1024) : fs.readFileSync(file, 'utf8');
+    data = st.size > HIST_TETO ? tailRead(file, HIST_TETO) : fs.readFileSync(file, 'utf8');
   } catch { return msgs; }
   for (const line of data.split('\n')) {
     if (!line.startsWith('{')) continue;

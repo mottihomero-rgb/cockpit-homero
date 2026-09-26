@@ -31,6 +31,7 @@ function ctxMain() {
     pegar(main, 'tiraBlocos'), pegar(main, 'semContexto'),
     linha(main, 'const RESUMO_DA_SESSAO = '), linha(main, 'const FIM_DO_RESUMO = '), pegar(main, 'semResumoDaSessao'),
     'function cortarHistorico(m) { return m; }', 'function tailRead() { return ""; }', 'function claudeToolArg() { return ""; }',
+    'const HIST_TETO = 64 * 1024 * 1024;',
     pegar(main, 'claudeHistory'), 'this.claudeHistory = claudeHistory; this.semResumoDaSessao = semResumoDaSessao;',
   ].join('\n'), ctx);
   return ctx;

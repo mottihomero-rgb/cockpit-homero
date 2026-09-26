@@ -5561,18 +5561,17 @@ function abrirMemoriaDaConversa(P, bt) {
   const d = document.createElement('div');
   d.id = 'memoriaConversa';
   d.dataset.nivel = pct >= 90 ? 'alto' : pct >= 70 ? 'medio' : '';
-  d.innerHTML = '<div class="mc-tit">Memória da conversa</div>'
-    + '<div class="mc-num"><span class="mc-pct"></span><span class="mc-de"></span></div>'
+  // 26/09 (de novo): mais enxuta, no vidro do cartão de uso do topo — título e ×, a linha "316k de
+  // 1.000k · 32%", a barra fina e "Faltam 684k" com o Resumir pequeno ao lado
+  d.innerHTML = '<div class="mc-top"><span class="mc-tit">Memória da conversa</span>'
+    + '<button class="mc-fechar" type="button" title="Fechar (esc)" aria-label="Fechar">' + ico('x') + '</button></div>'
+    + '<div class="mc-lin"><span class="mc-de"></span><b class="mc-pct"></b></div>'
     + '<div class="mc-barra"><span></span></div>'
-    + '<div class="mc-linhas"><div><span>Usado</span><b class="mc-u"></b></div><div><span>Limite</span><b class="mc-l"></b></div>'
-    + '<div><span>Faltam</span><b class="mc-f"></b></div></div>'
-    + '<div class="mc-acoes"><button class="mc-fechar" type="button">Fechar</button><button class="mc-resumir" type="button">Resumir</button></div>';
+    + '<div class="mc-lin mc-pe"><span class="mc-f"></span><button class="mc-resumir" type="button">Resumir</button></div>';
   $('.mc-pct', d).textContent = pct + '%';
   $('.mc-de', d).textContent = janela ? k(usado) + ' de ' + k(janela) : k(usado);
   $('.mc-barra span', d).style.width = pct + '%';
-  $('.mc-u', d).textContent = k(usado);
-  $('.mc-l', d).textContent = janela ? k(janela) : '—';
-  $('.mc-f', d).textContent = janela ? k(Math.max(0, janela - usado)) : '—';
+  $('.mc-f', d).textContent = janela ? 'Faltam ' + k(Math.max(0, janela - usado)) : '';
   $('.mc-fechar', d).onclick = fecharMemoriaDaConversa;
   $('.mc-resumir', d).onclick = () => { fecharMemoriaDaConversa(); compactarConversa(P); };
   document.body.appendChild(d);

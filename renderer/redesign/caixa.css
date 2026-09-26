@@ -488,23 +488,28 @@
 .p-tempo.hidden{display:none}
 
 /* ---- janelinha da memória da conversa (26/09) ----
-   Presa embaixo da bolinha do topo do chat: título, "8%" grande + "84k de 1.000k", a barra (cinza,
-   âmbar a 70%, vermelha a 90%), Usado / Limite / Faltam e os botões Fechar · Resumir. */
-#memoriaConversa{position:fixed;z-index:9000;width:240px;padding:12px;border-radius:12px;background:var(--bg-elevated);
-  box-shadow:var(--shadow-float);color:var(--label-1);display:flex;flex-direction:column;gap:8px;
-  animation:menu-abre var(--dur-fast) ease-out}
-#memoriaConversa .mc-tit{font:600 12px/16px var(--font-sans);color:var(--label-2)}
-#memoriaConversa .mc-num{display:flex;align-items:baseline;gap:8px}
-#memoriaConversa .mc-pct{font:600 22px/26px var(--font-sans);font-variant-numeric:tabular-nums}
-#memoriaConversa .mc-de{font:400 12px/16px var(--font-sans);color:var(--label-2);font-variant-numeric:tabular-nums}
-#memoriaConversa .mc-barra{height:5px;border-radius:3px;background:var(--fill-2);overflow:hidden}
-#memoriaConversa .mc-barra span{display:block;height:100%;border-radius:3px;background:var(--label-2)}
+   Mesmo vidro do cartão de uso do topo (#usoCartao): raio 16, 240 de largura. Título 13/600 com o ×
+   fantasma; "316k de 1.000k" e o % na mesma linha; barra de 4 (cinza, âmbar a 70%, vermelha a 90%);
+   embaixo "Faltam 684k" e o Resumir pequeno em fill-2 (nada de pílula azul grande). */
+#memoriaConversa{position:fixed;z-index:9000;width:240px;padding:10px 12px 12px;border-radius:16px;
+  background:var(--glass-regular);-webkit-backdrop-filter:var(--blur-glass);backdrop-filter:var(--blur-glass);
+  box-shadow:var(--shadow-float),inset 0 0 0 1px var(--glass-edge);color:var(--label-1);
+  display:flex;flex-direction:column;gap:6px;animation:menu-abre var(--dur-fast) ease-out}
+#memoriaConversa .mc-top{display:flex;align-items:center;gap:6px;margin-bottom:2px}
+#memoriaConversa .mc-tit{flex:1;font:600 13px/18px var(--font-sans)}
+#memoriaConversa .mc-fechar{flex:none;width:20px;height:20px;margin-right:-4px;display:grid;place-items:center;padding:0;border:0;
+  border-radius:6px;background:transparent;color:var(--label-3)}
+#memoriaConversa .mc-fechar:hover{background:var(--fill-3);color:var(--label-1)}
+#memoriaConversa .mc-fechar .ic{width:11px;height:11px}
+#memoriaConversa .mc-lin{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  font:400 12px/16px var(--font-sans);color:var(--label-2);font-variant-numeric:tabular-nums}
+#memoriaConversa .mc-pct{font-weight:600;color:var(--label-1)}
+#memoriaConversa .mc-barra{height:4px;border-radius:2px;background:var(--fill-2);overflow:hidden}
+#memoriaConversa .mc-barra span{display:block;height:100%;border-radius:2px;background:var(--label-2)}
 #memoriaConversa[data-nivel="medio"] .mc-barra span{background:var(--status-wait)}
 #memoriaConversa[data-nivel="alto"] .mc-barra span{background:var(--status-error)}
-#memoriaConversa .mc-linhas{display:flex;flex-direction:column;gap:2px;font:400 12px/16px var(--font-sans);color:var(--label-2)}
-#memoriaConversa .mc-linhas div{display:flex;justify-content:space-between}
-#memoriaConversa .mc-linhas b{font-weight:500;color:var(--label-1);font-variant-numeric:tabular-nums}
-#memoriaConversa .mc-acoes{display:flex;justify-content:flex-end;gap:6px;padding-top:2px}
-#memoriaConversa button{height:26px;padding:0 12px;border:0;border-radius:13px;background:var(--fill-2);color:var(--label-1);font:500 12px/15px var(--font-sans)}
-#memoriaConversa button:hover{background:var(--fill-1)}
-#memoriaConversa .mc-resumir{background:var(--accent);color:var(--on-accent);font-weight:600}
+#memoriaConversa .mc-pe{margin-top:2px}
+#memoriaConversa .mc-resumir{flex:none;height:22px;padding:0 10px;border:0;border-radius:6px;background:var(--fill-2);
+  color:var(--label-1);font:500 12px/15px var(--font-sans);transition:background-color var(--dur-fast) ease-out}
+#memoriaConversa .mc-resumir:hover{background:var(--fill-1)}
+#memoriaConversa :is(.mc-fechar,.mc-resumir):focus-visible{outline:none;box-shadow:var(--anel-foco)}

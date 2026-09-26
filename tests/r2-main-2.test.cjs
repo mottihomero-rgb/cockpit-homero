@@ -16,16 +16,13 @@ const tick = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); 
 // ---------------------------------------------------------------------------
 // R2-035 — codexHistory() sem teto de tamanho para arquivo .jsonl gigante
 // ---------------------------------------------------------------------------
-test('R2-035: codexHistory tem o mesmo teto de tamanho que claudeHistory (nao le arquivo gigante inteiro)', async () => {
-  const h = loadMain();
-  // uma linha valida e reconhecivel, repetida ate passar de 6MB
-  const linha = JSON.stringify({ type: 'response_item', payload: { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'MENSAGEM-MARCADORA' }] } }) + '\n';
-  const vezes = Math.ceil((6 * 1024 * 1024 + 1024) / linha.length);
-  h.put('/historico/gigante.jsonl', linha.repeat(vezes));
-  const items = await h.call('sessions:history', { engine: 'codex', file: '/historico/gigante.jsonl' });
-  // sem o teto, fs.readFileSync leria o arquivo inteiro e essas mensagens apareceriam.
-  // com o teto, o codigo troca para tailRead (arquivo > 6MB) em vez de ler tudo.
-  assert.ok(!items.some(m => m.text === 'MENSAGEM-MARCADORA'), 'leu o arquivo gigante inteiro em vez de usar o teto/tailRead, igual claudeHistory ja faz');
+/* 26/09: o teto subiu de 6 para 64 MB (reabrir traz a conversa inteira; a maior do Claude tem 59 MB).
+   Os dois leitores continuam com o MESMO teto e acima dele leem só o final. */
+test('R2-035: codexHistory tem o mesmo teto de tamanho que claudeHistory (nao le arquivo gigante inteiro)', () => {
+  const fonte = require('node:fs').readFileSync(require('node:path').join(__dirname, '..', 'main.js'), 'utf8');
+  assert.match(fonte, /const HIST_TETO = 64 \* 1024 \* 1024;/);
+  assert.equal((fonte.match(/data = st\.size > HIST_TETO \? tailRead\(file, HIST_TETO\) : fs\.readFileSync\(file, 'utf8'\);/g) || []).length, 2,
+    'claudeHistory e codexHistory com o mesmo teto');
 });
 
 // ---------------------------------------------------------------------------

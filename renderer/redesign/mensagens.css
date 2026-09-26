@@ -8,4 +8,360 @@
    .cxq-*, .cx-acao, .aviso-agente, .entrega-img, .note.
    Carrega DEPOIS do style.css e do quadro.css (e do celular.css no iPhone): ganha deles sem
    !important. Usar os tokens (../cockpit-tokens.css) e as peças rd- do base.css.
+   Medidas: "Cockpit Janela.dc.html", telas 03, 05, 07 e 08 (estilo inline de cada bloco).
    ============================================================================ */
+
+/* ---------- a coluna de leitura ----------
+   A conversa inteira (mensagens, passos, trabalhando, fim do turno) corre numa coluna de no
+   máximo 700, centrada no painel, com 28 de margem (16 em painel com menos de 560).
+   Feito com o padding do próprio .pane-chat, e não com max-width em cada bloco: assim todo
+   bloco que entra na conversa (inclusive os das outras áreas) já cai na coluna certa, sem
+   precisar saber dela. Os 10 do lado direito são a calha da barra de rolagem (reservada
+   sempre, para a coluna não pular de lugar quando a conversa passa a rolar). */
+.pane-chat{scrollbar-gutter:stable;padding-top:10px;
+  padding-left:max(28px,calc((100% - 700px) / 2));
+  padding-right:max(18px,calc((100% - 700px) / 2 - 10px))}
+@container (max-width:559px){
+  .pane-chat{padding-left:16px;padding-right:6px}
+}
+
+/* ---------- mensagem (as duas) ---------- */
+.msg{padding:0}
+.msg.bot.emenda{padding-top:0}
+/* rótulo: nada de CAIXA ALTA com letra espaçada. No assistente: logo de 14 na cor dele + nome
+   12/600 em --label-2, a 8 do texto. A cor do logo vem do data-motor (regra no style.css). */
+.msg-role{display:flex;align-items:center;gap:6px;height:16px;margin:0 0 8px;
+  font:600 12px/16px var(--font-sans);color:var(--label-2);text-transform:none;letter-spacing:0}
+.msg.bot .av{width:14px;height:14px;padding:0;border-radius:0;background:none;display:flex}
+
+/* ---------- mensagem minha ----------
+   À direita: linha de 16 com "Você" (11px, --label-3) e, à esquerda dele, as ações do hover;
+   a 5 dela as fichas de anexo e a bolha (--fill-3, raio 12, padding 8 12, 14/21, até 86%).
+   No design os 86% são do TEXTO (a caixa de lá é content-box); aqui tudo é border-box, então
+   a bolha soma os 24 do padding para quebrar a linha no mesmo lugar. */
+.msg.user{display:flex;flex-direction:column;align-items:flex-end}
+.msg.user .msg-role{flex-direction:row;justify-content:flex-end;gap:0;margin:0 0 5px;
+  font:400 11px/16px var(--font-sans);color:var(--label-3)}
+/* a foto do usuário não aparece mais na mensagem (o design só escreve "Você") */
+.msg.user .av{display:none}
+.msg.user .msg-body{max-width:calc(86% + 24px);padding:8px 12px;border:0;border-radius:12px;
+  background:var(--fill-3);white-space:pre-wrap;text-align:left}
+.msg-anx{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;margin:0 0 5px}
+
+/* ações no hover: botões de 24×22, ícone de 14 em --label-2, raio 6 (o "sem moldura" da folha).
+   Aparecem só com o mouse em cima (ou com o foco de teclado dentro), sem mexer no layout. */
+.msg-acoes{display:flex;align-items:center;gap:2px;padding:0;margin:0;
+  opacity:0;transition:opacity var(--dur-fast) ease-out}
+.msg:hover .msg-acoes,.msg-acoes:focus-within{opacity:1}
+.msg-acoes button{width:24px;height:22px;border:0;border-radius:6px;background:transparent;
+  color:var(--label-2);display:grid;place-items:center;flex:none;user-select:none;
+  transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
+.msg-acoes button:hover{background:var(--fill-3);color:var(--label-1)}
+.msg-acoes button:active{background:var(--fill-2);color:var(--label-1)}
+.msg-acoes button:focus-visible{outline:none;box-shadow:var(--anel-foco)}
+.msg-acoes button .ic{width:var(--ic-botao);height:var(--ic-botao);stroke-width:1.4}
+.msg-acoes .bt-copiar.copiou{color:var(--status-ok)}
+/* na minha: na linha do "Você", a 8 dele */
+.msg.user .msg-acoes{margin-right:8px}
+/* no assistente (o copiar da resposta): pendurado logo abaixo do texto, POR CIMA do vão de 22
+   até o próximo bloco. No fluxo ele somava 22 de altura morta embaixo de cada resposta e o
+   ritmo da conversa desandava. O ícone fica alinhado com a margem do texto. */
+.msg.bot .msg-acoes{position:absolute;left:-5px;top:calc(100% - 4px);z-index:1}
+
+/* ---------- texto (as duas) ---------- */
+.msg-body{font:var(--f-leitura);color:var(--label-1);overflow-wrap:anywhere;min-width:0;text-wrap:pretty}
+.msg-body :is(p,ul,ol,blockquote,pre,table,h1,h2,h3,h4,h5,h6){margin:0}
+.msg-body strong{font-weight:600;color:inherit}
+/* títulos: H2 é o Title 2 (17/22 600); H1 igual (nada maior dentro de resposta); H3 Title 3 */
+.msg-body :is(h1,h2){font:var(--f-title2);color:var(--label-1)}
+.msg-body h3{font:var(--f-title3);color:var(--label-1)}
+.msg-body :is(h4,h5,h6){font:600 14px/21px var(--font-sans);color:var(--label-1)}
+
+/* links da web em --accent-text, sublinhado só no hover; o "↗" de texto virou o ícone external */
+.msg-body a{color:var(--accent-text);text-decoration:none}
+.msg-body a:hover{text-decoration:underline}
+.msg-body a.link-web::after{content:"";display:inline-block;width:10px;height:10px;margin-left:2px;
+  vertical-align:0;opacity:.8;background:currentColor;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 2.75h4.25V7M13.25 2.75L7.5 8.5M11 9.5v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h3'/%3E%3C/svg%3E") center/10px no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 2.75h4.25V7M13.25 2.75L7.5 8.5M11 9.5v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h3'/%3E%3C/svg%3E") center/10px no-repeat}
+/* caminho clicável (arquivo do Mac): mono 12,5 em --accent-text, sublinhado de 1pt */
+.msg-body a.arquivo{font-family:var(--font-mono);font-size:12.5px;color:var(--accent-text);cursor:pointer;
+  text-decoration:none;border-bottom:1px solid var(--separator-strong)}
+.msg-body a.arquivo:hover{text-decoration:none;border-bottom-color:currentColor}
+
+/* código no meio da frase: mono 12,5 em --fill-3, raio 4, na entrelinha do texto (o base.css
+   dava 18 ao <code>; aqui ele segue os 21 da fala, como no design) */
+.msg-body code{font-family:var(--font-mono);font-size:12.5px;line-height:inherit;background:var(--fill-3);
+  padding:1px 4px;border-radius:4px;color:var(--label-1)}
+
+/* bloco de código: --code-bg, raio 8, contorno de 1pt; barra de 28 com a linguagem (11px,
+   --label-2) e o copiar à direita; o código em mono 12/19 com padding 10 12.
+   A barra é o ::before do <pre> (lê o data-lang que o botoesDeCopia põe): não entra na seleção
+   nem no ⌘C. Quem rola de lado é o <code>, não o <pre>: assim a barra e o copiar ficam parados. */
+.msg-body pre{position:relative;background:var(--code-bg);border:0;border-radius:8px;
+  box-shadow:inset 0 0 0 1px var(--separator);padding:0;overflow:hidden;overflow-wrap:normal;word-break:normal}
+.msg-body pre::before{content:attr(data-lang);display:flex;align-items:center;height:28px;
+  padding:0 40px 0 12px;border-bottom:1px solid var(--separator);
+  font:400 11px/14px var(--font-sans);color:var(--label-2);user-select:none}
+.msg-body pre code{display:block;overflow-x:auto;padding:10px 12px;background:none;border-radius:0;
+  font:400 12px/19px var(--font-mono);color:var(--label-1);white-space:pre}
+.msg-body pre.com-copia .bt-copiar{position:absolute;top:3px;right:6px;z-index:2;width:22px;height:22px;
+  border:0;border-radius:6px;background:transparent;color:var(--label-2);opacity:1;
+  display:grid;place-items:center;transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
+.msg-body pre.com-copia .bt-copiar:hover{background:var(--fill-3);color:var(--label-1)}
+.msg-body pre.com-copia .bt-copiar .ic{width:var(--ic-texto);height:var(--ic-texto);stroke-width:1.4}
+.msg-body pre.com-copia .bt-copiar.copiou{color:var(--status-ok);border:0}
+
+/* listas: número (ou marcador) em --label-3 numa coluna de 12 alinhada à direita, a 4 da
+   margem, e o texto a 10 dele; 4 entre um item e outro. Numeradas usam o contador do próprio
+   <ol> (respeita o start="3" do marked). */
+.msg-body :is(ul,ol){list-style:none;padding:0}
+.msg-body li{position:relative;padding-left:26px;margin:0}
+.msg-body li + li{margin-top:4px}
+.msg-body li > :is(ul,ol){margin-top:4px}
+.msg-body li::before{position:absolute;left:4px;width:12px;text-align:right;color:var(--label-3)}
+.msg-body ol > li::before{content:counter(list-item) ".";font-variant-numeric:tabular-nums;
+  width:auto;min-width:12px;left:auto;right:calc(100% - 16px)}
+.msg-body ul > li::before{content:"•"}
+.msg-body ul ul > li::before{content:"◦"}
+/* lista de tarefas do markdown ("- [ ] item"): a caixinha já é o marcador */
+.msg-body li:has(> input[type="checkbox"])::before{content:none}
+.msg-body li > input[type="checkbox"]{position:absolute;left:2px;top:4px;margin:0;accent-color:var(--accent)}
+
+/* citação: guia de 1pt, como a do pensamento (nada de borda grossa) */
+.msg-body blockquote{border-left:1px solid var(--separator-strong);padding-left:12px;color:var(--label-2)}
+.msg-body > hr{margin:12px 0}
+
+/* tabela: contorno de 1pt e raio 8, 13/16; cabeçalho 12/600 em --label-2; células 8 12.
+   Continua tabela de verdade (e não bloco com rolagem): o overflow-wrap:anywhere da fala deixa
+   qualquer coluna quebrar, então ela sempre cabe na coluna de leitura. */
+.msg-body table{display:table;border-collapse:separate;border-spacing:0;min-width:60%;max-width:100%;
+  border-radius:8px;box-shadow:inset 0 0 0 1px var(--separator);font:400 13px/16px var(--font-sans);overflow:visible}
+.msg-body :is(th,td){padding:8px 12px;border:0;border-bottom:1px solid var(--separator);text-align:left;vertical-align:top}
+.msg-body th{font-weight:600;font-size:12px;color:var(--label-2);background:none}
+.msg-body tbody tr:last-child td{border-bottom:0}
+
+/* miniatura da entrega: 220×132, raio 10, contorno de 1pt POR CIMA da imagem, e o nome do
+   arquivo embaixo (mono 11, --label-2). A altura toda (132 + 6 + 16) já nasce reservada: a
+   imagem chega depois e não pode empurrar a conversa. */
+.msg-body .entrega-img{display:flex;flex-direction:column;gap:6px;width:220px;max-width:100%;
+  height:154px;margin:0;cursor:zoom-in}
+.msg-body .entrega-img .ei-quadro{position:relative;display:block;flex:none;height:132px;
+  border-radius:10px;overflow:hidden;background:var(--fill-3)}
+.msg-body .entrega-img .ei-quadro::after{content:"";position:absolute;inset:0;border-radius:inherit;
+  box-shadow:inset 0 0 0 1px var(--separator);pointer-events:none}
+.msg-body .entrega-img img{display:block;width:100%;height:100%;max-width:none;object-fit:cover;
+  border:0;border-radius:0;background:none}
+.msg-body .entrega-img .ei-nome{font:400 11px/16px var(--font-mono);color:var(--label-2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* recibo do turno (o fecho "## Recibo"): cartão neutro, sem a borda azul grossa nem o título
+   em caixa alta. Mesmo cartão do erro: --fill-4, contorno de 1pt, raio 10. */
+.msg-body .recibo{margin:0;padding:10px 12px;border:0;border-radius:10px;background:var(--fill-4);
+  box-shadow:inset 0 0 0 1px var(--separator);font:400 13px/18px var(--font-sans)}
+.msg-body .recibo > * + *{margin-top:6px}
+.msg-body .recibo .recibo-tit{margin:0;font:600 12px/16px var(--font-sans);color:var(--label-2);
+  text-transform:none;letter-spacing:0}
+
+/* ritmo dentro da resposta: 8 entre parágrafos, listas e miniatura; 12 em volta de título,
+   tabela, código e recibo (o título ganha +2 em cima, como no design). Vem DEPOIS das regras de
+   cada peça (que zeram a margem) e com especificidade maior que o "p{margin:0 0 9px}" antigo. */
+.msg-body > :not(:first-child){margin-top:8px}
+.msg-body > :is(h1,h2,h3,h4,h5,h6):not(:first-child){margin-top:14px}
+.msg-body > :is(h1,h2):first-child{margin-top:2px}
+.msg-body > :is(pre,table,hr,.recibo):not(:first-child),
+.msg-body > :is(pre,table,hr,.recibo,h1,h2,h3,h4,h5,h6) + *{margin-top:12px}
+.msg-body :is(li,blockquote) > p + p{margin-top:8px}
+
+/* resposta chegando: o cursor de 7×15 em --label-2 no fim do último parágrafo. "Chegando" =
+   o textDelta marcou a fala (.chegando, o textFinal tira) E ela é o bloco logo antes do
+   "trabalhando" (.trab), que só existe com o motor ocupado: turno parado não fica com cursor. */
+.msg.bot:has(+ .trab) .msg-body.chegando > p:last-child::after{content:"";display:inline-block;width:7px;height:15px;
+  margin-left:2px;border-radius:1px;background:var(--label-2);vertical-align:-2px}
+
+/* ---------- mensagem que ainda não saiu (na fila) / que voltou (não enviada) ----------
+   Não pode parecer enviada: bolha apagada com contorno tracejado fino e, na linha do "Você",
+   "· na fila" em âmbar (ou "· não enviada" em vermelho). Sem selo em caixa alta. */
+.msg.esperando .msg-body,.msg.naoenviada .msg-body{border:0;background:var(--fill-3);opacity:.6;
+  outline:1px dashed var(--separator-strong);outline-offset:-1px}
+.msg.naoenviada .msg-body{outline-color:color-mix(in srgb,var(--status-error) 55%,transparent)}
+.msg.esperando .msg-role::after,.msg.naoenviada .msg-role::after{margin-left:4px;padding:0;border:0;border-radius:0;
+  font:400 11px/16px var(--font-sans);letter-spacing:0;text-transform:none}
+.msg.esperando .msg-role::after{content:"· na fila";color:var(--status-wait-text)}
+.msg.naoenviada .msg-role::after{content:"· não enviada";color:var(--status-error)}
+
+/* ---------- corrigir e mandar de novo (a bolha vira campo) ---------- */
+.msg-edita{width:86%;padding:0}
+.me-txt{display:block;width:100%;min-height:63px;padding:8px 12px;border:0;border-radius:12px;
+  background:var(--fill-3);color:var(--label-1);font:var(--f-leitura);outline:none;resize:vertical;
+  box-shadow:var(--anel-foco)}
+.me-bts{display:flex;justify-content:flex-end;gap:6px;margin-top:6px}
+.me-bts button{height:26px;padding:0 12px;border:0;border-radius:7px;background:var(--fill-2);
+  color:var(--label-1);font:500 13px/16px var(--font-sans);
+  transition:background-color var(--dur-fast) ease-out}
+.me-bts button:hover{background:var(--fill-1)}
+.me-bts .destaque{background:var(--accent);color:var(--on-accent);font-weight:600}
+.me-bts .destaque:hover{background:color-mix(in srgb,var(--accent) 88%,white)}
+
+/* ---------- anexo dentro da mensagem enviada ----------
+   Ficha de 26: --fill-3, raio 7, padding 0 10 0 8, ícone photo de 14 em --label-2 + nome em
+   --label-1 (12px). Sem miniatura, sem a linha "PNG · 2 MB" (o nome basta; o resto vai no title). */
+.msg-anx .anx{height:26px;max-width:220px;padding:0 10px 0 8px;gap:6px;border:0;border-radius:7px;
+  background:var(--fill-3);font:400 12px/16px var(--font-sans);color:var(--label-2)}
+.msg-anx .anx.clicavel:hover{background:var(--fill-2)}
+.msg-anx .anx-mini{width:14px;height:14px;border-radius:0;background:none;color:var(--label-2);overflow:visible}
+.msg-anx .anx-mini .ic{width:14px;height:14px}
+.msg-anx .anx-mini img{display:none}
+.msg-anx .anx-mini:has(img){background:currentColor;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linejoin='round'%3E%3Crect x='2' y='2.75' width='12' height='10.5' rx='1.75'/%3E%3Ccircle cx='5.75' cy='6.25' r='1.1'/%3E%3Cpath d='M2.5 11.5L6 8l2.5 2.5 2-2 3 3'/%3E%3C/svg%3E") center/14px no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linejoin='round'%3E%3Crect x='2' y='2.75' width='12' height='10.5' rx='1.75'/%3E%3Ccircle cx='5.75' cy='6.25' r='1.1'/%3E%3Cpath d='M2.5 11.5L6 8l2.5 2.5 2-2 3 3'/%3E%3C/svg%3E") center/14px no-repeat}
+.msg-anx .anx-n{font-size:12px;color:var(--label-1)}
+.msg-anx .anx-s{display:none}
+/* o "texto" (tirar o texto da imagem) continua existindo, mas só aparece com o mouse na ficha,
+   do lado de FORA dela (à esquerda): a ficha fica só ícone + nome e nada pula de lugar */
+.msg-anx .anx-ocr{position:absolute;right:100%;top:50%;transform:translateY(-50%);margin:0 6px 0 0;
+  padding:0;border:0;border-radius:0;background:none;font:400 11px/14px var(--font-sans);color:var(--label-3);
+  white-space:nowrap;opacity:0;transition:opacity var(--dur-fast) ease-out}
+.msg-anx .anx:hover .anx-ocr,.msg-anx .anx-ocr:focus-visible,.msg-anx .anx-ocr:disabled{opacity:1}
+.msg-anx .anx-ocr:hover{color:var(--label-1)}
+
+/* ---------- fim do turno ----------
+   "Levou 2m" (12px, --label-3, tabular) · "Ver mudanças · 1 arquivo" (--label-2, sublinhado de
+   1pt). À esquerda, na coluna, a 16 do bloco de cima. */
+.turno-fim{display:flex;align-items:center;justify-content:flex-start;flex-wrap:wrap;gap:10px;margin:0;
+  font:400 12px/16px var(--font-sans);color:var(--label-3);opacity:1}
+.turno-levou{font-variant-numeric:tabular-nums;white-space:nowrap}
+.turno-mudancas{height:auto;padding:0;margin:0;border:0;border-bottom:1px solid var(--separator-strong);border-radius:0;
+  background:none;font:400 12px/16px var(--font-sans);color:var(--label-2);white-space:nowrap;
+  transition:color var(--dur-fast) ease-out,border-color var(--dur-fast) ease-out}
+.turno-mudancas:hover{color:var(--label-1);border-color:var(--label-3)}
+.turno-prints{margin-left:0}
+
+/* galeria dos prints do turno: raio 10 e contorno de 1pt, sem borda azul no hover */
+.mo-print{border:0;border-radius:10px;box-shadow:0 0 0 1px var(--separator)}
+.mo-print:hover{box-shadow:0 0 0 1px var(--separator-strong)}
+
+/* ---------- aviso que o agente mandou (PushNotification) ----------
+   Fica na conversa como cartão: --fill-4, raio 10, contorno de 1pt no âmbar do "esperando
+   você" (é algo que pede atenção), raio ⚡ de 16 no âmbar, texto 13/18. Nada de fundo tingido. */
+.aviso-agente{display:flex;align-items:flex-start;gap:10px;margin:0;padding:10px 12px;border:0;border-radius:10px;
+  background:var(--fill-4);box-shadow:inset 0 0 0 1px var(--status-wait-line);
+  font:400 13px/18px var(--font-sans);color:var(--label-1)}
+.aviso-agente .ag-ic{margin-top:1px;color:var(--status-wait)}
+.aviso-agente .ag-ic .ic{width:16px;height:16px}
+
+/* ---------- avisos soltos na conversa ----------
+   .note (recado temporário) em 12/16 --label-2. O de erro vira o cartão "Erro" do design:
+   --fill-4, contorno de 1pt, raio 10, triângulo de 16 em --status-error e o texto 13/18. */
+.note{padding:0;font:400 12px/16px var(--font-sans);color:var(--label-2)}
+.note.err{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;
+  background:var(--fill-4);box-shadow:inset 0 0 0 1px var(--separator);
+  font:400 13px/18px var(--font-sans);color:var(--label-1)}
+.note.err::before{content:"";flex:none;width:16px;height:16px;margin-top:1px;background:var(--status-error);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M8 2.5l6 10.5H2z'/%3E%3Cpath d='M8 6.5v3'/%3E%3Ccircle cx='8' cy='11.2' r='.75' fill='black' stroke='none'/%3E%3C/svg%3E") center/16px no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.4' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M8 2.5l6 10.5H2z'/%3E%3Cpath d='M8 6.5v3'/%3E%3Ccircle cx='8' cy='11.2' r='.75' fill='black' stroke='none'/%3E%3C/svg%3E") center/16px no-repeat}
+/* "daqui em diante quem responde é o Codex" e o recado de envio: linha discreta, na coluna */
+.troca{padding:0;font:400 11px/14px var(--font-sans);color:var(--label-3)}
+.troca::before,.troca::after{background:var(--separator)}
+.envio-nota{padding:0;font:400 11px/14px var(--font-sans);color:var(--label-3)}
+
+/* ---------- cartões do Codex (plano, estado, imagem gerada) ----------
+   O cartão neutro do design: --fill-4, contorno de 1pt, raio 10, padding 10 12, 13/18.
+   Título 12/600 em --label-2 (como "Time de agentes"). Nada de borda azul na esquerda. */
+.cx-cartao{margin:0;max-width:none;padding:10px 12px;border:0;border-radius:10px;background:var(--fill-4);
+  box-shadow:inset 0 0 0 1px var(--separator);font:400 13px/18px var(--font-sans);color:var(--label-1);overflow-wrap:anywhere}
+.cx-cartao h3{margin:0;font:600 12px/16px var(--font-sans);color:var(--label-2)}
+.cx-cartao p{margin:6px 0 0;color:var(--label-2);white-space:pre-wrap}
+.cx-estado,.cx-pergunta.encerrada{border-left:0}
+/* passos do plano: feito = check em --label-3 (sem risco), em andamento = anel em --label-1,
+   pendente = círculo vazio em --label-4. O ✓ ● ○ de texto some (fica no title). */
+.cx-passos{margin:8px 0 0;gap:4px}
+.cx-passos li{align-items:center;gap:8px}
+.cx-passo-marca{position:relative;width:12px;height:12px;font-size:0;color:transparent}
+.cx-passo-marca::before{content:"";position:absolute;inset:0;box-sizing:border-box;border-radius:50%;
+  border:1.5px solid var(--label-4)}
+.cx-passos :is([data-status=completed],[data-status=done]){color:var(--label-3)}
+.cx-passos :is([data-status=completed],[data-status=done]) .cx-passo-marca::before{border:0;border-radius:0;
+  background:var(--label-3);
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E") center/12px no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E") center/12px no-repeat}
+.cx-passos :is([data-status=in_progress],[data-status=inProgress]) .cx-passo-marca::before{
+  border-color:var(--fill-1);border-top-color:var(--label-1);border-right-color:var(--label-1);
+  animation:ck-spin 1s linear infinite}
+.cx-imagem img{margin:8px 0 0;border-radius:10px;background:none}
+
+/* ---------- pergunta do assistente ----------
+   Cartão de vidro com contorno de 1pt em --status-wait-line e o glifo de espera no título;
+   opções em linhas de 26 (raio 6), botões de 26 com raio 7: "Cancelar" (--fill-2) à esquerda e
+   "Responder" (o único azul) à direita. Respondida, vira o cartão neutro e perde o glifo. */
+.cx-pergunta{display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:12px;
+  background:var(--glass-regular);-webkit-backdrop-filter:var(--blur-glass);backdrop-filter:var(--blur-glass);
+  box-shadow:var(--shadow-float),inset 0 0 0 1px var(--status-wait-line)}
+.cx-pergunta h3{display:flex;align-items:center;gap:8px;font:600 13px/16px var(--font-sans);color:var(--label-1)}
+.cx-pergunta h3::before{content:"!";flex:none;width:13px;height:13px;border-radius:50%;background:var(--status-wait);
+  color:#1A1000;font:800 9.5px/13px var(--font-sans);text-align:center}
+.cx-pergunta p{margin:0}
+.cx-pergunta.encerrada{background:var(--fill-4);-webkit-backdrop-filter:none;backdrop-filter:none;
+  box-shadow:inset 0 0 0 1px var(--separator)}
+.cx-pergunta.encerrada h3::before{display:none}
+.cxq-form{gap:10px}
+.cxq-form fieldset{gap:2px}
+.cxq-form legend{padding:0 0 6px;font:400 13px/18px var(--font-sans);color:var(--label-1)}
+.cxq-opcao{align-items:center;gap:8px;min-height:26px;padding:4px 6px;border:0;border-radius:6px;
+  transition:background-color var(--dur-fast) ease-out}
+.cxq-opcao:hover{border:0;background:var(--fill-3)}
+.cxq-opcao:has(input:checked){border:0;background:var(--fill-2)}
+.cxq-opcao input{width:14px;height:14px;margin:0;accent-color:var(--accent)}
+/* radio do design: anel de 1,5 em --label-3; marcado vira o azul com o miolo claro */
+.cxq-opcao input[type="radio"]{appearance:none;-webkit-appearance:none;flex:none;border-radius:50%;
+  background:transparent;box-shadow:inset 0 0 0 1.5px var(--label-3);cursor:pointer}
+.cxq-opcao input[type="radio"]:checked{background:var(--on-accent);box-shadow:inset 0 0 0 4px var(--accent)}
+.cxq-opcao input[type="radio"]:disabled{opacity:.5;cursor:default}
+.cxq-opcao small,.cxq-campo small{font:400 11px/14px var(--font-sans);color:var(--label-2)}
+.cxq-campo label{font:400 12px/15px var(--font-sans);color:var(--label-2)}
+.cxq-input{min-height:26px;padding:5px 8px;border:0;border-radius:6px;background:var(--fill-2);
+  color:var(--label-1);font:400 13px/16px var(--font-sans)}
+textarea.cxq-input{min-height:52px}
+.cxq-form pre{padding:8px 10px;border-radius:8px;background:var(--code-bg);
+  box-shadow:inset 0 0 0 1px var(--separator);font:var(--f-mono)}
+.cxq-acoes{justify-content:flex-end;gap:6px}
+.cx-acao{display:inline-flex;align-items:center;min-height:26px;height:26px;padding:0 12px;border:0;border-radius:7px;
+  background:var(--fill-2);color:var(--label-1);font:500 13px/16px var(--font-sans);
+  transition:background-color var(--dur-fast) ease-out}
+.cx-acao:hover{filter:none;background:var(--fill-1)}
+.cx-acao:active{background:var(--separator-strong)}
+.cx-acao.principal{order:2;border:0;background:var(--accent);color:var(--on-accent)}
+.cx-acao.principal:hover{background:color-mix(in srgb,var(--accent) 88%,white)}
+.cx-acao.principal:active{background:color-mix(in srgb,var(--accent) 80%,black)}
+.cx-acao:disabled{opacity:.4}
+.cx-acao:focus-visible,.cxq-input:focus-visible,.cxq-opcao input:focus-visible{outline:none;box-shadow:var(--anel-foco)}
+.cxq-status{font:400 11px/14px var(--font-sans);color:var(--label-2)}
+
+/* ---------- ritmo entre os blocos da conversa ----------
+   22 entre um bloco e outro (mensagem, passos, trabalhando, cartões), como o gap do design.
+   Fica no FIM do arquivo e com especificidade baixa de propósito: as regras de cada bloco
+   acima zeram a margem sem apagar este vão, e as áreas carregadas depois (passos.css) podem
+   trocar o vão dos blocos delas com um seletor simples. O fim do turno fica a 16 (22 − 6). */
+.pane-chat > * + *{margin-top:22px}
+.pane-chat > .turno-fim{margin-top:16px}
+
+/* ---------- iPhone ----------
+   O celular.css deixava a letra da conversa em 14,5 e a bolha em 92%: este arquivo vem depois
+   dele e desfaria isso. Lá a coluna tem 16 de margem (a barra de rolagem do iPhone flutua,
+   não ocupa lugar). Mesmo filtro de tela do celular.css. */
+@media (max-width: 820px), (pointer: coarse) and (max-width: 1100px) {
+  .pane-chat{scrollbar-gutter:auto;padding-left:max(16px,calc((100% - 700px) / 2));
+    padding-right:max(16px,calc((100% - 700px) / 2))}
+  .msg-body{font-size:14.5px}
+  .msg.user .msg-body,.msg-edita{max-width:92%}
+  .msg-edita{width:92%}
+}
+/* toque não tem hover: no iPhone o "texto" da ficha fica sempre à vista, dentro dela */
+@media (hover: none) {
+  .msg-anx .anx-ocr{position:static;transform:none;margin:0 0 0 4px;opacity:1}
+}
+@media (max-width: 600px) {
+  .cx-acao{min-height:40px;height:auto;padding:7px 12px}
+  .cxq-input{font-size:16px;min-height:40px}
+  .cxq-opcao{padding:10px 8px}
+}

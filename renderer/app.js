@@ -1992,7 +1992,11 @@ function userMsg(P, text, anexos) {
   clearEmpty(P);
   const d = document.createElement('div');
   d.className = 'msg user';
-  d.innerHTML = '<div class="msg-role"><span class="av"></span>Você</div>'
+  /* redesenho 25/09: copiar, editar e voltar no tempo moram na MESMA linha do "Você", à
+     esquerda dele (e não mais no pé da bolha). A barra já nasce aqui dentro: o barraDeAcoes
+     acha ela e não cria outra embaixo. O .av (foto) continua no DOM para o pintarAvatar,
+     mas o design só mostra "Você" — o CSS esconde. */
+  d.innerHTML = '<div class="msg-role"><div class="msg-acoes"></div><span class="av"></span>Você</div>'
     + '<div class="msg-anx hidden"></div><div class="msg-body"></div>';
   pintarAvatar($('.av', d));
   if (anexos && anexos.length) {
@@ -2093,7 +2097,7 @@ function botoesDaMinhaMensagem(P, d, texto) {
   bEdit.onclick = () => editarMinhaMensagem(P, d, texto);
   const bCopia = botaoCopiar('Copiar o que eu escrevi', () => texto);
   const bVolta = document.createElement('button');
-  bVolta.className = 'msg-bt'; bVolta.title = 'Voltar no tempo até aqui'; bVolta.innerHTML = ico('rotate-cw');
+  bVolta.className = 'msg-bt'; bVolta.title = 'Voltar no tempo até aqui'; bVolta.innerHTML = ico('rewind');
   bVolta.onclick = () => menuVoltarNoTempo(P, d, texto);
   barra.appendChild(bCopia); barra.appendChild(bEdit); barra.appendChild(bVolta);
 }
@@ -2363,6 +2367,8 @@ function textDelta(P, key, text) {
     P.execEl = null;                                  // proximo comando abre cartao novo
   }
   b.raw += text; pintarPonta(b);
+  // marca a fala que ainda está chegando: o CSS põe o cursor de 7×15 no fim dela (some no textFinal)
+  b.el.classList.add('chegando');
   // o texto ACUMULADO, nao o pedaco de 50ms que chegou agora: sozinho ele quase nunca
   // e uma frase inteira
   legendarTrabalho(P, b.raw);
@@ -2994,6 +3000,11 @@ function botoesDeCopia(b) {
   for (const pre of b.el.querySelectorAll('pre')) {
     if ($('.bt-copiar', pre)) continue;
     pre.classList.add('com-copia');
+    /* a barra de 28 do bloco de código mostra a linguagem (o CSS lê o data-lang). O marked
+       põe a linguagem na classe do <code> ("language-js"); sem ela a barra fica só com o copiar */
+    const cod = pre.querySelector('code');
+    const lang = cod && /(?:^|\s)language-([\w+#.-]+)/.exec(cod.className);
+    pre.dataset.lang = lang ? lang[1] : '';
     pre.appendChild(botaoCopiar('Copiar o código', () => (pre.querySelector('code') || pre).innerText));
   }
 }
@@ -3036,7 +3047,16 @@ function miniaturaDaEntrega(P, a, caminho) {
   cx.className = 'entrega-img';
   cx.title = 'abre aqui dentro';
   cx.onclick = (e) => { e.preventDefault(); e.stopPropagation(); verArquivo(P, caminho); };
-  a.after(cx);
+  /* A miniatura é um bloco (220×132 + o nome embaixo): colada logo depois do link ela partia
+     o parágrafo ao meio e o "." do fim da frase caía embaixo da imagem. Agora ela entra DEPOIS
+     do parágrafo do link (e depois das outras miniaturas que já estão ali, na mesma ordem dos
+     links). Link fora de parágrafo (item de lista, tabela) continua do jeito antigo. */
+  const par = a.closest('p');
+  if (par && par.parentNode) {
+    let ult = par;
+    while (ult.nextElementSibling && ult.nextElementSibling.classList.contains('entrega-img')) ult = ult.nextElementSibling;
+    ult.after(cx);
+  } else a.after(cx);
   if (!miniaturas.has(caminho)) {
     if (miniaturas.size >= 24) miniaturas.delete(miniaturas.keys().next().value);
     // new Promise pega ate erro na hora da chamada: miniatura que falha nao pode derrubar a fala
@@ -3046,7 +3066,12 @@ function miniaturaDaEntrega(P, a, caminho) {
     if (!r || r.tipo !== 'imagem' || !r.dados) { miniaturas.delete(caminho); cx.remove(); return; }
     const img = document.createElement('img');
     img.alt = a.textContent || ''; img.src = r.dados;
-    cx.appendChild(img);
+    // quadro de raio 10 (o contorno de 1pt fica por cima da imagem) + o nome do arquivo em mono
+    const quadro = document.createElement('span'); quadro.className = 'ei-quadro';
+    const nome = document.createElement('span'); nome.className = 'ei-nome';
+    nome.textContent = caminho.split('/').pop();
+    quadro.appendChild(img);
+    cx.append(quadro, nome);
   });
 }
 
@@ -3116,6 +3141,7 @@ function textFinal(P, key, text) {
   }
   // aqui o bloco e refeito INTEIRO, de uma vez so: e o desenho que vale no fim do turno
   b.raw = text; b.el.innerHTML = marked.parse(text); b.corte = 0; b.fixos = 0;
+  b.el.classList.remove('chegando');   // a fala está inteira: sem o cursor de "ainda escrevendo"
   legendarTrabalho(P, text);
   linkarArquivos(P, b.el); marcarLinksWeb(b.el); botoesDeCopia(b); marcarRecibo(b.el);
   if (P.trabEl) P.chat.appendChild(P.trabEl);
@@ -3354,15 +3380,20 @@ function marcarFimDoTurno(P) {
   const d = document.createElement('div');
   d.className = 'turno-fim';
   const txt = document.createElement('span');
-  const tok = P.tokens ? ' · ' + (P.tokens / 1000).toFixed(1) + 'k de contexto' : '';
-  const uso = P.usoTurno ? ' · ' + fmtK(P.usoTurno.entrada) + '↑ ' + fmtK(P.usoTurno.saida) + '↓' : '';
-  txt.textContent = 'levou ' + duracaoCurta(levou) + uso + tok;
+  txt.className = 'turno-levou';
+  const tok = P.tokens ? (P.tokens / 1000).toFixed(1) + 'k de contexto' : '';
+  const uso = P.usoTurno ? fmtK(P.usoTurno.entrada) + '↑ ' + fmtK(P.usoTurno.saida) + '↓' : '';
+  /* redesenho 25/09: na linha fica só "Levou 3m 40s" (como no design); o consumo do turno e o
+     tamanho do contexto continuam a um passar de mouse, no title */
+  txt.textContent = 'Levou ' + duracaoCurta(levou).replace(/m(\d\d)s$/, (_, seg) => (seg === '00' ? 'm' : 'm ' + Number(seg) + 's'));
+  const detalhe = [uso, tok].filter(Boolean).join(' · ');
+  if (detalhe) txt.title = detalhe;
   d.appendChild(txt);
   if (temMudanca) {
     const n = P.diffTurno ? arquivosDoDiffUnificado(P.diffTurno) : arquivosDasMudancas(P);
     const bt = document.createElement('button');
     bt.className = 'turno-mudancas';
-    bt.textContent = 'ver mudanças (' + n + (n === 1 ? ' arquivo' : ' arquivos') + ')';
+    bt.textContent = 'Ver mudanças · ' + n + (n === 1 ? ' arquivo' : ' arquivos');
     bt.title = 'Tudo que este turno mexeu em arquivo, num lugar só';
     // congela o rastro DESTE turno: o proximo turno zera P.mudancasTurno
     const mudancas = (P.mudancasTurno || []).slice();
@@ -3373,7 +3404,7 @@ function marcarFimDoTurno(P) {
   if (prints.length) {
     const bp = document.createElement('button');
     bp.className = 'turno-mudancas turno-prints';
-    bp.textContent = prints.length + (prints.length === 1 ? ' print' : ' prints');
+    bp.textContent = 'Ver ' + (prints.length === 1 ? 'print' : 'prints') + ' · ' + prints.length;
     bp.title = 'As imagens que o agente viu neste turno';
     bp.addEventListener('click', (e) => { e.stopPropagation(); mostrarPrintsDoTurno(P, prints); });
     d.appendChild(bp);

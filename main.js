@@ -296,6 +296,27 @@ function emitDelta(paneId, id, texto) {
   f.texto += texto;
   if (!f.timer) f.timer = setTimeout(() => despejarDelta(paneId), 50);
 }
+/* 26/09: a resposta aparecia DUAS vezes quando o Claude pensava antes de falar. O pedacinho ao
+   vivo leva o numero do bloco na mensagem inteira (pensamento = 0, texto = 1: 'b1'), mas o CLI
+   manda a mensagem final picada, um bloco por envio, e ali o texto e o item 0 ('b0'). Numeros
+   diferentes = a tela abria um 2o bloco com o mesmo texto. Aqui o texto final herda o numero que
+   o ao vivo usou: por mensagem (message.id), o 1o texto final pega o 1o bloco de texto que chegou
+   ao vivo, o 2o pega o 2o, e assim por diante. */
+const blocosAoVivo = new Map();
+const streamMsgId = new Map();   // paneId -> message.id da mensagem que esta chegando ao vivo   // paneId -> Map(message.id -> { ids: ['b1', ...], usados })
+function blocoAoVivo(paneId, msgId, id) {
+  if (!msgId) return;
+  let porMsg = blocosAoVivo.get(paneId);
+  if (!porMsg) { porMsg = new Map(); blocosAoVivo.set(paneId, porMsg); }
+  let r = porMsg.get(msgId);
+  if (!r) { r = { ids: [], usados: 0 }; porMsg.set(msgId, r); }
+  if (!r.ids.includes(id)) r.ids.push(id);
+}
+function idDoTextoFinal(paneId, msgId, i) {
+  const r = msgId && blocosAoVivo.has(paneId) && blocosAoVivo.get(paneId).get(msgId);
+  if (r && r.usados < r.ids.length) return r.ids[r.usados++];
+  return 'b' + i;
+}
 function avisarWeb(canal, dados) {
   for (const ws of ouvintesWeb) { try { ws.send(JSON.stringify({ tipo: 'evento', canal, dados })); } catch {} }
 }
@@ -1197,6 +1218,7 @@ function claudeStop(paneId) {
   }
   const delta = filaDelta.get(paneId);
   if (delta) { clearTimeout(delta.timer); filaDelta.delete(paneId); }
+  blocosAoVivo.delete(paneId); streamMsgId.delete(paneId);
   descartarPendenciasClaude(paneId);
   ultimoContexto.delete(paneId);
   claudeCwd.delete(paneId);   // R2-036: senao fica crescendo pra sempre, um chat fechado atras do outro
@@ -1315,9 +1337,13 @@ function claudeMessage(paneId, m) {
   if (m.type === 'stream_event' && m.event) {
     const ev = m.event;
     if (ev.type === 'message_start' && !m.parent_tool_use_id) somConclusao.evento(paneId, 'turn-activity');
+    if (ev.type === 'message_start' && ev.message && ev.message.id) streamMsgId.set(paneId, ev.message.id);
     if (ev.type === 'content_block_delta') {
       const d = ev.delta || {};
-      if (d.type === 'text_delta') emitDelta(paneId, 'b' + ev.index, d.text || '');
+      if (d.type === 'text_delta') {
+        blocoAoVivo(paneId, streamMsgId.get(paneId), 'b' + ev.index);
+        emitDelta(paneId, 'b' + ev.index, d.text || '');
+      }
       else if (d.type === 'thinking_delta') emit(paneId, 'think-delta', { text: d.thinking || '' });
     }
     return;
@@ -1332,7 +1358,7 @@ function claudeMessage(paneId, m) {
   if (m.type === 'assistant' && m.message) {
     (m.message.content || []).forEach((c, i) => {
       if (c.type === 'text') {
-        emit(paneId, 'text-final', { id: 'b' + i, text: c.text || '' });
+        emit(paneId, 'text-final', { id: idDoTextoFinal(paneId, m.message.id, i), text: c.text || '' });
         /* R3-013: quando a API recusa por limite de sessao (ou outro erro sintetico: 529,
            sem internet, deslogado), o CLI nao cai — devolve isso como texto de assistente
            comum (m.message.model === '<synthetic>'). Sem checagem nenhuma, o Cockpit tratava
@@ -1428,6 +1454,7 @@ function claudeMessage(paneId, m) {
     return;
   }
   if (m.type === 'result') {
+    blocosAoVivo.delete(paneId);   // turno fechado: os numeros do ao vivo nao servem ao proximo
     const u = m.usage || {};
     /* 26/09: a bolinha do contexto vivia vermelha. O usage do 'result' SOMA todas as chamadas do
        turno — e o cache_read relê a conversa inteira a cada passo: 20 passos numa conversa de

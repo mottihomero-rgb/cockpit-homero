@@ -1,4 +1,4 @@
-/* ============================================================================
+/* ============================================================================================
    REDESENHO · MENUS E POPOVERS (handoff do Claude Design, 25/09/2026 — README, "Telas e componentes")
    Menus e popovers (vidro, raio 12, padding 6, --shadow-float): item de 24 com raio 6, ✓ numa
    coluna de 12, valor/atalho à direita em --label-3, item destacado em --accent com texto branco,
@@ -7,4 +7,285 @@
    Seletores de hoje: .menu*, .mi*, .pop-global, .p-menu-top, .layout-menu, .ef-*, .mo-chips*.
    Carrega DEPOIS do style.css e do quadro.css (e do celular.css no iPhone): ganha deles sem
    !important. Usar os tokens (../cockpit-tokens.css) e as peças rd- do base.css.
-   ============================================================================ */
+
+   ONDE O MENU MORA: o menu do painel usa o mesmo .p-modal das janelinhas (conta, terminal); o que
+   o faz menu é a classe .como-menu. Por isso toda regra de CAIXA do menu começa em
+   `.modal.p-modal.como-menu > .modal-cx` (especificidade alta de propósito: o sheets.css carrega
+   depois deste e estiliza o .modal-cx das janelinhas). Os três tipos de menu dividem o visual:
+     · .modal.p-modal.como-menu > .modal-cx — menus do chat (/, modelo, permissão, +, assistente, @)
+     · .pop-global                          — menus da lista de conversas ("…", grupo) e de layout
+     · .menu-fantasma                       — a cópia que esmaece ao fechar (app.js, menuSaindo)
+   O LUGAR (preso ao botão) sai do app.js em variáveis --menu-l/-r/-t/-b; a caixa só as lê no Mac.
+   No celular o menu continua subindo do rodapé (celular.css): lá só vale o visual dos itens.
+   ============================================================================================ */
+
+@keyframes menu-abre{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+@keyframes menu-sai{from{opacity:1;transform:none}to{opacity:0;transform:scale(.96)}}
+
+/* --menus-mac = 1 liga o popover (seção 2). No Mac vale em QUALQUER largura: janela estreita, ou
+   ⌘+ com zoom de 110 a 125%, passava abaixo de 821 e o menu voltava a ser o cartão antigo no meio
+   do painel (o index.html não carrega o celular.css, então nada desenhava o menu do rodapé).
+   No navegador do celular (index-web.html, o único que carrega o celular.css) continua o de antes:
+   popover só com tela larga, o menu do rodapé no resto. O app.js lê a mesma variável (menuSaindo). */
+:root{--menus-mac:0}
+@media (min-width: 821px) and (pointer: fine), (min-width: 1101px){:root{--menus-mac:1}}
+:root:not(:has(> head > link[href="celular.css"])){--menus-mac:1}
+
+/* ---------- 1. visual dos itens (Mac e celular) ---------- */
+
+/* sem ícone nos menus (design): só o logo do assistente e a cor do grupo aparecem, mais abaixo */
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi-ic{display:none}
+/* flex:none em tudo que empilha: sem isto, menu mais alto que o espaço ESPREMIA os itens em vez
+   de rolar (a própria referência do design tem esse defeito no campo de filtro) */
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi{
+  flex:none;display:flex;align-items:flex-start;gap:6px;border-radius:6px;color:var(--label-1);cursor:default}
+/* o atual não ganha mais fundo azulado: o ✓ à esquerda já diz qual é */
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi.on{background:transparent}
+/* coluna do ✓: sempre presente (vazia quando não é o atual), 12 de largura, à esquerda */
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi-ck{
+  flex:none;order:0;align-self:flex-start;width:12px;height:16px;padding-top:2px;box-sizing:border-box;
+  display:flex;justify-content:center;color:inherit;font-size:12px}
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi-ck .ic{width:12px;height:12px}
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi-txt{
+  flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi-n{
+  font:400 13px/16px var(--font-sans);color:inherit;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* item com descrição: título + uma linha de 11px; o texto inteiro fica no balão do mouse */
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi-d{
+  margin:0;font:400 11px/14px var(--font-sans);color:var(--label-2);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* valor atual ou atalho, à direita, no tom de metadado */
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi-tag{
+  flex:none;align-self:flex-start;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font:400 12px/16px var(--font-sans);color:var(--label-3);font-variant-numeric:tabular-nums}
+/* logo do assistente, na cor dele (a cor do assistente aparece SÓ no logo) */
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi-ic.mi-logo{
+  display:flex;flex:none;width:14px;height:16px;padding-top:1px;margin:0;box-sizing:border-box;opacity:1}
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi-logo .logo-motor,
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi-logo svg{width:14px;height:14px}
+.mi[data-motor="claude"] .mi-logo{color:var(--logo-claude)}
+.mi[data-motor="codex"] .mi-logo{color:var(--logo-codex)}
+.mi[data-motor="gemini"] .mi-logo{color:var(--logo-gemini)}
+.mi[data-motor="grok"] .mi-logo{color:var(--logo-grok)}
+/* o logo oficial do Gemini vem com o degradê colorido dele (camada com máscara). Nos menus ele é
+   recolorido como os outros (regra 8 do README): fica só a estrela, na cor --logo-gemini */
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi-logo .logo-motor > path{fill:currentColor}
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi-logo .logo-motor > g[mask]{display:none}
+/* a cor do grupo (menu da pastinha) é o nome do grupo: fica */
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi-ic:has(.pop-cor){
+  display:flex;align-items:center;flex:none;width:10px;height:16px;margin:0}
+.pop-cor{width:10px;height:10px;border-radius:3px}
+/* o que apaga fica em vermelho, para não ser clicado no automático */
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi-perigo .mi-n{color:var(--status-error)}
+/* item desativado (Sistema.dc, "Atual · destacado · desativado"): tudo em --label-4, sem destaque;
+   o porquê fica no balão do mouse */
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi.mi-off,
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi.mi-off :is(.mi-n, .mi-d, .mi-tag, .mi-ck){color:var(--label-4)}
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi.mi-off .mi-logo{opacity:.4}
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi.mi-off:hover{background:transparent}
+/* menu "@": a linha de baixo é a pasta do arquivo; se não couber, o corte fica à ESQUERDA, para
+   sobrar o fim do caminho (a parte que separa dois arquivos de mesmo nome) */
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma).menu-arquivos .mi-d{direction:rtl;text-align:left}
+
+/* cabeçalho de grupo: 11/600 --label-2, alinhado com o texto dos itens (26 = 8 + ✓ 12 + 6) */
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .menu-secao{
+  position:relative;flex:none;margin:0;padding:4px 8px 2px 26px;
+  font:600 11px/14px var(--font-sans);color:var(--label-2);text-transform:none;letter-spacing:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* separador de 1pt com margem 4 8, entre um grupo e o próximo (o menu / tem vários grupos).
+   Medido na referência: o cabeçalho começa 10 abaixo do fim do último item (1 de vão + 9), com a
+   linha a +5 */
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .menu-secao:not(:first-child){
+  margin-top:9px;overflow:visible}
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .menu-secao:not(:first-child)::before{
+  content:"";position:absolute;left:8px;right:8px;top:-5px;height:1px;background:var(--separator)}
+/* já existe uma linha logo antes: não dobra */
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .menu-linha + .menu-secao{margin-top:0}
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .menu-linha + .menu-secao::before{content:none}
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .menu-linha{
+  flex:none;height:1px;margin:4px 8px;background:var(--separator)}
+/* linha de conteúdo dentro do menu (o trecho da mensagem em "Voltar até aqui", "procurando…") */
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mo-sub{
+  flex:none;margin:0;padding:0 8px 4px 26px;font:400 11px/14px var(--font-sans);color:var(--label-3)}
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mo-sub.erro{color:var(--status-error)}
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mo-sub.mo-estado{
+  font-style:normal;padding:2px 10px 6px 26px}
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .menu-empty{
+  flex:none;padding:4px 8px 4px 26px;font:400 13px/16px var(--font-sans);color:var(--label-3)}
+:is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .menu-corpo{
+  display:flex;flex-direction:column;gap:1px;min-height:0}
+
+/* ---- campo de filtro do menu / (lupa de 12 + "Filtrar"), 26 de altura, raio 6 ---- */
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .menu-filtro{
+  flex:none;display:flex;align-items:center;gap:6px;height:26px;margin:0 0 4px;padding:0 8px;
+  box-sizing:border-box;border-radius:6px;background:var(--fill-2);color:var(--label-3);cursor:text}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .menu-filtro .ic{width:12px;height:12px;flex:none}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .menu-filtro .menu-search{
+  flex:1;min-width:0;width:auto;height:100%;margin:0;padding:0;border:0;border-radius:0;
+  background:transparent;box-shadow:none;outline:none;color:var(--label-1);font:400 12px/16px var(--font-sans)}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .menu-filtro .menu-search::placeholder{color:var(--label-3)}
+/* campo de busca com foco: o anel de foco da folha de componentes */
+.modal.p-modal.como-menu > .modal-cx .menu-filtro:focus-within{box-shadow:var(--anel-foco)}
+
+/* ---- slider Esforço (menu Modelo): trilho de 3, 5 marcas, botão branco de 16 ----
+   O "?" com a explicação saiu (o texto foi para o balão da linha "Esforço"). O campo de pixels
+   animado e o degradê do último nível também: o design é um slider simples do Mac. */
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .ef-blk{
+  --ef-thumb:16px;flex:none;display:flex;flex-direction:column;gap:8px;padding:6px 10px 8px 26px}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .ef-top{display:flex;align-items:center;height:16px;gap:0}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .ef-tit{
+  flex:1;display:flex;align-items:center;font:600 12px/16px var(--font-sans);color:var(--label-2)}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .ef-stage{
+  margin-left:auto;height:16px;font:500 12px/16px var(--font-sans);color:var(--label-1)}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .ef-stage>span{left:auto;right:0;transform-origin:right center}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .ef-blk.ultra .ef-cur{color:inherit}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .ef-helpwrap{display:none}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .ef-shell{order:2;height:16px;margin:0}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .ef-axis{
+  order:3;display:flex;justify-content:space-between;margin:0;
+  font:400 11px/16px var(--font-sans);color:var(--label-3);letter-spacing:0}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .ef-track{
+  inset:7px 0 auto 0;height:3px;overflow:visible;border-radius:2px;background:var(--fill-1);box-shadow:none}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .ef-track::before{content:none}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .ef-px{display:none}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .ef-fill{
+  top:0;bottom:0;left:0;width:calc(100% * var(--ef-prog));border-radius:2px;
+  background:var(--accent);opacity:1;transition:none}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .ef-ticks{
+  inset:5px 0 auto 0;height:4px;display:flex;align-items:stretch;justify-content:space-between}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .ef-tick,
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .ef-tick:last-child{
+  width:1px;height:4px;border-radius:0;background:var(--label-3);opacity:1;transition:none}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .ef-thumb{
+  top:0;left:calc(100% * var(--ef-prog) - 8px);width:16px;height:16px;box-sizing:border-box;
+  border:0;border-radius:50%;background:#fff;
+  box-shadow:0 1px 3px rgba(0,0,0,.35),0 0 0 .5px rgba(0,0,0,.15)}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .ef-thumb:focus-visible{
+  box-shadow:var(--anel-foco),0 1px 3px rgba(0,0,0,.35)}
+
+/* ---- Velocidade e Memória do Codex (menu do cérebro): segmented do Mac ----
+   container --fill-3 raio 8 padding 2, itens de 22 raio 6; o ativo em --control-selected.
+   A frase de explicação embaixo sai da tela: ela já é o balão do título. */
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .mo-chips{flex:none;padding:6px 10px 6px 26px}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .mo-chips-tit{
+  margin:0 0 6px;font:600 12px/16px var(--font-sans);color:var(--label-2)}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .mo-chips-linha{
+  display:flex;flex-wrap:nowrap;gap:0;padding:2px;border-radius:8px;background:var(--fill-3)}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .mo-chip{
+  flex:1 1 0;min-width:0;min-height:0;height:22px;padding:0 8px;border:0;border-radius:6px;
+  background:transparent;color:var(--label-2);font:500 12px/22px var(--font-sans);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default;
+  transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .mo-chip:hover{background:var(--fill-3);color:var(--label-1)}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .mo-chip.on{
+  background:var(--control-selected);color:var(--label-1);font-weight:600;
+  box-shadow:0 1px 2px rgba(0,0,0,.18),0 0 0 .5px var(--separator-strong)}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .mo-chip:focus-visible{outline:none;box-shadow:var(--anel-foco)}
+:is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .mo-chips-dica{display:none}
+
+/* ---------- 2. a caixa do menu e o lugar dele (só no Mac; o celular tem o menu do rodapé) ----------
+   Liga com --menus-mac (topo do arquivo): o Mac em qualquer largura e o navegador com tela larga.
+   Consulta de estilo porque junta as duas condições (tamanho de tela OU ser o app do Mac) sem
+   escrever o bloco duas vezes. */
+@container style(--menus-mac: 1) {
+  /* sem véu: o menu é um popover sobre a conversa, não uma janela modal. O .p-modal continua
+     cobrindo o painel (invisível) para o clique fora fechar o menu, como sempre fechou */
+  .modal.p-modal.como-menu{display:block;background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none}
+
+  /* vidro, raio 12, padding 6, --shadow-float; itens com 1 de vão entre eles */
+  .modal.p-modal.como-menu > .modal-cx,
+  .menu-fantasma,
+  .pop-global{
+    box-sizing:border-box;margin:0;padding:6px;border:0;border-radius:12px;
+    background:var(--glass-regular);-webkit-backdrop-filter:var(--blur-glass);backdrop-filter:var(--blur-glass);
+    box-shadow:var(--shadow-float);color:var(--label-1);font:400 13px/16px var(--font-sans);
+    display:flex;flex-direction:column;gap:1px}
+  /* contraste aumentado: o vidro vira opaco (tokens) e ganha contorno visível */
+  html[data-theme$="-hc"] .modal.p-modal.como-menu > .modal-cx,
+  html[data-theme$="-hc"] .menu-fantasma,
+  html[data-theme$="-hc"] .pop-global{box-shadow:var(--shadow-float),inset 0 0 0 1px var(--glass-edge)}
+
+  /* preso ao botão: as variáveis vêm do app.js (posicionarMenu); a altura para antes da borda */
+  .modal.p-modal.como-menu > .modal-cx{
+    position:absolute;left:var(--menu-l,auto);right:var(--menu-r,auto);
+    top:var(--menu-t,auto);bottom:var(--menu-b,auto);
+    width:280px;max-width:calc(100% - 26px);max-height:var(--menu-alt,calc(100% - 20px));
+    overflow-x:hidden;overflow-y:auto;
+    transform-origin:var(--menu-ox,0%) var(--menu-oy,100%);
+    animation:menu-abre var(--dur-base) var(--ease-spring) both}
+  /* larguras do design (tela de 1470): comandos 320, modelo 280, permissão 300, anexar 240,
+     assistente 200; o "@" e o "voltar" pedem espaço para caminho e frase */
+  .modal.p-modal.como-menu > .modal-cx.menu-cmd{width:320px;max-height:min(560px,var(--menu-alt,560px));overflow:hidden}
+  .modal.p-modal.como-menu > .modal-cx.menu-modelo{width:280px}
+  .modal.p-modal.como-menu > .modal-cx.menu-modo{width:300px}
+  .modal.p-modal.como-menu > .modal-cx.menu-anexo{width:240px}
+  .modal.p-modal.como-menu > .modal-cx.menu-motor{width:200px}
+  /* o "@" pode achar 40 arquivos: para no mesmo teto do / em vez de cobrir o painel inteiro */
+  .modal.p-modal.como-menu > .modal-cx.menu-arquivos{width:320px;max-height:min(560px,var(--menu-alt,560px));overflow:hidden}
+  .modal.p-modal.como-menu > .modal-cx.menu-voltar{width:300px}
+  /* no / e no @ o campo e o cabeçalho ficam parados; só a lista rola */
+  .modal.p-modal.como-menu > .modal-cx:is(.menu-cmd, .menu-arquivos) .menu-corpo{flex:1 1 auto;overflow-y:auto;
+    /* a barra de rolagem (6) mora no recuo de 6 do menu: os itens ficam da largura do campo de
+       filtro, com ou sem barra (o gutter fica sempre reservado) */
+    margin-right:-6px;scrollbar-gutter:stable}
+
+  /* a cópia que esmaece ao fechar: no mesmo lugar, sem clique, 120ms */
+  .menu-fantasma{position:absolute;z-index:75;pointer-events:none;overflow:hidden;
+    transform-origin:var(--menu-ox,0%) var(--menu-oy,100%);
+    animation:menu-sai var(--dur-fast) var(--ease-spring) both}
+  /* a cópia dos menus da lista também é .pop-global: sem repetir o menu-sai aqui, a regra do
+     .pop-global (logo abaixo, mesma força) rodava o menu-abre nela e o menu REAPARECIA por 200ms */
+  .pop-global.menu-fantasma{position:fixed;z-index:609;transform-origin:0 0;
+    animation:menu-sai var(--dur-fast) var(--ease-spring) both}
+
+  /* menu da lista de conversas e de layout: mesma caixa, nasce do canto do botão */
+  .pop-global{min-width:200px;max-width:290px;transform-origin:0 0;
+    animation:menu-abre var(--dur-base) var(--ease-spring) both}
+
+  /* item: 24 de altura, raio 6, padding 4 8 (5 8 quando tem descrição) */
+  :is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi{
+    min-height:24px;margin:0;padding:4px 8px;box-sizing:border-box;
+    transition:none}
+  :is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi:has(.mi-d){padding:5px 8px}
+  :is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma).menu-1linha .mi:has(.mi-d){padding:4px 8px}
+
+  /* item destacado (mouse em cima, ou escolhido pelas setas no "@"): azul do sistema, texto branco.
+     Desativado não destaca. */
+  :is(.modal.p-modal.como-menu > .modal-cx, .pop-global) .mi:not(.mi-off):hover,
+  :is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi.sel{
+    background:var(--accent);color:var(--on-accent);outline:none}
+  :is(.modal.p-modal.como-menu > .modal-cx, .pop-global) .mi:not(.mi-off):hover :is(.mi-d, .mi-tag),
+  :is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi.sel :is(.mi-d, .mi-tag){color:rgba(255,255,255,.82)}
+  :is(.modal.p-modal.como-menu > .modal-cx, .pop-global) .mi:not(.mi-off):hover .mi-logo,
+  :is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi.sel .mi-logo{color:var(--on-accent)}
+  /* o que apaga, destacado: o mesmo azul dos outros, como no menu do Mac. O fundo vermelho de
+     erro deixava o texto branco ilegível no escuro (#FF6961: 2,8:1); o vermelho fica no texto
+     quando o item está parado */
+  :is(.modal.p-modal.como-menu > .modal-cx, .pop-global) .mi.mi-perigo:hover .mi-n{color:var(--on-accent)}
+
+  /* menu de layout (layout-hugo.js): botões simples, no mesmo desenho de item */
+  .pop-global.layout-menu{max-height:60vh;overflow-y:auto}
+  .pop-global.layout-menu button{
+    display:flex;align-items:center;width:100%;min-height:24px;margin:0;padding:4px 8px 4px 26px;
+    box-sizing:border-box;border:0;border-radius:6px;background:transparent;color:var(--label-1);
+    font:400 13px/16px var(--font-sans);text-align:left;outline:none;box-shadow:none}
+  .pop-global.layout-menu button:hover,
+  .pop-global.layout-menu button:focus-visible{background:var(--accent);color:var(--on-accent);outline:none;box-shadow:none}
+}
+
+/* Barra de rolagem da lista do / e do @: invisível parada, aparece só enquanto rola, como a do
+   Mac (o app.js põe .rolando por 900ms a cada rolada). Fora do bloco de cima de propósito: a
+   consulta de estilo não alcança com certeza o pseudo-elemento da barra. */
+.modal.p-modal.como-menu > .modal-cx:is(.menu-cmd, .menu-arquivos) .menu-corpo::-webkit-scrollbar{width:6px}
+.modal.p-modal.como-menu > .modal-cx:is(.menu-cmd, .menu-arquivos) .menu-corpo::-webkit-scrollbar-thumb{
+  border-width:1px;background:transparent;background-clip:content-box}
+.modal.p-modal.como-menu > .modal-cx:is(.menu-cmd, .menu-arquivos) .menu-corpo.rolando::-webkit-scrollbar-thumb,
+.modal.p-modal.como-menu > .modal-cx:is(.menu-cmd, .menu-arquivos) .menu-corpo::-webkit-scrollbar-thumb:hover{
+  background:color-mix(in srgb,var(--label-1) 28%,transparent);background-clip:content-box}
+
+/* Reduzir movimento: o menu aparece e some sem escala nem esmaecer (o app.js nem cria a cópia) */
+@media (prefers-reduced-motion: reduce){
+  .modal.p-modal.como-menu > .modal-cx,.pop-global,.menu-fantasma{animation:none}
+  .menu-fantasma{display:none}
+}

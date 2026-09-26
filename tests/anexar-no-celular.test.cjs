@@ -34,7 +34,9 @@ test('no Mac o menu do + continua inteiro, na mesma ordem', () => {
   const l = itensDoMenu(false);
   assert.equal(atos(l), 'file,image,folder,cwd,recorte,foto');
   const img = l.find(i => i.act === 'image');
-  assert.equal(img.nome, 'Enviar imagem');
+  // redesenho 26/09: os nomes do menu Anexar passaram a ser os do design ("Imagem…", "Pasta…"),
+  // com "…" porque abrem outra janela; o que o item faz e a explicação continuam iguais
+  assert.equal(img.nome, 'Imagem…');
   assert.equal(img.desc, 'png, jpg, webp');
 });
 

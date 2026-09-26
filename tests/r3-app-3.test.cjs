@@ -275,10 +275,11 @@ test('R3-008 (regressão): painel recém-criado continua recebendo o worktree sa
   assert.equal(ctx._chamadas.mostrarPastaNoPainel.worktree, 'branch-y');
 });
 
-/* ================= R3-024 — "terminal" e "terminal na VPS" não podem aparecer no iPhone ================= */
+/* ================= R3-024 — "terminal" e "terminal na VPS" não podem aparecer no iPhone =================
+   (redesenho 26/09: os nomes ganharam inicial maiúscula, como os outros itens do menu /) */
 test('R3-024: os itens de terminal somem do menu quando window.SEM_ELECTRON (iPhone)', () => {
-  const re1 = /\.\.\.\(window\.SEM_ELECTRON \? \[\] : \[\{ sec: 'Painel', ic: 'terminal', nome: 'terminal',[\s\S]*?\}\]\),/;
-  const re2 = /\.\.\.\(window\.SEM_ELECTRON \|\| !NA_VPS\(P\.cwd\) \? \[\] : \[\{ sec: 'Painel', ic: 'terminal', nome: 'terminal na VPS',[\s\S]*?\}\]\),/;
+  const re1 = /\.\.\.\(window\.SEM_ELECTRON \? \[\] : \[\{ sec: 'Painel', ic: 'terminal', nome: 'Terminal',[\s\S]*?\}\]\),/;
+  const re2 = /\.\.\.\(window\.SEM_ELECTRON \|\| !NA_VPS\(P\.cwd\) \? \[\] : \[\{ sec: 'Painel', ic: 'terminal', nome: 'Terminal na VPS',[\s\S]*?\}\]\),/;
   const linha1 = trecho(re1, "item 'terminal' do menu do painel");
   const linha2 = trecho(re2, "item 'terminal na VPS' do menu do painel");
 

@@ -1148,8 +1148,8 @@ html[data-theme^="light"] .ef-thumb{background:var(--puxador);border-color:var(-
    O desenho da barra, das abas e dos botoes + mora no redesign/janela.css. */
 :root{--topo-altura:52px;--veu-topo:52px;--recuo-semaforo:92px}
 
-/* o shell perde a altura do que fica em cima dele (no Mac a faixa de avisos entra no fluxo e
-   o janela.css troca esta conta por flex; no celular continua esta) */
+/* o shell perde a altura do que fica em cima dele. É a conta de reserva: o janela.css põe o
+   body em coluna flex (a faixa de avisos entra no fluxo) e o #shell fica com o que sobra. */
 #shell{display:flex;height:calc(100% - var(--topo-altura))}
 
 /* --- espaco de cada aba: os chats lado a lado, igual antes --- */
@@ -1668,16 +1668,11 @@ body.arrastando-aba,body.arrastando-aba *{cursor:grabbing !important}
    nunca vê. Nomes com prefixo `fx` de propósito: a classe `.aviso` do fork de origem já é
    usada aqui pela tarja de limite do plano (`.p-uso aviso`, app.js) e o CSS de lá a
    repintaria inteira (padding, fundo, borda, tamanho de letra).
-   `position:fixed`: #shell tem altura calculada na mão (100% - --topo-altura); um elemento a
-   mais no fluxo do body empurraria a tela toda para baixo. No Mac o redesenho quer a faixa
-   ENTRE a barra do topo e os chats, empurrando tudo (36pt): lá o janela.css põe o body em
-   coluna flex e a faixa no fluxo. Esta regra continua valendo para o celular.
-   O top segue --topo-altura: no Mac 52px (só a barra do topo); no telefone a barra de título
-   é mais alta (46px + o recorte da câmera) e quem soma isso é o celular.css — é o único que
-   conhece o --sat. Antes aqui havia um calc com --sat que, sem o celular.css (no Mac, janela
-   estreita ou com zoom), ficava inválido e enterrava a barra de abas. */
-#faixaAvisos{position:fixed;left:0;right:0;top:var(--topo-altura);z-index:60;display:flex;flex-direction:column;
-  max-height:30vh;overflow-y:auto}
+   Redesenho (25/09, tela 21): a faixa fica NO FLUXO, entre a barra do topo e os chats, e
+   empurra tudo para baixo — no Mac, no celular e no navegador. Antes era position:fixed por
+   cima dos chats e, no iPhone, cobria o cabeçalho deles (sumiam o seletor de IA e o ×). Quem
+   põe o body em coluna e a faixa no lugar certo (order) é o redesign/janela.css. */
+#faixaAvisos{display:flex;flex-direction:column;max-height:30vh;overflow-y:auto}
 #faixaAvisos:empty{display:none}
 /* o desenho das tarjas (.fx, .fx-ic, .fx-txt, .fx-acao, .fx-x) mora no redesign/janela.css */
 

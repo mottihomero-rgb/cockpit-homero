@@ -10,19 +10,23 @@
 
    "Só no Mac": o index.html esconde a barra de título (#titlebar.hidden) porque a barra das abas
    faz o papel dela, com os semáforos na esquerda. O index-web.html (celular e navegador) mantém a
-   barra de título, a faixa das abas de 50px e a faixa de avisos por cima; quem manda nas alturas
-   de lá é o celular.css. Por isso o que muda a geometria da janela vem preso a #titlebar.hidden.
+   barra de título e a faixa das abas de 50px; quem manda nas alturas de lá é o celular.css. Por
+   isso o que é medida do Mac (52, recuo dos semáforos) vem preso a #titlebar.hidden.
    ============================================================================ */
 
-/* ---------- a janela no Mac: barra do topo, faixa de aviso e o resto, em coluna ----------
+/* ---------- a janela: barra de título (só no celular), barra do topo, faixa de aviso e o resto ----------
    A faixa de aviso do redesenho fica ENTRE a barra do topo e os chats e empurra tudo para baixo
-   (tela 21). Antes ela boiava por cima (position:fixed) e cobria o cabeçalho dos chats. Com o
-   body em coluna flex, o #shell fica com a altura que sobra, com ou sem faixa, sem conta na mão.
-   `order` põe a faixa depois da barra sem mexer no HTML (no DOM ela vem antes). */
-body:has(> #titlebar.hidden){display:flex;flex-direction:column}
-#titlebar.hidden ~ #abasTopo{order:-2;height:52px}
-#titlebar.hidden ~ #faixaAvisos{order:-1;position:relative;top:auto;left:auto;right:auto;z-index:auto;flex:none}
-#titlebar.hidden ~ #shell{flex:1 1 auto;min-height:0;height:auto}
+   (tela 21). Antes ela boiava por cima (position:fixed) e cobria o cabeçalho dos chats — no iPhone
+   sumiam o seletor de IA e o × do chat. Com o body em coluna flex, o #shell fica com a altura que
+   sobra, com ou sem faixa, sem conta na mão. `order` põe a faixa depois da barra das abas sem
+   mexer no HTML (no DOM ela vem antes). Vale no Mac e no index-web (o celular.css já deixava o
+   body em coluna no telefone; aqui a faixa só entra na fila). */
+body:has(> #shell){display:flex;flex-direction:column}
+#titlebar{order:-3;flex:none}
+#abasTopo{order:-2}
+#titlebar.hidden ~ #abasTopo{height:52px}
+#faixaAvisos{order:-1;flex:none}
+#shell{flex:1 1 auto;min-height:0;height:auto}
 
 /* ---------- barra do topo ----------
    Fundo --bg-window, sem linha embaixo: quem separa a barra dos chats é o --bg-content deles.
@@ -37,21 +41,42 @@ body:has(> #titlebar.hidden){display:flex;flex-direction:column}
 #abasLista::-webkit-scrollbar{display:none;height:0}
 .abas-gap{flex:1 1 0;min-width:0}
 
+/* Muitas abas (não tem no design; é o jeito do Safari): primeiro elas ENCOLHEM, o nome ganha
+   reticências e a aberta fica inteira; só quando nem assim cabem é que a fileira rola. Aí a
+   borda do lado que tem aba escondida se apaga em 24pt — antes a última aparecia cortada no meio
+   da letra, colada no "+", sem nada dizendo que havia mais.
+   A borda segue a rolagem da própria lista (animation-timeline: scroll): sem nada para rolar a
+   linha do tempo fica inativa, as duas medidas ficam em 0 e nada se apaga. */
+@property --abas-borda-e{syntax:"<length>";inherits:false;initial-value:0px}
+@property --abas-borda-d{syntax:"<length>";inherits:false;initial-value:0px}
+@keyframes abas-bordas{
+  0%{--abas-borda-e:0px;--abas-borda-d:24px}
+  6%,94%{--abas-borda-e:24px;--abas-borda-d:24px}
+  100%{--abas-borda-e:24px;--abas-borda-d:0px}}
+#abasLista{
+  -webkit-mask-image:linear-gradient(to right,transparent,#000 var(--abas-borda-e),#000 calc(100% - var(--abas-borda-d)),transparent);
+  mask-image:linear-gradient(to right,transparent,#000 var(--abas-borda-e),#000 calc(100% - var(--abas-borda-d)),transparent);
+  animation:abas-bordas linear both;animation-timeline:scroll(self inline)}
+
 /* ---------- a aba: cápsula de 28 ----------
    Sinal + nome + contador (e o × no hover). Selecionada: --fill-1, --label-1, 600. As outras sem
    fundo, --label-2, 500. Sem borda e sem a cor do assistente (o contorno que seguia a IA em foco
    saiu: o pintarCorFoco ainda escreve o --cor-foco, mas ninguém mais pinta com ele).
    Trocar de aba é instantâneo (README, "Movimento"): a transição de 120ms só vale para o hover
    de uma aba que não está aberta. */
-.aba{position:relative;flex:none;display:flex;flex-direction:row;align-items:center;
-  justify-content:flex-start;gap:7px;min-width:0;max-width:240px;height:28px;padding:0 12px;
+.aba{position:relative;flex:0 1 auto;display:flex;flex-direction:row;align-items:center;
+  justify-content:flex-start;gap:7px;max-width:240px;height:28px;padding:0 12px;
   border:0;border-radius:var(--r-capsule);background:transparent;box-shadow:none;
   color:var(--label-2);font:500 13px/16px var(--font-sans);white-space:nowrap;cursor:default;
   -webkit-app-region:no-drag}
 .aba:hover{background:var(--fill-3);color:var(--label-1);
   transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
 .aba:active{background:var(--fill-2)}
-.aba.ativa{background:var(--fill-1);color:var(--label-1);font-weight:600;transition:none}
+.aba.ativa{flex-shrink:0;background:var(--fill-1);color:var(--label-1);font-weight:600;transition:none}
+/* piso ao encolher: 104pt (o mesmo das abas de antes: menos que isso o nome vira "O…"), ou a
+   largura da própria aba se ela já for menor (a "Zouti 1" do design tem 71 e não pode crescer).
+   O min-width:0 fica de reserva se o calc-size faltar. */
+.aba{min-width:0;min-width:calc-size(max-content, min(size, 104px))}
 .aba-proj{flex:0 1 auto;min-width:0;max-width:170px;overflow:hidden;text-overflow:ellipsis;
   font:inherit;text-align:left}
 /* contador de chats: só o número, em --label-3, peso 400 e tabular (não dança quando muda) */
@@ -91,6 +116,19 @@ body:has(> #titlebar.hidden){display:flex;flex-direction:column}
 .aba .aba-x .ic{width:12px;height:12px}
 .aba .aba-x:hover{background:var(--fill-2);color:var(--label-1)}
 .aba .aba-x:active{background:var(--fill-1)}
+
+/* ---------- a aba que está nascendo (tela 01) ----------
+   Com a sheet "Nova aba" aberta, a fileira mostra uma cápsula "Nova aba" selecionada no fim
+   (--fill-1, 600, sem sinal nem contador) e a aba aberta até então volta a ser uma das outras.
+   Os 19 da direita são os 7 do vão + o contador vazio da cápsula do design (89,4 de largura).
+   É só desenho: some quando a sheet fecha, com ou sem aba criada. Fica fora do #abasLista de
+   propósito — o arrastar e o clique procuram '#abasTopo .aba' e não podem achá-la. */
+.aba-provisoria{display:none;flex:none;align-items:center;height:28px;margin-left:2px;padding:0 19px 0 12px;
+  border-radius:var(--r-capsule);background:var(--fill-1);color:var(--label-1);
+  font:600 13px/16px var(--font-sans);white-space:nowrap;-webkit-app-region:no-drag}
+body:has(> #novaAba:not(.hidden)) .aba-provisoria{display:flex}
+body:has(> #novaAba:not(.hidden)) .aba.ativa{flex-shrink:1;background:transparent;color:var(--label-2);font-weight:500}
+body:has(> #novaAba:not(.hidden)) .aba.ativa:hover{background:var(--fill-3);color:var(--label-1)}
 
 /* ---------- "+" de nova aba (28, redondo) e "+ Chat" sem moldura à direita ----------
    Os dois são o botão "Sem moldura" da folha: --label-2 parado, hover --fill-3, pressionado
@@ -135,6 +173,15 @@ body:has(> #titlebar.hidden){display:flex;flex-direction:column}
 .fx-alerta .fx-ic{color:var(--status-wait)}
 .fx-erro .fx-ic{color:var(--status-error)}
 .fx-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* nome de arquivo dentro do texto: SF Mono 12, na cor do texto (tela 21) */
+.fx-mono{font:400 12px/16px var(--font-mono)}
+/* Chat esperando você (README, "Estados"): o círculo de 14 em --status-wait com "!" no lugar do
+   ícone, e o estado ("esperando você autorizar") em --status-wait-text. Sem traço de SVG: o
+   círculo é o mesmo sinal da aba. */
+.fx-espera .fx-ic .ic{display:none}
+.fx-espera .fx-ic::before{content:"!";display:grid;place-items:center;width:14px;height:14px;
+  border-radius:50%;background:var(--status-wait);color:#1A1000;font:800 10px/14px var(--font-sans)}
+.fx-destaque{color:var(--status-wait-text)}
 /* inline-block (e não flex) de propósito: o ::first-letter só vale em bloco, e é ele que põe a
    maiúscula nos rótulos que chegam em minúscula ("ver", "ir", "copiar comando") */
 .fx-acao{flex:none;display:inline-block;height:24px;padding:0 10px;border:0;border-radius:6px;
@@ -177,11 +224,13 @@ body:has(> #titlebar.hidden){display:flex;flex-direction:column}
   background:var(--status-error);color:var(--on-accent);font:700 9.5px/14px var(--font-sans);
   font-variant-numeric:tabular-nums;text-align:center;box-shadow:0 0 0 2px var(--bg-window)}
 
-/* ---------- divisor de 1pt entre a barra de ícones e os chats ----------
-   Com a coluna lateral fechada, os chats encostam na barra: a linha de 1pt (--separator) que
-   no design é a borda esquerda do primeiro painel. Com a coluna aberta quem separa é ela (a
-   borda da coluna e o #dragbar, da área lateral). */
+/* ---------- divisor de 1pt entre a barra de ícones e o que vem depois ----------
+   Sempre em x=52, em --separator. Com a coluna lateral fechada, os chats encostam na barra e a
+   linha é a borda esquerda do primeiro painel. Com a coluna aberta, é a borda esquerda dela
+   (tela 16: 1pt fora dos 280). O lateral.css declara a mesma borda na coluna; os dois valores
+   são iguais, então juntar as duas áreas não dobra a linha. */
 #dragbar.hidden + #panes{border-left:1px solid var(--separator)}
+#sidebar{border-left:1px solid var(--separator)}
 
 /* barra de título do navegador/celular (index-web.html): mesma cor da barra das abas, sem linha,
    as duas viram um topo só. O ☰ virou o ícone de coluna lateral. */

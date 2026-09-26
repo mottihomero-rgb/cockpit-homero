@@ -44,9 +44,11 @@
   <!-- as duas folgas crescem por igual: as abas ficam no meio do topo -->
   <span class="abas-gap"></span>
   <div class="abas-lista" id="abasLista"></div>
-  <button class="aba-mais" id="btnNovaAba" title="Nova aba de projeto (⌘⇧T)"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3v10M3 8h10"></path></g></svg></button>
+  <!-- a aba que está nascendo: só aparece com a sheet "Nova aba" aberta (janela.css) -->
+  <span class="aba-provisoria" aria-hidden="true">Nova aba</span>
+  <button class="aba-mais" id="btnNovaAba" title="Nova aba ⌘⇧T"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3v10M3 8h10"></path></g></svg></button>
   <span class="abas-gap"></span>
-  <button class="aba-mais canto" id="btnNovoChat" title="Novo chat nesta aba (⌘T)"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3v10M3 8h10"></path></g></svg><span class="am-txt">Chat</span></button>
+  <button class="aba-mais canto" id="btnNovoChat" title="Novo chat nesta aba ⌘T"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3v10M3 8h10"></path></g></svg><span class="am-txt">Chat</span></button>
 </div>
 
 <div id="shell">

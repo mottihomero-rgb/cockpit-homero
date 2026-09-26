@@ -32,7 +32,8 @@ body.sem-mac::after{content:"reconectando ao Mac…";position:fixed;left:0;right
   body{position:fixed;inset:0;display:flex;flex-direction:column;
     height:var(--altura-app,100dvh);overscroll-behavior:none}
   #titlebar,#abasTopo{flex-shrink:0}
-  /* barra de titulo do telefone (46px + camera) + faixa de abas (50px): e onde a faixa de avisos comeca */
+  /* barra de titulo do telefone (46px + camera) + faixa de abas (50px); a faixa de avisos vem
+     logo abaixo, no fluxo (redesign/janela.css) */
   /* --veu-topo e onde COMECA toda janela flutuante: nova aba, time de agentes, atalhos e
      avisos. Ficava nos 38px do Mac, entao no telefone as quatro nasciam por baixo da ilha
      dinamica. Aqui ela comeca onde a barra de titulo do telefone acaba. */

@@ -18,8 +18,10 @@ const HTMLS = ['renderer/index.html', 'renderer/index-web.html'];
 test('os semáforos caem no meio da barra do topo de 52', () => {
   const m = ler('main.js').match(/trafficLightPosition:\s*\{\s*x:\s*(\d+),\s*y:\s*(\d+)\s*\}/);
   assert.ok(m, 'trafficLightPosition sumiu do main.js');
-  // o Electron posiciona o quadro do botão (16 de altura): o centro fica em y + 8
-  assert.equal(Number(m[2]) + 8, 52 / 2, 'o centro dos semáforos saiu do meio da barra');
+  // o Electron põe o TOPO do quadro do botão em y; no macOS 26 o quadro mede 14×14 (medido numa
+  // NSWindow escondida), então o centro fica em y + 7
+  assert.equal(Number(m[2]) + 7, 52 / 2, 'o centro dos semáforos saiu do meio da barra');
+  assert.equal(Number(m[1]) + 1, 20, 'a bolinha de 12 (no meio do quadro de 14) sai de x=20');
   assert.match(ler('renderer/style.css'), /:root\{--topo-altura:52px;--veu-topo:52px;/);
   assert.match(css, /#titlebar\.hidden ~ #abasTopo\{[^}]*height:52px/);
 });
@@ -62,15 +64,81 @@ test('um sinal por aba: esperando ganha de trabalhando, que ganha de nova', () =
   // a aba não volta a ser contornada com a cor da IA em foco (os comentários podem citar o nome)
   assert.doesNotMatch(css.replace(/\/\*[\s\S]*?\*\//g, ''), /--cor-foco|--aba-cor|--motor/);
   assert.match(css, /\.aba\{[^}]*border:0[^}]*background:transparent/);
-  assert.match(css, /\.aba\.ativa\{background:var\(--fill-1\)[^}]*font-weight:600/);
+  assert.match(css, /\.aba\.ativa\{[^}]*background:var\(--fill-1\)[^}]*font-weight:600/);
 });
 
-test('no Mac a faixa de aviso empurra os chats (não cobre o cabeçalho deles)', () => {
-  assert.match(css, /body:has\(> #titlebar\.hidden\)\{display:flex;flex-direction:column\}/);
-  assert.match(css, /#titlebar\.hidden ~ #faixaAvisos\{[^}]*position:relative/);
-  assert.match(css, /#titlebar\.hidden ~ #shell\{flex:1 1 auto;min-height:0;height:auto\}/);
-  // e o index.html continua escondendo a barra de título (é o que liga tudo isso)
+test('a faixa de aviso empurra os chats no Mac e no celular (não cobre o cabeçalho deles)', () => {
+  assert.match(css, /body:has\(> #shell\)\{display:flex;flex-direction:column\}/);
+  // ordem: barra de título (celular) → barra das abas → faixa → chats
+  assert.match(css, /#titlebar\{order:-3;flex:none\}/);
+  assert.match(css, /#abasTopo\{order:-2\}/);
+  assert.match(css, /#faixaAvisos\{order:-1;flex:none\}/);
+  assert.match(css, /#shell\{flex:1 1 auto;min-height:0;height:auto\}/);
+  // no iPhone ela ficava position:fixed por cima do cabeçalho do chat (sumia o seletor e o ×)
+  const faixa = (ler('renderer/style.css').match(/#faixaAvisos\{[^}]*\}/) || [''])[0];
+  assert.ok(faixa, 'a regra da faixa sumiu do style.css');
+  assert.doesNotMatch(faixa, /position:fixed/, 'a faixa voltou a boiar por cima dos chats');
+  assert.doesNotMatch(ler('renderer/celular.css'), /#faixaAvisos\{[^}]*position:fixed/);
+  // e o index.html continua escondendo a barra de título (a altura de 52 depende disso)
   assert.match(ler('renderer/index.html'), /<div id="titlebar" class="hidden">/);
+  assert.match(css, /#titlebar\.hidden ~ #abasTopo\{height:52px\}/);
+});
+
+test('texto da tarja em pedaços: nome de arquivo em mono, tudo por textContent', () => {
+  const app = ler('renderer/app.js');
+  const corpo = app.match(/function escreverAviso\(el, texto\) \{([\s\S]*?)\n\}/);
+  assert.ok(corpo, 'escreverAviso sumiu');
+  const no = () => ({ filhos: [], textContent: '', appendChild(f) { this.filhos.push(f); } });
+  const document = {
+    createElement: () => { const e = no(); e.className = ''; return e; },
+    createTextNode: (t) => ({ texto: t }),
+  };
+  const el = no();
+  const ctx = { el, document };
+  vm.runInNewContext('(function escreverAviso(el, texto) {' + corpo[1] + '\n})(el, ["Chegou ", { mono: "<b>x.pdf</b>" }, " na caixa de entrada"])', ctx);
+  assert.equal(el.filhos.length, 3);
+  assert.equal(el.filhos[1].className, 'fx-mono');
+  assert.equal(el.filhos[1].textContent, '<b>x.pdf</b>', 'o nome entra como texto, nunca como HTML');
+  assert.doesNotMatch(corpo[1], /innerHTML/);
+  assert.match(css, /\.fx-mono\{font:400 12px\/16px var\(--font-mono\)\}/);
+  // chegou arquivo: o nome vai no pedaço mono (tela 21)
+  assert.match(app, /\['Chegou ', \{ mono: m\.nome \|\| 'imagem' \}, ' na caixa de entrada'/);
+});
+
+test('tarja de chat esperando usa o sinal de espera; rotina parada é erro', () => {
+  const app = ler('renderer/app.js');
+  assert.match(app, /id, tipo: 'espera', fixo: true, acao: 'ir'/);
+  assert.match(app, /\{ espera: e\.txt \}/);
+  assert.match(app, /mostrarAviso\(\{ id: 'rotina-' \+ t\.nome, tipo: 'erro', fixo: true, acao: 'ver'/);
+  // o triângulo é de alerta/erro; espera é o círculo com "!" desenhado no CSS
+  assert.match(app, /function icoDoAviso\(tipo\) \{ return tipo === 'espera' \? ''/);
+  assert.match(css, /\.fx-espera \.fx-ic::before\{content:"!"[^}]*background:var\(--status-wait\)/);
+  assert.match(css, /\.fx-destaque\{color:var\(--status-wait-text\)\}/);
+});
+
+test('muitas abas: encolhem antes de rolar e a borda escondida se apaga', () => {
+  assert.match(css, /\.aba\{[^}]*flex:0 1 auto/);
+  // o piso de 104 não pode alargar aba curta (a "Zouti 1" do design tem 71)
+  assert.match(css, /\.aba\{min-width:0;min-width:calc-size\(max-content, min\(size, 104px\)\)\}/);
+  assert.match(css, /\.aba\.ativa\{flex-shrink:0;/);
+  assert.match(css, /animation:abas-bordas linear both;animation-timeline:scroll\(self inline\)/);
+  assert.match(css, /@property --abas-borda-e\{[^}]*initial-value:0px\}/);
+});
+
+test('sheet Nova aba aberta: cápsula "Nova aba" fora da lista de abas', () => {
+  for (const f of HTMLS) {
+    const topo = (ler(f).match(/<div id="abasTopo">([\s\S]*?)\n<\/div>/) || [])[1] || '';
+    const lista = topo.indexOf('id="abasLista"'), prov = topo.indexOf('class="aba-provisoria"'), mais = topo.indexOf('id="btnNovaAba"');
+    assert.ok(lista > 0 && prov > lista && mais > prov, f + ': a cápsula fica entre a lista e o "+"');
+    // sem a classe .aba: o arrastar e o clique procuram '#abasTopo .aba'
+    assert.doesNotMatch(topo, /class="aba aba-provisoria|class="aba-provisoria aba/);
+  }
+  assert.match(css, /body:has\(> #novaAba:not\(\.hidden\)\) \.aba-provisoria\{display:flex\}/);
+});
+
+test('divisor de 1pt em x=52 também com a coluna lateral aberta', () => {
+  assert.match(css, /#dragbar\.hidden \+ #panes\{border-left:1px solid var\(--separator\)\}/);
+  assert.match(css, /#sidebar\{border-left:1px solid var\(--separator\)\}/);
 });
 
 test('barra de ícones: Conversas, separador e as ferramentas da janela', () => {

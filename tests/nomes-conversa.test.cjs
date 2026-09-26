@@ -644,3 +644,11 @@ test('a lista esconde as conversas do robô de memória (claude-mem), como os ou
   assert.ok(re.test('/Users/h/.claude/projects/-Users-h--claude-mem-observer-sessions/a.jsonl'));
   assert.ok(!re.test('/Users/h/.claude/projects/-Users-h-Desktop-Projetos-claude-Pedro/a.jsonl'));
 });
+
+test('a lista esconde também conversa de teste (pasta temporária) e o robô do chat do webinário', () => {
+  const re = new RegExp(main.match(/const PASTA_DE_ROBO = \/(.*)\/;/)[1]);
+  for (const p of ['/private/tmp/ck-e2e', '/tmp', '/Users/h/Desktop/Projetos-claude/Pedro/2026-09-12_chat-ao-vivo-zoom']) assert.ok(re.test(p), p);
+  for (const p of ['/Users/h/Desktop/Projetos-claude/Pedro', '/Users/h/tmpx', '/Users/homeromotti']) assert.ok(!re.test(p), p);
+  assert.match(main, /PASTA_DE_ROBO\.test\(fi\.cwd \|\| ''\)\)\) continue;/, 'Claude');
+  assert.match(main, /if \(!incluirRobos && PASTA_DE_ROBO\.test\(fi\.cwd \|\| ''\)\) continue;/, 'Codex');
+});

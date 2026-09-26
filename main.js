@@ -2598,6 +2598,9 @@ function headRead(file, bytes) {
 const ENTRADAS_DE_GENTE = ['claude-vscode', 'cockpit', 'cli', 'claude-code'];
 // pastas de conversa que são só de robô (o observador do claude-mem grava uma conversa por anotação)
 const CONVERSA_DE_ROBO = /[\/\\]-Users-[^\/\\]*-claude-mem-observer-sessions[\/\\]/;
+/* e as que rodam em pasta de robô: a pasta temporária (testes de script, "responda apenas: ok") e a do
+   robô que lê o chat do webinário ao vivo (46 conversas iguais na lista em 26/09) */
+const PASTA_DE_ROBO = /^(?:\/private)?\/tmp(?:\/|$)|chat-ao-vivo-zoom(?:\/|$)/;
 
 const INDICE_PATH = () => path.join(app.getPath('userData'), 'indice-conversas.json');
 let indice = null;
@@ -2673,7 +2676,7 @@ function claudeSessions(limit, incluirRobos) {
     if (!incluirRobos && fi.entrada && !ENTRADAS_DE_GENTE.includes(fi.entrada)) continue;
     /* 26/09: as ~600 conversas do robô de memória (claude-mem, desligado em 24/09: "Condense the tool
        payload…") não têm entrypoint gravado e passavam pelo filtro de cima — eram metade da lista. */
-    if (!incluirRobos && CONVERSA_DE_ROBO.test(it.f)) continue;
+    if (!incluirRobos && (CONVERSA_DE_ROBO.test(it.f) || PASTA_DE_ROBO.test(fi.cwd || ''))) continue;
     let title = nomesMeus[it.id] || fi.title;
     if (!title) continue;
     out.push({ engine: 'claude', id: it.id, title, cwd: fi.cwd || HOME, when: it.mtime, file: it.f, entrada: fi.entrada });
@@ -2907,6 +2910,7 @@ function codexSessions(incluirRobos, nomesDoApp) {
     const fi = fichaCodex(it);
     lidos++;
     if (!incluirRobos && fi.entrada && !ORIGENS_DE_GENTE.includes(fi.entrada)) continue;
+    if (!incluirRobos && PASTA_DE_ROBO.test(fi.cwd || '')) continue;
     const id = fi.sid || it.id;
     const title = meus[id] || (nomesDoApp && nomesDoApp[id]) || fi.title;
     if (!title) continue;

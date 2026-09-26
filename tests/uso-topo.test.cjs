@@ -76,3 +76,18 @@ test('no Mac o uso mora no topo, não na coluna; e o topo não é área de arras
   assert.doesNotMatch(html, /id="cvUso"/);
   assert.match(css, /#usoTopo\{[^}]*-webkit-app-region:no-drag/);
 });
+
+test('Grok com a semana aberta e nada gasto (sem creditUsagePercent) vira 0%, como no Codenotch', () => {
+  const main = fs.readFileSync(path.join(raiz, 'main.js'), 'utf8');
+  const pegarM = (nome) => { const i = main.indexOf('function ' + nome + '('); let k = main.indexOf('{', i), d = 0;
+    for (; k < main.length; k++) { if (main[k] === '{') d++; else if (main[k] === '}' && --d === 0) break; } return main.slice(i, k + 1); };
+  const ctx = {}; vm.createContext(ctx);
+  vm.runInContext(pegarM('pctDoGrok') + pegarM('janelasDoGrok') + ';this.j = janelasDoGrok;', ctx);
+  // a resposta real do billing?format=credits no primeiro dia da semana
+  const cfg = { currentPeriod: { type: 'USAGE_PERIOD_TYPE_WEEKLY', start: '2026-09-26T02:15:49Z', end: '2099-10-03T02:15:49Z' },
+    onDemandCap: { val: 0 }, onDemandUsed: { val: 0 } };
+  const r = ctx.j(cfg, 0);
+  assert.equal(r.semana.pct, 0);
+  assert.equal(r.sessao, null);
+  assert.equal(ctx.j({ onDemandCap: { val: 0 } }, 0).semana, null, 'sem período nenhum continua sem número');
+});

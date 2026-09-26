@@ -3701,6 +3701,10 @@ function pctDoGrok(cfg) {
   const cap = cfg.onDemandCap && Number(cfg.onDemandCap.val);
   const used = cfg.onDemandUsed && Number(cfg.onDemandUsed.val);
   if (cap > 0 && Number.isFinite(used)) return used / cap * 100;
+  /* 26/09: com a semana aberta e nada gasto ainda, o Grok manda o período e nenhum número de
+     uso (sem creditUsagePercent). O anel sumia do topo; o Codenotch lê o mesmo endereço e mostra
+     0%. Período de uso aberto sem número = nada usado nele. */
+  if (cfg.currentPeriod && cfg.currentPeriod.end) return 0;
   return null;
 }
 function janelasDoGrok(cfg, velho) {

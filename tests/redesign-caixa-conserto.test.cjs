@@ -296,12 +296,11 @@ test('botão do plano só no Codex; nos outros motores ele some', () => {
   assert.match(pegar('pintarControlesCodex'), /if \(!codex\) \{ pintarPlano\(P\); return; \}/);
 });
 
-/* 26/09: "tem que funcionar como antes, só que com o visual de hoje" — o modo volta a ser
-   escrito: raio + Entra, fila + Fila, numa pílula discreta */
-test('modo de envio: raio no Entra, fila na Fila, sempre com a palavra', () => {
+/* 26/09 (de novo): "tira a palavra, deixa só o ícone" — raio = Entra, fila = Fila; clicar troca */
+test('modo de envio: só o ícone, raio no Entra e fila na Fila', () => {
   const corpo = /const pintarEnvio = \(\) => \{([\s\S]*?)\n  \};/.exec(app)[1];
-  assert.match(corpo, /ico\(entra \? 'zap' : 'queue'\)/);
-  assert.match(css, /\.p-modoenvio span\{display:inline;/);
+  assert.match(corpo, /btEnvio\.innerHTML = ico\(entra \? 'zap' : 'queue'\);/);
+  assert.match(css, /\.cmp-bar \.p-modoenvio\{width:26px;/);
 });
 
 /* ============================ 6. reduzir movimento ============================ */

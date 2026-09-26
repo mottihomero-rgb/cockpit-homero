@@ -281,59 +281,37 @@ html[data-theme$="-hc"] .side-pastas{box-shadow:var(--shadow-float),inset 0 0 0 
 .grp-corpo{margin-top:1px}
 
 /* ============================ TORRE ============================ */
-.torre{padding:0 0 12px 8px;gap:1px;font:var(--f-body)}
-/* só aparece sem chat nenhum aberto ("Nenhum chat aberto"): o resumo com a contagem saiu da tela */
-.torre-resumo{padding:0 8px 10px;font:var(--f-sub);color:var(--label-3);font-variant-numeric:tabular-nums}
-/* grupo por aba: 11, 600, label-2; a bolinha azul saiu (azul é "resposta nova") */
-.torre-aba{margin-top:15px;padding:0 8px 4px;gap:8px;font:600 11px/14px var(--font-sans);color:var(--label-2);
+/* 26/09 (pedido dele): a torre mora no topo das Conversas, num cartão cinza de canto 10 — a
+   separação da lista de baixo é o próprio cartão (fundo fill-3) + o título "Conversas" logo embaixo.
+   Grupo = 11/600 label-2 com a contagem em label-3. Linha = 26 de altura: logo 14, título 13 e, à
+   direita, o tempo (se trabalhando) e o sinal. Sem nada pendente o cartão some (hidden). */
+.torre-bloco{flex:none;margin:10px 8px 0;padding:6px 0;border-radius:10px;background:var(--fill-3);
+  max-height:40%;display:flex;flex-direction:column;min-height:0}
+.torre{padding:0 4px;gap:0;font:var(--f-body);flex:1}
+.torre-aba{margin-top:6px;padding:0 8px 2px;gap:6px;font:600 11px/14px var(--font-sans);color:var(--label-2);
   text-transform:none;letter-spacing:0}
-/* o primeiro grupo cola no título (y=46 no desenho) */
-.torre-aba:first-child,.torre-resumo + .torre-aba{margin-top:0}
+.torre-aba:first-child{margin-top:0}
 .torre-cor{display:none}
-.torre-conta{font-weight:400;color:var(--label-3);font-variant-numeric:tabular-nums}
-.torre-fora{padding-top:12px;border-top:1px solid var(--separator)}
-/* linha: logo de 14 + título + linha de estado (sinal + texto 11). Selecionada = o chat em foco */
-.torre-item{flex-wrap:wrap;align-items:flex-start;gap:0 8px;padding:6px 8px;border-radius:6px;
+.torre-conta{margin-left:0;font-weight:400;color:var(--label-3);font-variant-numeric:tabular-nums}
+.torre-item{flex-wrap:nowrap;align-items:center;gap:8px;height:26px;padding:0 8px;border-radius:6px;
   transition:background-color var(--dur-fast) ease-out}
-.torre-item:hover{background:var(--fill-3)}
+.torre-item:hover{background:var(--fill-2)}
 .torre-item.foco{background:var(--fill-1)}
-.torre-item.fora{cursor:default}
-.torre-item.fora:hover{background:transparent}
-.ti-logo{flex:none;width:14px;height:14px;margin-top:1px;display:flex;color:var(--label-2)}
+.ti-logo{flex:none;width:14px;height:14px;display:flex;color:var(--label-2)}
 .ti-logo svg{width:14px;height:14px}
 .ti-logo[data-motor="claude"]{color:var(--logo-claude)}
 .ti-logo[data-motor="codex"]{color:var(--logo-codex)}
 .ti-logo[data-motor="gemini"]{color:var(--logo-gemini)}
 .ti-logo[data-motor="grok"]{color:var(--logo-grok)}
 .ti-logo[data-motor="acp"]{color:var(--acp)}
-.ti-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.ti-cab{display:flex;align-items:center;gap:8px;min-width:0}
 .ti-tit{flex:1;min-width:0;font:var(--f-body);color:var(--label-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ti-caminho{font:400 12px/16px var(--font-mono)}
-.ti-ha{flex:none;font:var(--f-sub);color:var(--label-3);font-variant-numeric:tabular-nums}
-.ti-est{display:flex;align-items:center;gap:6px;min-width:0;font:var(--f-sub);color:var(--label-2);
-  font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
-.ti-est-txt{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.ti-est{flex:none;display:flex;align-items:center;gap:6px;font:var(--f-sub);color:var(--label-3);font-variant-numeric:tabular-nums}
+.ti-est-txt:empty{display:none}
 .ti-sinal:not(.rd-anel):not(.rd-espera):not(.rd-nova){display:none}
-/* resposta nova: ponto azul de 6 (na linha de estado da torre o desenho usa 6, não os 7 da aba) */
+/* resposta nova: ponto azul de 6 (na torre o desenho usa 6, não os 7 da aba) */
 .ti-sinal.rd-nova{width:6px;height:6px}
 .ti-sinal.rd-anel{width:9px;height:9px}
 .ti-sinal.rd-espera{width:12px;height:12px;font-size:9px}
-.torre-item.espera .ti-est{color:var(--status-wait-text)}
-.torre-item.vazio .ti-est{color:var(--label-3)}
-/* sessão de fora: caminho em mono + tempo; embaixo "Copiar comando" e "Abrir pasta" (22, fill-2).
-   Os dois somam 227 e o vão é de 226: o próprio desenho passa 1pt da borda do item (o "Abrir pasta"
-   termina em x=266). O recuo de -2 à direita (1 do desenho + 1 de folga para o arredondamento
-   do texto) mantém os dois lado a lado nos 280;
-   com a coluna mais estreita (a alça deixa ir até 220) o segundo DESCE para a linha de baixo em
-   vez de sair da coluna cortado ("Abri"). */
-.ti-acoes{flex:1 0 calc(100% + 2px);flex-wrap:wrap;gap:6px;margin-right:-2px;padding:6px 0 0 22px}
-.ti-acao{flex:none;height:22px;padding:0 8px;display:flex;align-items:center;gap:5px;border:0;border-radius:6px;
-  background:var(--fill-2);color:var(--label-1);font:400 12px/15px var(--font-sans);white-space:nowrap;align-self:auto;
-  transition:background-color var(--dur-fast) ease-out}
-.ti-acao .ic{width:12px;height:12px}
-.ti-acao:hover{background:var(--fill-1);color:var(--label-1);border-color:transparent}
-.ti-acao:active{background:var(--separator-strong)}
 
 /* ============================ ROTINAS ============================ */
 .rot{padding:0 0 12px 8px;gap:2px;font:var(--f-body)}
@@ -387,27 +365,29 @@ html[data-theme$="-hc"] .side-pastas{box-shadow:var(--shadow-float),inset 0 0 0 
 /* ============================ AJUSTES ============================
    Grupos Geral, Entrada e Avançado: rótulo 11/600 em label-2 e o cartão em fill-4, raio 10,
    contorno de 1pt. Cada linha tem 36: título + (i) + controle, fio de 1pt entre as linhas. */
-.settings{flex:1;min-height:0;overflow:auto;padding:0 4px 16px 12px;display:flex;flex-direction:column;gap:14px}
-.aj-grupo{display:flex;flex-direction:column;gap:6px}
-.aj-gtit{padding:0 4px;font:600 11px/14px var(--font-sans);color:var(--label-2)}
+/* 26/09 (pedido dele): tudo um pouco menor — linha de 30 (era 36), letra 12 (era 13), toggle 28×16,
+   miniaturas 52×37, grupos com 10 entre eles (era 14) */
+.settings{flex:1;min-height:0;overflow:auto;padding:0 4px 14px 12px;display:flex;flex-direction:column;gap:10px}
+.aj-grupo{display:flex;flex-direction:column;gap:4px}
+.aj-gtit{padding:0 4px;font:600 10.5px/13px var(--font-sans);color:var(--label-2)}
 .aj-cartao{display:flex;flex-direction:column;border-radius:10px;background:var(--fill-4);
   box-shadow:inset 0 0 0 1px var(--separator)}
-.aj{display:flex;flex-wrap:wrap;align-items:center;column-gap:8px;min-height:36px;padding:0 10px;
+.aj{display:flex;flex-wrap:wrap;align-items:center;column-gap:8px;min-height:30px;padding:0 9px;
   border-top:1px solid var(--separator)}
 .aj:first-child{border-top:0}
 /* 36 de linha + o fio de 1 em cima = 37 a partir da segunda (o cartão Geral mede 110, como no
    desenho); o fio é borda, então sem isto ele comia 1pt da linha */
-.aj + .aj{border-top:1px solid var(--separator);min-height:37px}
+.aj + .aj{border-top:1px solid var(--separator);min-height:31px}
 /* O título não encolhe abaixo da palavra mais comprida + (i): com a alça no mínimo (220), o
    min-width:0 deixava "Caixa de entrada" com 56 de largura, o (i) vazava para baixo do botão da
    pasta e o balão não abria. Agora quem cede é o pop-up (ele corta o caminho). */
 .aj-tit{flex:1;min-height:0;margin:0;display:flex;align-items:center;justify-content:space-between;gap:8px;
-  font:var(--f-body);color:var(--label-1);text-transform:none;letter-spacing:0}
-.aj-txt{flex:none;font:400 12px/15px var(--font-sans);color:var(--label-2);font-variant-numeric:tabular-nums}
+  font:400 12px/15px var(--font-sans);color:var(--label-1);text-transform:none;letter-spacing:0}
+.aj-txt{flex:none;font:400 11px/14px var(--font-sans);color:var(--label-2);font-variant-numeric:tabular-nums}
 /* (i): a explicação fica no tooltip, nunca na tela */
-.info{width:18px;height:18px;margin:0 -2px;border-radius:50%;color:var(--label-3);
+.info{width:16px;height:16px;margin:0 -2px;border-radius:50%;color:var(--label-3);
   transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
-.info svg{width:14px;height:14px}
+.info svg{width:12px;height:12px}
 .info:hover,.info:focus-visible,.info.aberto{background:var(--fill-3);color:var(--label-1)}
 .dica{max-width:250px;padding:6px 10px;border:0;border-radius:8px;background:var(--bg-elevated);color:var(--label-1);
   font:400 12px/16px var(--font-sans);box-shadow:var(--shadow-float)}
@@ -421,12 +401,12 @@ html[data-theme$="-hc"] .dica{box-shadow:var(--shadow-float),inset 0 0 0 1px var
 /* toggle 32×18: bolinha branca de 14; ligado em --status-ok (verde do sistema, não o azul) */
 .settings .chave{flex:none;margin:0;min-height:0;gap:0;flex-direction:row;justify-content:flex-end}
 .settings .chave span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
-.chave input{width:32px;height:18px;margin:0;border:0;border-radius:9px;background:var(--fill-1);
+.chave input{width:28px;height:16px;margin:0;border:0;border-radius:8px;background:var(--fill-1);
   transition:background-color var(--dur-fast) ease-out}
-.chave input::after{top:2px;left:2px;width:14px;height:14px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);
+.chave input::after{top:2px;left:2px;width:12px;height:12px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);
   transition:transform var(--dur-fast) ease-out}
 .chave input:checked{background:var(--status-ok)}
-.chave input:checked::after{transform:translateX(14px);background:#fff}
+.chave input:checked::after{transform:translateX(12px);background:#fff}
 .chave input:focus-visible{outline:none;box-shadow:var(--anel-foco)}
 .chave input:disabled{background:var(--fill-2);opacity:.45;cursor:default}
 /* contraste aumentado: o trilho desligado ganha contorno (o fill-1 do claro some no cartão) */
@@ -443,7 +423,7 @@ html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inse
 
 /* Foto: círculo de 22 + botões small (22, fill-2, raio 6) */
 .foto-linha{flex:none;gap:6px}
-.foto-prev{width:22px;height:22px;border:0;background:var(--fill-2);color:var(--label-3);font-size:10px}
+.foto-prev{width:20px;height:20px;border:0;background:var(--fill-2);color:var(--label-3);font-size:10px}
 .foto-prev .ic{width:12px;height:12px}
 .foto-btns{flex:none;flex-direction:row;gap:6px}
 .foto-btns .btn-wide,.foto-btns .btn-wide:hover{width:auto}
@@ -453,8 +433,8 @@ html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inse
 @media (hover:hover){
   .aj:not(:hover):not(:focus-within) #btnFotoTirar{display:none}
 }
-.foto-btns .btn-wide,.aj-pop{height:22px;margin:0;padding:0 8px;border:0;border-radius:6px;background:var(--fill-2);
-  color:var(--label-1);font:400 12px/15px var(--font-sans);white-space:nowrap;
+.foto-btns .btn-wide,.aj-pop{height:20px;margin:0;padding:0 8px;border:0;border-radius:6px;background:var(--fill-2);
+  color:var(--label-1);font:400 11px/14px var(--font-sans);white-space:nowrap;
   transition:background-color var(--dur-fast) ease-out}
 .foto-btns .btn-wide:hover,.aj-pop:hover{background:var(--fill-1)}
 .foto-btns .btn-wide:active,.aj-pop:active{background:var(--separator-strong)}
@@ -463,7 +443,7 @@ html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inse
    ("Caixa de / entrada", como no desenho) em vez de 3. Na largura normal os 120 valem igual. */
 .aj-pop{flex:0 1 auto;min-width:0;max-width:min(120px,50%);padding:0 4px 0 8px;display:flex;align-items:center;gap:2px}
 .aj-pop .path-box{flex:0 1 auto;min-width:0;padding:0;border:0;border-radius:0;background:none;
-  font:400 12px/15px var(--font-sans);color:var(--label-1);user-select:none}
+  font:400 11px/14px var(--font-sans);color:var(--label-1);user-select:none}
 .aj-seta{flex:none;display:flex;color:var(--label-3)}
 .aj-seta .ic{width:12px;height:12px}
 
@@ -536,13 +516,13 @@ html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inse
 }
 
 /* Ajustes › Contas (26/09): logo + IA + conta e UM botão de vincular */
-.aj.aj-conta{flex-wrap:wrap;row-gap:6px;padding-top:7px;padding-bottom:7px}
+.aj.aj-conta{flex-wrap:wrap;row-gap:4px;padding-top:5px;padding-bottom:5px}
 .aj-conta .ajc-logo{flex:none}
 .aj-conta .ajc-txt{flex:1 1 60px;min-width:60px;display:flex;flex-direction:column}
-.aj-conta .ajc-n{font:var(--f-body);color:var(--label-1)}
-.aj-conta .ajc-e{font:400 11px/14px var(--font-sans);color:var(--label-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.aj-conta .ajc-bt{flex:none;height:22px;margin-left:auto;padding:0 10px;border:0;border-radius:6px;background:var(--fill-2);
-  color:var(--label-1);font:400 12px/15px var(--font-sans);white-space:nowrap;cursor:pointer;
+.aj-conta .ajc-n{font:400 12px/15px var(--font-sans);color:var(--label-1)}
+.aj-conta .ajc-e{font:400 10.5px/13px var(--font-sans);color:var(--label-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aj-conta .ajc-bt{flex:none;height:20px;margin-left:auto;padding:0 9px;border:0;border-radius:6px;background:var(--fill-2);
+  color:var(--label-1);font:400 11px/14px var(--font-sans);white-space:nowrap;cursor:pointer;
   transition:background-color var(--dur-fast) ease-out}
 .aj-conta .ajc-bt:hover{background:var(--fill-1)}
 .aj-conta .ajc-bt.destaque{background:var(--accent);color:var(--on-accent);font-weight:600}
@@ -579,13 +559,13 @@ html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inse
    Cada opção é uma miniatura de 64×46 (fundo de tela azul, a barra de cima e uma janela com os três
    semáforos) e o nome embaixo. A escolhida ganha o anel cinza de 3 e o nome em negrito. A linha do
    título fica em cima e as miniaturas embaixo: a coluna dos Ajustes é estreita. */
-.aj.aj-miniaturas{flex-direction:column;align-items:stretch;padding-top:10px;padding-bottom:10px;gap:8px}
+.aj.aj-miniaturas{flex-direction:column;align-items:stretch;padding-top:8px;padding-bottom:8px;gap:6px}
 .aj-miniaturas .aj-tit{flex:none}
-.aj-mini{display:flex;gap:10px;justify-content:flex-start;flex-wrap:wrap}
+.aj-mini{display:flex;gap:8px;justify-content:flex-start;flex-wrap:wrap}
 .mini-op{display:flex;flex-direction:column;align-items:center;gap:5px;padding:0;border:0;background:transparent;
-  color:var(--label-2);font:400 11px/14px var(--font-sans);cursor:default}
+  color:var(--label-2);font:400 10.5px/13px var(--font-sans);cursor:default}
 .mini-op.on{color:var(--label-1);font-weight:600}
-.mini-img{position:relative;display:block;width:64px;height:46px;border-radius:8px;overflow:hidden;
+.mini-img{position:relative;display:block;width:64px;height:46px;border-radius:8px;overflow:hidden;zoom:.8;
   box-shadow:0 0 0 1px rgba(0,0,0,.14);outline:3px solid transparent;outline-offset:2px;
   transition:outline-color var(--dur-fast) ease-out}
 .mini-op:hover .mini-img{outline-color:var(--fill-1)}

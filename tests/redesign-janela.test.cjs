@@ -143,8 +143,9 @@ test('divisor de 1pt em x=52 também com a coluna lateral aberta', () => {
 test('barra de ícones: Conversas, separador e as ferramentas da janela', () => {
   for (const f of HTMLS) {
     const nav = (ler(f).match(/<nav id="activitybar">([\s\S]*?)<\/nav>/) || [])[1] || '';
-    const conversas = nav.indexOf('data-view="conversas"'), sep = nav.indexOf('class="act-sep"'), torre = nav.indexOf('data-view="torre"');
-    assert.ok(conversas > 0 && sep > conversas && torre > sep, f + ': o separador fica entre Conversas e a Torre');
+    // 26/09: a torre foi para dentro das Conversas; depois do separador vêm os Ajustes
+    const conversas = nav.indexOf('data-view="conversas"'), sep = nav.indexOf('class="act-sep"'), aj = nav.indexOf('data-view="settings"');
+    assert.ok(conversas > 0 && sep > conversas && aj > sep, f + ': o separador fica entre Conversas e os Ajustes');
   }
   assert.match(css, /\.act-sep\{flex:none;width:20px;height:1px;margin:6px 0;background:var\(--separator\)\}/);
 });

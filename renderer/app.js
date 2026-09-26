@@ -871,7 +871,8 @@ function newPane(opts = {}) {
   /* O anel do contexto sempre disse "clique para resumir" na dica, mas nunca teve clique
      ligado — nem no Mac nem no celular. Agora tem: é o mesmo resumir do menu de ações. */
   const btCompactar = $('.p-compactar', el);
-  if (btCompactar) btCompactar.addEventListener('click', (e) => { e.stopPropagation(); compactarConversa(P); });
+  // 26/09 (pedido dele): clicar abre a janelinha com os números; resumir só pelo botão dela
+  if (btCompactar) btCompactar.addEventListener('click', (e) => { e.stopPropagation(); abrirMemoriaDaConversa(P, btCompactar); });
   pintarAnel(P);   // o anel aparece desde o chat vazio (README: sempre na barra); nasce vazio
 
   // pasta
@@ -1036,7 +1037,9 @@ function newPane(opts = {}) {
     /* 26/09 (pedido dele: "tem que funcionar como antes, só que com o visual de hoje"): o modo
        volta a ficar ESCRITO na caixa — raio + "Entra" ou fila + "Fila". Só com o fundo mudando
        ele não via em qual modo estava, e o clique parecia não fazer nada. */
-    btEnvio.innerHTML = ico(entra ? 'zap' : 'queue') + '<span>' + (entra ? 'Entra' : 'Fila') + '</span>';
+    // 26/09 (de novo, pedido dele): só o ícone — raio = Entra, fila = Fila; o nome fica na dica
+    btEnvio.innerHTML = ico(entra ? 'zap' : 'queue');
+    btEnvio.setAttribute('aria-label', entra ? 'Entra' : 'Fila');
     btEnvio.classList.toggle('ligado', !entra);
     btEnvio.setAttribute('aria-pressed', String(!entra));
     btEnvio.title = entra
@@ -1674,7 +1677,8 @@ function paintEngine(P) {
     // clique segue ligado porque o trocarMotor é quem diz o porquê, em cima da caixa de texto.
     const naoDa = motorIndisponivelNaPasta(b.dataset.motor, P.cwd);
     b.classList.toggle('apagado', !!naoDa);
-    b.title = naoDa || '';
+    // 26/09: o nome da IA saiu do botão (só o logo): ele vai na dica
+    b.title = naoDa || nomeDoMotor(b.dataset.motor);
   });
   pintarControlesCodex(P);
   if (P === focusPane) pintarCorFoco();
@@ -1856,7 +1860,7 @@ function pintarAnel(P) {
 
   // 26/09: o anel mora no topo do chat, no lugar do "84k / 1000k": o número vai na dica
   const conta = (P.tokens && P.janela) ? Math.round(P.tokens / 1000) + 'k de ' + Math.round(P.janela / 1000) + 'k · ' : '';
-  bt.title = 'Memória da conversa: ' + conta + pct + '%\nClique para resumir e liberar espaço sem perder o fio.';
+  bt.title = 'Memória da conversa: ' + conta + pct + '%';
 }
 
 function setDot(P, state) {
@@ -5468,14 +5472,17 @@ function fecharRespostaDaTorre() {
     t.volta.pai.insertBefore(t.volta.el, t.volta.depois && t.volta.depois.parentNode === t.volta.pai ? t.volta.depois : null);
   }
   t.veu.remove();
-  if (torreVisivel()) pintarTorre(false);
+  if (torreVisivel()) pintarTorre();
 }
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && torreResposta && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); fecharRespostaDaTorre(); }
 }, true);
-/* o número no ícone da torre: quantos chats esperam por ele ou têm resposta nova para ler */
+/* o número no ícone de Conversas (26/09: a torre mora lá): quantos chats esperam por ele ou têm
+   resposta nova para ler. Com a coluna aberta, a torre repinta logo depois (sem esperar os 4 s). */
+let torreAgendada = 0;
 function pintarSeloTorre() {
-  const bt = $('.act[data-view="torre"]'); if (!bt) return;
+  if (torreVisivel() && !torreAgendada) torreAgendada = setTimeout(() => { torreAgendada = 0; if (torreVisivel()) pintarTorre(); }, 300);
+  const bt = $('.act[data-view="conversas"]'); if (!bt) return;
   const selo = $('.act-selo', bt); if (!selo) return;
   let n = 0;
   for (const P of panes.values()) { const c = estadoDoPainel(P).cls; if (c === 'espera' || (P.nova && c !== 'ocupado')) n++; }
@@ -5528,6 +5535,44 @@ async function somarTempoDoHistorico(P, partes) {
 }
 // enquanto trabalha, o relógio anda (só repinta quando o texto muda)
 setInterval(() => { for (const P of panes.values()) if (P.busy) pintarTempo(P); }, 1000);
+
+/* ---- janelinha da memória da conversa (26/09, pedido dele) ----
+   Clicar na bolinha do topo do chat não resume mais na hora: abre esta janelinha com quanto a
+   conversa já usou, o limite do modelo e a porcentagem, e os botões Resumir e Fechar. */
+let memoriaAberta = null;
+function fecharMemoriaDaConversa() { if (memoriaAberta) { memoriaAberta.remove(); memoriaAberta = null; } }
+function abrirMemoriaDaConversa(P, bt) {
+  if (memoriaAberta) { fecharMemoriaDaConversa(); return; }
+  const usado = P.tokens || 0, janela = P.janela || janelaConhecida(P) || 0;
+  const pct = janela ? Math.min(100, Math.round((usado / janela) * 100)) : 0;
+  const k = (n) => Math.round(n / 1000).toLocaleString('pt-BR') + 'k';
+  const d = document.createElement('div');
+  d.id = 'memoriaConversa';
+  d.dataset.nivel = pct >= 90 ? 'alto' : pct >= 70 ? 'medio' : '';
+  d.innerHTML = '<div class="mc-tit">Memória da conversa</div>'
+    + '<div class="mc-num"><span class="mc-pct"></span><span class="mc-de"></span></div>'
+    + '<div class="mc-barra"><span></span></div>'
+    + '<div class="mc-linhas"><div><span>Usado</span><b class="mc-u"></b></div><div><span>Limite</span><b class="mc-l"></b></div>'
+    + '<div><span>Faltam</span><b class="mc-f"></b></div></div>'
+    + '<div class="mc-acoes"><button class="mc-fechar" type="button">Fechar</button><button class="mc-resumir" type="button">Resumir</button></div>';
+  $('.mc-pct', d).textContent = pct + '%';
+  $('.mc-de', d).textContent = janela ? k(usado) + ' de ' + k(janela) : k(usado);
+  $('.mc-barra span', d).style.width = pct + '%';
+  $('.mc-u', d).textContent = k(usado);
+  $('.mc-l', d).textContent = janela ? k(janela) : '—';
+  $('.mc-f', d).textContent = janela ? k(Math.max(0, janela - usado)) : '—';
+  $('.mc-fechar', d).onclick = fecharMemoriaDaConversa;
+  $('.mc-resumir', d).onclick = () => { fecharMemoriaDaConversa(); compactarConversa(P); };
+  document.body.appendChild(d);
+  memoriaAberta = d;
+  const r = bt.getBoundingClientRect(), w = d.offsetWidth || 240;
+  d.style.top = Math.round(r.bottom + 6) + 'px';
+  d.style.left = Math.round(Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8))) + 'px';
+}
+document.addEventListener('mousedown', (e) => {
+  if (memoriaAberta && !memoriaAberta.contains(e.target) && !e.target.closest('.p-compactar')) fecharMemoriaDaConversa();
+}, true);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && memoriaAberta) { e.stopPropagation(); fecharMemoriaDaConversa(); } }, true);
 
 function renderizarHistorico(P, m) {
   const role = m.role || m.kind || m.type;
@@ -6187,7 +6232,8 @@ function pintarModo(P) {
   /* Na barra da caixa o redesenho usa só o cadeado: aberto = segue sem perguntar (Auto e Sem
      pedir permissão), fechado = pede antes. O ícone próprio de cada modo continua no menu. */
   $('.modo-ic', P.el).innerHTML = ico(m.id === 'bypass' || m.id === 'auto' ? 'lock-open' : 'lock');
-  $('.modo-nome', P.el).textContent = m.nome;
+  // 26/09 (pedido dele): na caixa, "Sem pedir permissão" aparece como "Liberado" (o menu segue com o nome inteiro)
+  $('.modo-nome', P.el).textContent = m.id === 'bypass' ? 'Liberado' : m.nome;
   pintarPlano(P);   // o botão do plano (fora do Codex) é este mesmo modo
 }
 
@@ -11175,8 +11221,6 @@ document.querySelectorAll('[data-new]').forEach(b =>
 /* leva 10.2: "Atualizar agora" da torre. O `true` fura o cache de 30s da lista de fora — é o
    único jeito de ver na hora um Claude que ele acabou de abrir no Terminal. */
 {
-  const btTorre = document.getElementById('btnTorreAtualizar');
-  if (btTorre) { btTorre.innerHTML = ico('refresh-cw'); btTorre.addEventListener('click', () => pintarTorre(true)); }
 }
 
 /* ============ arrastar: chats dentro da aba, e abas entre si ============ */
@@ -11720,10 +11764,8 @@ document.querySelectorAll('.act').forEach(b => b.addEventListener('click', () =>
    quanto tempo, se parou esperando você) mais as sessões do Claude que rodam FORA do Cockpit
    nesta máquina (VS Code, Terminal, robô agendado). Antes só havia uma bolinha por aba: com 4
    chats em 3 abas, saber qual estava travado esperando permissão exigia abrir uma por uma. */
-let torreAgentes = { quando: 0, itens: [], erro: '', velha: false };
-let torreGen = 0;   // repaint em voo: o mais novo ganha, o antigo não monta por cima
 function torreVisivel() {
-  const v = $('.side-view[data-view="torre"]'), lat = $('#sidebar');
+  const v = $('.side-view[data-view="conversas"]'), lat = $('#sidebar');
   return !!v && !v.classList.contains('hidden') && !!lat && !lat.classList.contains('hidden');
 }
 const nomeMotor = (e) => ({ claude: 'Claude', codex: 'Codex', acp: 'ACP', gemini: 'Gemini', grok: 'Grok' }[e] || 'IA');
@@ -11757,86 +11799,46 @@ function irAoChat(P) {
   setFocus(P);
   const inp = $('.p-input', P.el); if (inp) inp.focus();
 }
-/* Linha da torre no desenho novo (25/09): logo da IA (a cor dela SÓ no logo) + título + linha de
-   estado com o sinal na frente — anel girando = trabalhando, círculo âmbar com "!" = esperando
-   você. Parado não tem sinal. O nome da IA saiu do título (o logo já diz) e foi para a dica.
-   Sessão de FORA (com `caminho`): o caminho em mono + há quanto tempo, e os botões embaixo. */
-function linhaDaTorre({ titulo, motor, estado, aoClicar, acoes, engine, foco, caminho, ha, nova, onde }) {
+/* Linha da torre (26/09, versão enxuta dentro das Conversas): UMA linha — logo da IA (a cor dela
+   SÓ no logo) + título + à direita o sinal: "!" âmbar = esperando você, anel girando + tempo =
+   trabalhando, ponto azul = resposta nova. A frase inteira do estado e a pasta vão na dica. */
+function linhaDaTorre({ titulo, motor, estado, aoClicar, engine, foco, nova, onde }) {
   const d = document.createElement('div');
   d.className = 'torre-item ' + (estado.cls || '') + (foco ? ' foco' : '');
-  d.innerHTML = '<span class="ti-logo"></span><span class="ti-txt"><span class="ti-cab"><span class="ti-tit"></span></span>'
-    + '<span class="ti-est"><span class="ti-sinal"></span><span class="ti-est-txt"></span></span></span>';
+  d.innerHTML = '<span class="ti-logo"></span><span class="ti-tit"></span><span class="ti-est"><span class="ti-est-txt"></span><span class="ti-sinal"></span></span>';
   if (engine) { const lg = $('.ti-logo', d); lg.dataset.motor = engine; lg.innerHTML = svgMotor(engine); }
-  // textContent, nunca innerHTML: título de conversa e caminho de pasta vêm de fora
-  const tit = $('.ti-tit', d);
-  if (caminho) {
-    tit.textContent = caminho;
-    tit.classList.add('ti-caminho');
-    if (ha) { const q = document.createElement('span'); q.className = 'ti-ha'; q.textContent = ha; $('.ti-cab', d).appendChild(q); }
-    $('.ti-est', d).remove();
-  } else {
-    tit.textContent = titulo;
-    const txt = String(estado.txt || '');
-    /* A linha de estado usa as palavras curtas do desenho (26/09): esperando = "Esperando você"
-       (autorizar ou responder, o detalhe fica na dica), parado com o motor ligado = "Pronto".
-       O estadoDoPainel continua dizendo a frase inteira: a tarja da faixa de avisos usa ela. */
-    const curto = estado.cls === 'espera' ? 'esperando você' : txt === 'parado, motor ligado' ? 'pronto' : txt;
-    // 26/09: a torre não separa mais por pasta: a pasta (ou VPS) vem na linha de estado
-    const comOnde = (t) => onde ? t + ' · ' + onde : t;
-    // "trabalhando há 22s" vira "Trabalhando há 22s": a linha começa com maiúscula, como no desenho
-    $('.ti-est-txt', d).textContent = comOnde(curto.charAt(0).toUpperCase() + curto.slice(1));
-    if (curto !== txt) $('.ti-est', d).title = txt.charAt(0).toUpperCase() + txt.slice(1);
-    const sinal = $('.ti-sinal', d);
-    /* ponto azul = resposta nova que ele ainda não viu (chegou com a aba dela no fundo). Pronto
-       sem novidade não tem sinal: a ausência é o estado de repouso (folha do Sistema). */
-    sinal.className = 'ti-sinal' + (estado.cls === 'ocupado' ? ' rd-anel' : estado.cls === 'espera' ? ' rd-espera'
-      : nova && estado.cls === 'parado' ? ' rd-nova' : '');
-    // a torre repinta de 4 em 4 s: o giro nasce na fase do relógio, senão o anel pularia a cada repintura
-    if (estado.cls === 'ocupado') sinal.style.animationDelay = -(Date.now() % 1000) + 'ms';
-  }
-  if (aoClicar) { d.title = 'Ir até o chat' + (motor ? ' · ' + motor : ''); d.addEventListener('click', aoClicar); }
-  else { d.classList.add('fora'); d.title = [titulo, motor].filter(Boolean).join(' · '); }
-  /* Os botões vão numa LINHA PRÓPRIA, embaixo. Ao lado do texto eles comiam a largura inteira
-     da coluna (medido: 206px de coluna, dois botões de ~170px) e o título ficava com zero
-     pixel — a linha aparecia só com os botões, sem dizer de qual sessão era. */
-  if ((acoes || []).length) {
-    const fila = document.createElement('div');
-    fila.className = 'ti-acoes';
-    for (const ac of acoes) {
-      const b = document.createElement('button');
-      b.className = 'ti-acao';
-      b.innerHTML = (ac.ic ? ico(ac.ic) : '') + '<span></span>';
-      b.lastChild.textContent = ac.rotulo;
-      b.title = ac.dica || '';
-      b.addEventListener('click', (e) => { e.stopPropagation(); ac.aoClicar(b); });
-      fila.appendChild(b);
-    }
-    d.appendChild(fila);
-  }
+  // textContent, nunca innerHTML: o título da conversa vem de fora
+  $('.ti-tit', d).textContent = titulo;
+  const txt = String(estado.txt || '');
+  // trabalhando: só o tempo ("2min") ao lado do anel; o resto da frase vai para a dica
+  if (estado.cls === 'ocupado') $('.ti-est-txt', d).textContent = (/há ([^·]+)/.exec(txt) || [, ''])[1].trim();
+  const sinal = $('.ti-sinal', d);
+  sinal.className = 'ti-sinal' + (estado.cls === 'ocupado' ? ' rd-anel' : estado.cls === 'espera' ? ' rd-espera'
+    : nova && estado.cls === 'parado' ? ' rd-nova' : '');
+  // a torre repinta de 4 em 4 s: o giro nasce na fase do relógio, senão o anel pularia a cada repintura
+  if (estado.cls === 'ocupado') sinal.style.animationDelay = -(Date.now() % 1000) + 'ms';
+  // a frase inteira do estadoDoPainel ("esperando você autorizar", "trabalhando há 2min · lendo") + a pasta
+  d.title = [titulo, txt.charAt(0).toUpperCase() + txt.slice(1) + (onde ? ' · ' + onde : ''), motor].filter(Boolean).join('\n');
+  if (aoClicar) d.addEventListener('click', aoClicar);
   return d;
 }
-async function pintarTorre(forcarAgentes) {
-  const box = $('#torre');
+function pintarTorre() {
+  const box = $('#torre'), bloco = $('#torreBloco');
   if (!box) return;
-  const gen = ++torreGen;
-  // conversas que já estão abertas AQUI não entram na lista de "fora do Cockpit"
-  const sessoesDaqui = new Set();
-  for (const P of panes.values()) for (const s of [P.sessaoId, P.resumeId]) if (s) sessoesDaqui.add(s);
-
   /* 26/09 (pedido do Hugo, por áudio): a torre virou central de avisos, sem separar por pasta
      nem VPS. Três grupos: Esperando você (clicar abre uma janelinha para responder ali mesmo, sem
      ir até o chat), Prontas para ler (resposta nova que ele ainda não viu: clicar leva ao chat e
-     ela SAI da torre, como notificação lida) e Trabalhando. Chat parado e já lido não aparece. */
+     ela SAI da torre, como notificação lida) e Trabalhando. Chat parado e já lido não aparece.
+     26/09 (pedido dele): mais enxuta, no topo das Conversas, num cartão; sem nada pendente o
+     cartão some. As sessões de fora do app saíram (não cabiam no enxuto). */
   const blocos = [];
-  let total = 0, ocupados = 0, esperando = 0;
   const grupos = { espera: [], pronta: [], ocupado: [] };
   for (const A of abas.values()) {
     for (const P of A.ordem.map((id) => panes.get(id)).filter(Boolean)) {
       const e = estadoDoPainel(P);
-      total++;
       const onde = nomeProjeto(A.cwd) + (NA_VPS(A.cwd) ? ' · VPS' : '');
-      if (e.cls === 'espera') { esperando++; grupos.espera.push({ P, e, onde }); }
-      else if (e.cls === 'ocupado') { ocupados++; grupos.ocupado.push({ P, e, onde }); }
+      if (e.cls === 'espera') grupos.espera.push({ P, e, onde });
+      else if (e.cls === 'ocupado') grupos.ocupado.push({ P, e, onde });
       else if (P.nova) grupos.pronta.push({ P, e: { cls: 'parado', txt: 'pronta' }, onde });
     }
   }
@@ -11857,81 +11859,8 @@ async function pintarTorre(forcarAgentes) {
       }));
     }
   }
-  /* A linha de resumo ("3 chats · 1 trabalhando · 1 esperando você") saiu da tela (26/09): o
-     desenho põe o primeiro grupo logo abaixo do título, e cada linha já mostra o próprio estado.
-     A conta foi para a dica do título. Sem chat aberto nenhum, a torre diz isso em vez de ficar
-     em branco. */
-  const cab = $('.side-view[data-view="torre"] .side-head > span');
-  if (cab) {
-    // no celular o título já tem uma dica própria: a conta entra embaixo dela, sem apagar
-    if (cab.dataset.dica === undefined) cab.dataset.dica = cab.title || '';
-    const conta = total
-      ? total + (total === 1 ? ' chat' : ' chats') + ' · ' + ocupados + ' trabalhando' + (esperando ? ' · ' + esperando + ' esperando você' : '')
-      : '';
-    cab.title = [cab.dataset.dica, conta].filter(Boolean).join('\n');
-  }
-  box.innerHTML = '';
-  if (!blocos.length) {
-    const vazio = document.createElement('div');
-    vazio.className = 'torre-resumo';
-    vazio.textContent = total ? 'Nada pendente' : 'Nenhum chat aberto';
-    box.appendChild(vazio);
-  }
-  for (const b of blocos) box.appendChild(b);
-
-  /* As sessões de FORA vêm pelo processo principal (`claude agents --json`), que já tem cache
-     de 15s. Aqui o cache é de 30s e o desenho de cima já foi pintado: a lista de fora entra
-     quando chegar, sem segurar o resto da tela. */
-  if (forcarAgentes || Date.now() - torreAgentes.quando > 30000) {
-    torreAgentes.quando = Date.now();
-    try {
-      const r = await window.api.agentesClaude();
-      torreAgentes.itens = (r && Array.isArray(r.itens)) ? r.itens : [];
-      torreAgentes.erro = (r && r.error) || '';
-      torreAgentes.velha = !!(r && r.velho);
-    } catch (e) { torreAgentes.erro = String((e && e.message) || e); }
-    // outro repaint passou na frente enquanto a resposta vinha: refaz já com a lista que chegou
-    if (gen !== torreGen) { if (torreVisivel()) pintarTorre(false); return; }
-    if (!torreVisivel()) return;
-  }
-  const secFora = document.createElement('div');
-  secFora.className = 'torre-aba torre-fora';
-  secFora.innerHTML = '<span class="torre-nome"></span><span class="torre-conta"></span>';
-  $('.torre-nome', secFora).textContent = 'Fora do app';
-  const vistos = new Set();
-  const fora = torreAgentes.itens.filter((a) => {
-    // o mesmo número aparece duas vezes quando há subprocesso
-    if (!a || !a.sessionId || sessoesDaqui.has(a.sessionId) || vistos.has(a.sessionId)) return false;
-    vistos.add(a.sessionId); return true;
-  });
-  /* 26/09: com sessões na lista o grupo é só o nome, como no desenho, e a contagem vai para a
-     dica. O lado direito só fala quando há algo fora do normal: lista vazia, lista que não veio
-     ou lista velha (aí é estado, não contagem, e não pode ficar escondido). */
-  secFora.title = 'Sessões do Claude rodando nesta máquina por fora daqui (Terminal, VS Code, robô agendado)'
-    + (fora.length ? '\n' + fora.length + (fora.length === 1 ? ' sessão' : ' sessões') : '');
-  $('.torre-conta', secFora).textContent = fora.length
-    ? (torreAgentes.velha ? 'lista antiga' : '')
-    : (torreAgentes.erro ? 'não consegui listar' : 'nenhuma');
-  if (fora.length && torreAgentes.velha) $('.torre-conta', secFora).title = 'Não consegui atualizar: é a última lista que veio';
-  box.appendChild(secFora);
-  const COMO = { interactive: 'terminal / VS Code', background: 'segundo plano', subagent: 'subagente', sdk: 'via SDK', headless: 'sem tela' };
-  for (const a of fora) {
-    const ha = a.startedAt ? duracaoCurta(Date.now() - a.startedAt) : '';
-    box.appendChild(linhaDaTorre({
-      titulo: a.name || (String(a.cwd || '').split('/').filter(Boolean).pop()) || a.sessionId.slice(0, 8),
-      motor: COMO[a.kind] || 'Claude',
-      estado: { txt: shortPath(a.cwd) + (ha ? ' · há ' + ha : ''), cls: 'fora' },
-      engine: 'claude', caminho: shortPath(a.cwd), ha: a.startedAt ? quandoCurto(a.startedAt) : '',
-      acoes: [
-        /* "command claude" de propósito: no shell dele `claude` é APELIDO de ssh para a VPS
-           (~/.zshrc), então o comando copiado sem isso abriria a VPS em vez de continuar a
-           conversa daqui. O `command` pula o apelido e chama o programa de verdade. */
-        { rotulo: 'Copiar comando', ic: 'copy', dica: 'copia o "cd" + "claude --resume" para continuar essa conversa num terminal',
-          aoClicar: (bt) => copiarTexto('cd "' + a.cwd + '" && command claude --resume ' + a.sessionId, bt) },
-        ...(window.SEM_ELECTRON ? [] : [{ rotulo: 'Abrir pasta', ic: 'folder', dica: 'abre ' + shortPath(a.cwd) + ' no Finder', aoClicar: () => window.api.openPath(a.cwd) }]),
-      ],
-    }));
-  }
+  box.replaceChildren(...blocos);
+  if (bloco) bloco.classList.toggle('hidden', !blocos.length);
 }
 /* Repinta sozinha enquanto estiver aberta. Com o mouse em cima não repinta: trocar o HTML
    embaixo do cursor cancelaria o clique que ele já começou a dar. */
@@ -12123,10 +12052,8 @@ async function checarVersoesDosMotores() {
 
 function abrirVistaLateral(v) {
   // 25/09: uma vista só com as conversas de todas as IAs, e o uso do plano de cada uma no topo
-  if (v === 'conversas') { recarregarConversas(); pintarUsoLateral(true); }
-  // leva 10.2: a torre é sempre desenhada na hora — mostrar o estado de 4 segundos atrás
-  // seria pior do que não mostrar nada
-  if (v === 'torre') pintarTorre(true);
+  // 26/09: a torre mora no topo das Conversas e nasce desenhada junto com a lista
+  if (v === 'conversas') { recarregarConversas(); pintarUsoLateral(true); pintarTorre(); }
   // leva 11: mesma ideia da torre — estado de um minuto atrás não serve para dizer se um robô parou
   if (v === 'settings') pintarContasAjustes();
 }
@@ -12140,7 +12067,7 @@ function abrirBuscaDeConversa() {
   // 25/09: a vista é a lista única (a de todas as IAs); a conta não é relida à força aqui
   $('#sidebar').classList.remove('hidden'); $('#dragbar').classList.remove('hidden');
   $$('.side-view').forEach(x => x.classList.toggle('hidden', x.dataset.view !== 'conversas'));
-  recarregarConversas(); pintarUsoLateral();
+  recarregarConversas(); pintarUsoLateral(); pintarTorre();
   sincronizarIconesLaterais();
   const campo = $('.side-busca[data-busca="' + VISTA_CONVERSAS + '"]');
   const linha = campo && campo.closest('.side-ferramentas.icones');
@@ -12172,9 +12099,7 @@ function toggleSidebar() {
   if (!$('#sidebar').classList.contains('hidden')) {
     const v = $$('.side-view').find(x => !x.classList.contains('hidden'));
     // sem forcar: abrir pelo atalho nao pode disparar um "claude auth status" novo toda vez
-    if (v && v.dataset.view === 'conversas') { recarregarConversas(); pintarUsoLateral(); }
-    // leva 10.2: abrindo a coluna pelo atalho, a torre também precisa nascer atualizada
-    if (v && v.dataset.view === 'torre') pintarTorre(true);
+    if (v && v.dataset.view === 'conversas') { recarregarConversas(); pintarUsoLateral(); pintarTorre(); }
   }
 }
 

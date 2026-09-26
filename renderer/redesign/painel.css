@@ -67,12 +67,16 @@
 /* o apagado (motor que não existe nesta máquina) continua no style.css; aqui só o foco de teclado,
    por último para ganhar também do item ativo (que tem sombra própria) */
 .ch-lado:focus-visible{outline:none;box-shadow:var(--anel-foco)}
-.ch-nome{display:block}
-/* painel estreito (< 560pt): só o logo, com 6 de recuo (26×22 por item) */
-@container (max-width:559.98px){
-  .ch-lado{padding:0 6px}
-  .ch-nome{display:none}
-}
+/* 26/09 (pedido dele): os 4 logos SEMPRE sem o nome (26×22 por item; o nome vai na dica) e no MEIO
+   do cabeçalho. Grade de 3 colunas (vazia | seletor | branch, bolinha e ×): as laterais têm a mesma
+   largura, então o seletor fica centrado de verdade; o lado direito encolhe (a branch corta) em vez
+   de empurrar o seletor. No celular o cabeçalho segue em linha (bloco do telefone, mais abaixo). */
+.pane-hd{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
+.pane-hd > .p-chave{grid-column:2;grid-row:1}
+.pane-hd > .motor-extra{grid-column:1;grid-row:1;justify-self:end}
+.pane-hd > .hd-dir{grid-column:3;grid-row:1;justify-self:end}
+.ch-lado{padding:0 6px}
+.ch-nome{display:none}
 /* sessão antiga do protocolo ACP: o nome aparece ao lado do seletor, neutro (azul é ação) */
 .motor-extra{flex:none;padding:0 4px;white-space:nowrap;font:500 12px/16px var(--font-sans);color:var(--label-2)}
 
@@ -255,7 +259,7 @@ mark.acha{background:var(--highlight);color:inherit;border-radius:3px;padding:0 
    de estado de volta na linha 1, o respiro de baixo da conversa e a busca no fluxo (lá o
    cabeçalho não tem os 68pt que o top:70px supõe). */
 @media (max-width: 820px), (pointer: coarse) and (max-width: 1100px){
-  :root:has(.so-celular) .pane-hd{height:auto;gap:3px 6px;padding:5px 6px}
+  :root:has(.so-celular) .pane-hd{display:flex;height:auto;gap:3px 6px;padding:5px 6px}
   :root:has(.so-celular) .p-close{width:32px;height:32px}
   :root:has(.so-celular) .p-tokens{font-size:10px}
   :root:has(.so-celular) .ch-lado{height:auto;padding:9px 8px;font-size:10.5px}

@@ -113,9 +113,9 @@ test('Ajustes em cartões sem perder nenhum controle que o app.js liga', () => {
 test('toggle verde, cartão fill-4 com raio 10, e nada de caixa alta espaçada', () => {
   const c = semComentario(css);
   assert.match(c, /\.chave input:checked\{background:var\(--status-ok\)\}/, 'ligado é o verde do sistema, não o azul');
-  assert.match(c, /\.chave input\{width:32px;height:18px;/);
+  assert.match(c, /\.chave input\{width:28px;height:16px;/);  // 26/09: menor (era 32×18)
   assert.match(c, /\.aj-cartao\{[^}]*border-radius:10px;background:var\(--fill-4\);[^}]*box-shadow:inset 0 0 0 1px var\(--separator\)/);
-  assert.match(c, /\.aj\{[^}]*min-height:36px/);
+  assert.match(c, /\.aj\{[^}]*min-height:30px/);  // 26/09: tudo um pouco menor (era 36)
   // a única maiúscula forçada é a primeira letra do grupo ("no nome" -> "No nome"), sem espaçar
   assert.doesNotMatch(c.replace(/\.hist-cab::first-letter\{text-transform:uppercase\}/, ''), /text-transform:uppercase/,
     'caixa alta saiu da coluna');
@@ -127,7 +127,7 @@ test('toggle verde, cartão fill-4 com raio 10, e nada de caixa alta espaçada',
   assert.match(c, /\.hist-item\.on,\.hist-item\.aberta\{background:transparent;outline:0\}/);
   assert.match(c, /\.hist-item\.no-foco\{background:var\(--fill-1\)\}/);
   assert.match(c, /\.hist-item\.no-foco \.hi-t\{font-weight:600\}/);
-  assert.match(c, /\.aj \+ \.aj\{[^}]*min-height:37px/, '36 de linha + 1 de fio');
+  assert.match(c, /\.aj \+ \.aj\{[^}]*min-height:31px/, '30 de linha + 1 de fio');
 });
 
 test('rotina com ▶ de 26 e torre com o logo da IA e o sinal de estado', () => {
@@ -145,20 +145,25 @@ test('a selecionada da lista segue o chat em foco', () => {
   assert.match(pegar('setFocus'), /marcarAbertas\(\);/, 'trocar de chat repinta a selecionada');
 });
 
-test('torre e rotinas sem linha de resumo e com as palavras curtas do desenho', () => {
+/* 26/09 (pedido dele): torre enxuta no topo das Conversas — cartão que some sem nada pendente,
+   linha única (logo + título + sinal), sem as sessões de fora do app */
+test('torre enxuta no topo das Conversas, num cartão que some sem nada pendente', () => {
   const torre = pegar('pintarTorre');
-  assert.match(torre, /textContent = 'Fora do app'/);
-  assert.doesNotMatch(torre, /Fora do Cockpit/);
-  assert.doesNotMatch(torre, /box\.appendChild\(resumo\)/, 'a contagem saiu da tela (foi para a dica)');
+  assert.doesNotMatch(torre, /Fora do app/);
+  assert.match(torre, /bloco\.classList\.toggle\('hidden', !blocos\.length\)/);
+  assert.match(pegar('torreVisivel'), /data-view="conversas"/);
   const lt = pegar('linhaDaTorre');
-  assert.match(lt, /estado\.cls === 'espera' \? 'esperando você'/);
-  assert.match(lt, /'parado, motor ligado' \? 'pronto'/);
   assert.match(lt, /' rd-nova'/, 'resposta nova = ponto azul');
+  assert.doesNotMatch(lt, /ti-acoes/, 'sem os botões das sessões de fora');
+  assert.match(css, /\.torre-bloco\{flex:none;margin:10px 8px 0;padding:6px 0;border-radius:10px;background:var\(--fill-3\);/);
+  for (const f of ['renderer/index.html', 'renderer/index-web.html']) {
+    const h = ler(f);
+    assert.ok(!h.includes('data-view="torre"'), f + ': a torre não tem mais ícone nem vista própria');
+    assert.match(h, /<div class="side-view" data-view="conversas">\n\s*<!--[\s\S]*?-->\n\s*<section class="torre-bloco hidden" id="torreBloco"/, f + ': torre no topo das Conversas');
+  }
   const c = semComentario(css);
   // o ▶ desativado é o do botão normal da folha do Sistema (label-4 sobre fill-4 sumia no claro)
   assert.match(c, /\.ri-acao:disabled,\.ri-acao:disabled:hover\{opacity:1;background:var\(--fill-3\);color:var\(--label-3\)/);
-  // os botões da sessão de fora QUEBRAM de linha na coluna estreita, em vez de sair cortados
-  assert.match(c, /\.ti-acoes\{[^}]*flex-wrap:wrap/);
 });
 
 test('busca: a palavra achada cai na parte visível do trecho', () => {

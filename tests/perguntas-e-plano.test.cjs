@@ -138,7 +138,8 @@ test('pergunta simples do Codex abre a mesma janelinha; formulário e senha fica
 
 /* 26/09 (Hugo, por áudio): a torre é a central de avisos — Esperando você (responde numa janelinha
    sem ir ao chat), Prontas para ler (sai ao clicar) e Trabalhando; sem separar por pasta/VPS. */
-test('torre: três grupos, janelinha de responder e o número no ícone', () => {
+test('torre: três grupos, janelinha de responder e o número no ícone de Conversas', () => {
+  assert.match(pegar('pintarSeloTorre'), /\$\('\.act\[data-view="conversas"\]'\)/);
   const t = pegar('pintarTorre');
   assert.match(t, /const TITULOS = \{ espera: 'Esperando você', pronta: 'Prontas para ler', ocupado: 'Trabalhando' \};/);
   assert.match(t, /aoClicar: g === 'espera' \? \(\) => responderPelaTorre\(P\) : \(\) => \{ irAoChat\(P\); pintarTorre\(false\); \}/);

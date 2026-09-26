@@ -64,7 +64,8 @@ function observarAlturaPainel(P) {
     P.el.style.setProperty('--painel-min', Math.max(220, Math.ceil(altura + 85)) + 'px');
   };
   P.tamanhoObserver = new ResizeObserver(medir);
-  for (const selector of ['.pane-cmp', '.pane-perm', '.pane-hd', '.pane-nome']) {
+  // .p-uso: o aviso de limite virou linha própria da pilha de baixo (redesenho), fora da caixa
+  for (const selector of ['.pane-cmp', '.pane-perm', '.p-uso', '.pane-hd', '.pane-nome']) {
     const e = $(selector, P.el); if (e) P.tamanhoObserver.observe(e);
   }
 }

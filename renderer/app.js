@@ -862,6 +862,7 @@ function newPane(opts = {}) {
      ligado — nem no Mac nem no celular. Agora tem: é o mesmo resumir do menu de ações. */
   const btCompactar = $('.p-compactar', el);
   if (btCompactar) btCompactar.addEventListener('click', (e) => { e.stopPropagation(); compactarConversa(P); });
+  pintarAnel(P);   // o anel aparece desde o chat vazio (README: sempre na barra); nasce vazio
 
   // pasta
   const btnCwd = $('.p-cwd', el);
@@ -1048,6 +1049,12 @@ function newPane(opts = {}) {
   btMic.className = 'cb p-mic'; btMic.title = 'Ditar (⌘⇧D)'; btMic.innerHTML = ico('mic');
   btMic.addEventListener('click', (e) => { e.stopPropagation(); alternarDitado(P); });
   $('.p-slash', el).insertAdjacentElement('afterend', btMic);
+
+  /* "…": em painel estreito (menos de 400) o CSS esconde modo de envio, plano, quadro e time e
+     mostra este botão, que abre os quatro num menu. Cada item só CLICA o botão de verdade: o
+     que ele faz continua morando num lugar só. */
+  const btMais = $('.p-mais', el);
+  if (btMais) btMais.addEventListener('click', (e) => { e.stopPropagation(); menuMais(P); });
 
   pintarPasta(P, nomePasta(P.cwd));
   fillModels(P); paintEngine(P); pintarModo(P); pintarUso(P); lerUso(P.engine);
@@ -1596,7 +1603,10 @@ function fillModels(P) {
   if (listaReal && !ms.find(m => m.id === P.model)) P.model = (ms.find(m => m.id === modeloNovo(P.engine)) || ms.find(m => m.padrao) || ms[0]).id;
   const ef = esforcosDe(P);
   if (listaReal && ef.length && !ef.find(e => e.id === P.effort)) P.effort = modeloAtual(P).padraoEffort || ef[Math.min(2, ef.length - 1)].id;
-  $('.p-model', P.el).innerHTML = ico('brain') + '<span>' + modeloAtual(P).nome + '</span>';
+  /* pop-up de modelo do redesenho: "Opus 5.5 ⇅" (nome + setinhas). O cérebro continua no
+     começo só para o celular, que mostra o botão sem o nome (lá o caixa.css esconde as setinhas;
+     no Mac esconde o cérebro). */
+  $('.p-model', P.el).innerHTML = ico('brain') + '<span>' + modeloAtual(P).nome + '</span>' + ico('updown');
   pintarControlesCodex(P);
 }
 function posicionarChave(P) {
@@ -1611,6 +1621,9 @@ function posicionarChave(P) {
 function paintEngine(P) {
   const vazio = $('.pe-logo', P.el);
   if (vazio) vazio.innerHTML = svgMotor(P.engine);
+  // placeholder do redesenho: "Mensagem para Claude" (o nome de quem vai ler), não "Escreva aqui…"
+  const campo = $('.p-input', P.el);
+  if (campo) campo.placeholder = 'Mensagem para ' + nomeDoMotor(P.engine);
   posicionarChave(P);
   P.el.classList.toggle('eng-codex', P.engine === 'codex');
   P.el.classList.toggle('eng-claude', P.engine === 'claude');
@@ -1765,11 +1778,14 @@ function pintarAnel(P) {
   const bt = $('.p-compactar', P.el);
   if (!bt) return;
   const pct = (P.tokens && P.janela) ? Math.min(100, Math.round((P.tokens / P.janela) * 100)) : 0;
-  // só aparece quando já vale a pena pensar nisso
-  bt.classList.toggle('hidden', pct < 20);
+  /* Redesenho: no Mac o anel de 14 fica SEMPRE na barra (é assim no README, até com 0%). Só no
+     celular, onde a fileira é apertada, ele continua sumindo abaixo de 20% — quem esconde é o
+     caixa.css pela classe "baixo", não mais o "hidden". */
+  bt.classList.remove('hidden');
+  bt.classList.toggle('baixo', pct < 20);
   bt.classList.toggle('meio', pct >= 70 && pct < 90);
   bt.classList.toggle('cheio', pct >= 90);
-  const volta = 2 * Math.PI * 15;
+  const volta = 2 * Math.PI * 6;   // r=6 no viewBox de 16 (o desenho do handoff)
   $('.an-fio', bt).style.strokeDashoffset = String(volta - (volta * pct) / 100);
 
   bt.title = 'A conversa já ocupa ' + pct + '% do que cabe neste modelo.\n'
@@ -1951,24 +1967,38 @@ function passoPronto(P, id, erro) {
 function limparPassos(P) { P.execEl = null; P.thinkEl = null; P.trabPassos = []; }
 
 /* ===================== CONTINUAR A UM CLIQUE =====================
-   Chip fixo em cima da caixa de texto quando o chat esta parado e ja tem conversa;
-   Enter no campo vazio manda o mesmo "continue". Nunca aparece com trabalho rodando
-   nem com mensagem na fila. */
+   Botão "Continuar" quando o chat esta parado e ja tem conversa; Enter no campo vazio manda o
+   mesmo "continue". Nunca aparece com trabalho rodando nem com mensagem na fila.
+   Redesenho (README, "Fim do turno"): ele saiu de dentro da caixa de escrever e mora na linha do
+   fim do turno ("levou 2m · ver mudanças · Continuar"). Turno curto que não deixou essa linha
+   ganha uma linha só dele, no mesmo formato, no fim da conversa. */
 function podeContinuar(P) { return !!(P && !P.busy && !P.queued && P.hist && P.hist.length); }
 function mostrarContinuar(P) {
   limparContinuar(P);
   if (!podeContinuar(P)) return;
-  const cmp = P.el && $('.pane-cmp', P.el);
-  if (!cmp) return;
-  const box = document.createElement('div');
-  box.className = 'p-cont';
+  const chat = P.el && P.chat;
+  if (!chat) return;
+  const ult = chat.lastElementChild;
+  const naLinha = !!(ult && ult.classList.contains('turno-fim'));
+  // dentro da linha do turno: só o botão (sair dali não apaga a linha); sozinho: a linha inteira
+  const box = document.createElement(naLinha ? 'span' : 'div');
+  box.className = naLinha ? 'p-cont' : 'p-cont turno-fim';
   const bt = document.createElement('button');
   bt.className = 'cont-chip';
-  bt.innerHTML = '<span class="cont-seta">▶</span><span>Continuar</span>';
+  // botão de 24 em --fill-2, só a palavra. O ▶ de texto saiu: símbolo de texto no lugar de
+  // ícone era uma das sobras que o redesenho tira.
+  bt.innerHTML = '<span>Continuar</span>';
   bt.title = 'Manda "continue" (Enter no campo vazio faz o mesmo)';
   bt.addEventListener('click', (e) => { e.stopPropagation(); enviarContinue(P); });
   box.appendChild(bt);
-  cmp.insertBefore(box, $('.cmp-top', P.el));
+  (naLinha ? ult : chat).appendChild(box);
+  scroll(P);
+}
+// o chip "Continuar" está dentro da parte da conversa que aparece agora (não rolou para fora)?
+function chipNaVista(P, chip) {
+  const r = chip.getBoundingClientRect();
+  const c = (P.chat || chip.parentElement).getBoundingClientRect();
+  return r.height > 0 && r.bottom > c.top && r.top < c.bottom;
 }
 function limparContinuar(P) {
   const b = P && P.el && $('.p-cont', P.el);
@@ -3943,9 +3973,16 @@ async function send(P) {
      no fim de um turno desta conversa, entao chat recem-aberto nao liga o motor sem querer.
      Nao vale durante o ditado (campo vazio ali e falha de captacao, nao pedido), nem com
      anexo ou desenho do quadro pendurado — isso e esquecimento, e o texto ainda vem. */
-  if (!inp.value.trim() && $('.p-cont', P.el) && podeContinuar(P)
+  /* Redesenho: o chip saiu da caixa e mora no fim da conversa. Rolada para cima, ele sai da vista
+     e o Enter vazio mandaria "continue" sem nenhum sinal na tela. Aí o Enter só desce até o chip
+     (ele aparece, e o próximo Enter continua), como era quando o chip ficava sempre à vista. */
+  const chipCont = $('.p-cont', P.el);
+  if (!inp.value.trim() && chipCont && podeContinuar(P)
       && !(P.anexos || []).length && !P.quadroColado
-      && VIVO.P !== P && DITADO.P !== P) inp.value = 'continue';
+      && VIVO.P !== P && DITADO.P !== P) {
+    if (chipNaVista(P, chipCont)) inp.value = 'continue';
+    else chipCont.scrollIntoView({ block: 'nearest' });
+  }
   const text = inp.value.trim();
   if (text || (P.anexos || []).length || P.quadroColado) limparSugestoes(P);
   /* Print colado sozinho TEM de sair. Antes o envio exigia texto: ele colava a imagem, apertava
@@ -4323,7 +4360,7 @@ function receberEventoPane(ev) {
     case 'acp-info': {
       P.acpInfo = ev;
       const bt = $('.p-model', P.el);
-      if (bt && ev.agente) { bt.innerHTML = ico('brain') + '<span></span>'; $('span', bt).textContent = ev.agente + (ev.versao ? ' ' + ev.versao : ''); }
+      if (bt && ev.agente) { bt.innerHTML = ico('brain') + '<span></span>' + ico('updown'); $('span', bt).textContent = ev.agente + (ev.versao ? ' ' + ev.versao : ''); }
       if (ev.modoAtual) P.acpModo = ev.modoAtual;
       break;
     }
@@ -4349,6 +4386,83 @@ function escondePerm(P, encerrarTodas = true) {
   marcarEspera(P);                    // acabou a espera: a bolinha vermelha e a tarja saem juntas
 }
 
+/* ---- o pedido de autorização no desenho do redesenho (README, "Pilha inferior", item 2) ----
+   Cabeçalho curto ("Editar arquivo", "Rodar comando") + "há 12s", o objeto em mono (o arquivo ou
+   o comando INTEIRO: é o que ele vai autorizar, então nunca é cortado com reticências), a pasta
+   embaixo em mono menor e, quando o motor mandou, o antes/depois. Os motores mandam o pedido em
+   formatos diferentes (título + detalhe em texto); aqui ele só é separado em pedaços, sem perder
+   nada do que já aparecia. */
+function partesDoPedido(ev) {
+  const VERBO = { Edit: 'Editar arquivo', MultiEdit: 'Editar arquivo', Write: 'Escrever arquivo',
+    NotebookEdit: 'Editar notebook', Bash: 'Rodar comando', Read: 'Ler arquivo', Glob: 'Procurar arquivos',
+    Grep: 'Procurar no código', WebFetch: 'Abrir página', WebSearch: 'Pesquisar na web', Task: 'Chamar agente' };
+  const titulo = String(ev.title || '');
+  // o Claude manda "Claude quer usar: Edit"; o ACP manda o nome da ferramenta em ev.tool
+  const ferramenta = ev.tool || (/quer usar:\s*(\S+)/.exec(titulo) || [])[1] || '';
+  /* O Codex manda "Rodar comando no seu Mac": no Mac é o normal, então o cabeçalho fica o curto do
+     desenho. "na VPS" continua escrito: comando rodando em outra máquina é a exceção que ele
+     precisa ver antes de permitir. */
+  const cab = VERBO[ferramenta] || titulo.replace(/^(Rodar comando) no seu Mac$/, '$1') || 'Pedido de autorização';
+  const linhas = String(ev.detail || '').split('\n');
+  let caminho = '';
+  // o Codex manda "comando\nem /pasta": a pasta desce para a linha de baixo, como no desenho
+  if (linhas.length > 1 && /^em \S/.test(linhas[linhas.length - 1])) caminho = shortPath(linhas.pop().slice(3));
+  let obj = linhas.join('\n').trim();
+  // só um caminho de arquivo (sem espaço): nome do arquivo em cima, a pasta dele embaixo
+  const arquivo = obj && !/\s/.test(obj) && obj.includes('/') ? obj
+    : (!obj && ev.mudanca && ev.mudanca.arquivo) ? String(ev.mudanca.arquivo) : '';
+  if (arquivo && !caminho) {
+    const i = arquivo.lastIndexOf('/');
+    obj = arquivo.slice(i + 1);
+    if (i >= 0) caminho = shortPath(arquivo.slice(0, i) || '/');
+  }
+  return { cab, obj, caminho, porque: String(ev.reason || '') };
+}
+function pintarPedido(P, bar, ev) {
+  const partes = partesDoPedido(ev);
+  const pega = (s) => $(s, bar);
+  const tit = pega('.pp-tit'); if (tit) tit.textContent = partes.cab;
+  const txt = pega('.pp-txt'); if (txt) { txt.textContent = partes.obj; txt.classList.toggle('hidden', !partes.obj); }
+  const cam = pega('.pp-cam'); if (cam) { cam.textContent = partes.caminho; cam.classList.toggle('hidden', !partes.caminho); }
+  const por = pega('.pp-por'); if (por) { por.textContent = partes.porque; por.classList.toggle('hidden', !partes.porque); }
+  const dif = pega('.pp-diff');
+  if (dif) {
+    dif.innerHTML = '';
+    const m = ev.mudanca || null;
+    const pedacos = m ? (m.partes || ((m.antes != null || m.depois != null) ? [{ antes: m.antes, depois: m.depois }] : [])) : [];
+    for (const p of pedacos) {
+      for (const l of comContexto(linhasDoDiff(p.antes, p.depois))) {
+        const linha = document.createElement('div');
+        linha.className = 'ppd ' + (l.t === '+' ? 'mais' : l.t === '-' ? 'menos' : l.t === '@' ? 'pula' : 'igual');
+        const sinal = document.createElement('span'); sinal.className = 'ppd-s';
+        sinal.textContent = l.t === '+' ? '+' : l.t === '-' ? '−' : '';
+        const texto = document.createElement('span'); texto.className = 'ppd-t'; texto.textContent = l.txt;
+        linha.append(sinal, texto); dif.appendChild(linha);
+      }
+    }
+    dif.classList.toggle('hidden', !dif.children.length);
+  }
+  pintarHaPedido(P);
+}
+// "há 12s": quanto tempo o pedido está esperando. O relógio de baixo repinta a cada segundo.
+function pintarHaPedido(P) {
+  const ha = P && P.el && P.aprovacaoAtual && $('.pp-ha', P.el);
+  if (ha) ha.textContent = 'há ' + duracaoCurta(Date.now() - (P.aprovacaoAtual.desde || Date.now()));
+}
+setInterval(() => { for (const P of panes.values()) if (P.aprovacaoAtual) pintarHaPedido(P); }, 1000);
+/* O cartão sobe 8pt UMA vez, quando o pedido chega (.pp-chegando, redesign/caixa.css). A classe sai
+   logo depois: presa no cartão, a animação rodava de novo toda vez que ele voltava para a aba (o
+   painel sai do display:none), e trocar de aba não tem animação. Pedido que chega com a aba no
+   fundo já perdeu a classe quando ele abre a aba: aparece parado, sem animação. */
+function chegadaDoPedido(bar) {
+  if (!bar) return;
+  clearTimeout(bar.chegadaTimer);
+  bar.classList.remove('pp-chegando');
+  void bar.offsetWidth;               // o próximo pedido da fila anima de novo, do começo
+  bar.classList.add('pp-chegando');
+  bar.chegadaTimer = setTimeout(() => bar.classList.remove('pp-chegando'), 400);
+}
+
 function showApproval(P, ev) {
   if (P.aprovacaoAtual) {
     const fila = P.aprovacoesPendentes || (P.aprovacoesPendentes = []);
@@ -4356,9 +4470,10 @@ function showApproval(P, ev) {
     return;
   }
   const bar = $('.pane-perm', P.el);
-  const pedido = { key: ev.key }; P.aprovacaoAtual = pedido;
-  $('.pp-txt', bar).textContent = ev.title + '\n' + (ev.detail || '') + (ev.reason ? '\n' + ev.reason : '');
+  const pedido = { key: ev.key, desde: Date.now() }; P.aprovacaoAtual = pedido;
+  pintarPedido(P, bar, ev);
   bar.classList.remove('hidden');
+  chegadaDoPedido(bar);
   marcarEspera(P);                    // a aba tem de mudar de cara AGORA, mesmo estando no fundo
   const botoes = [$('.pp-yes', bar), $('.pp-no', bar)];
   botoes.forEach(b => { b.disabled = false; });
@@ -4437,7 +4552,8 @@ function pintarControlesCodex(P) {
   b.classList.toggle('hidden', !codex);
   if (!codex) return;
   const plano = P.collaborationMode === 'plan';
-  b.innerHTML = ico(plano ? 'clipboard-list' : 'code-xml');
+  // o desenho é sempre o do "plano" (README); ligado ou não quem diz é o fundo (.ligado)
+  b.innerHTML = ico('clipboard-list');
   b.classList.toggle('ligado', plano);
   b.setAttribute('aria-pressed', String(plano));
   b.disabled = paid;
@@ -5321,7 +5437,9 @@ function pintarModo(P) {
   // Claude em "Manual". Agora P.mode guarda o que ELE escolheu, e o equivalente do motor
   // atual e usado so na hora de pintar e de subir o motor.
   const m = modoDe(P);
-  $('.modo-ic', P.el).innerHTML = ico(m.ic);
+  /* Na barra da caixa o redesenho usa só o cadeado: aberto = segue sem perguntar (Auto e Sem
+     pedir permissão), fechado = pede antes. O ícone próprio de cada modo continua no menu. */
+  $('.modo-ic', P.el).innerHTML = ico(m.id === 'bypass' || m.id === 'auto' ? 'lock-open' : 'lock');
   $('.modo-nome', P.el).textContent = m.nome;
 }
 
@@ -6691,6 +6809,24 @@ function criarBotaoQuadro(P, el) {
   else $('.cmp-bar', el).appendChild(bt);
 }
 
+/* Menu do "…" da caixa (painel com menos de 400 de largura: o CSS esconde os quatro botões e
+   mostra o "…"). Cada item CLICA o botão escondido, então o que acontece é exatamente o mesmo
+   de sempre — nenhuma regra nova de envio, plano, quadro ou time mora aqui. */
+function menuMais(P) {
+  const m = novoMenu(P);
+  const bt = (s) => $(s, P.el);
+  const envio = bt('.p-modoenvio');
+  if (envio) m.appendChild(elItem({ ic: P.envio === 'entra' ? 'zap' : 'queue', nome: 'Modo de envio',
+    tag: P.envio === 'entra' ? 'Entra' : 'Fila' }, () => envio.click()));
+  const plano = bt('.p-plano');
+  if (plano && !plano.classList.contains('hidden') && !plano.disabled)
+    m.appendChild(elItem({ ic: 'clipboard-list', nome: 'Planejar antes de executar', on: P.collaborationMode === 'plan' }, () => plano.click()));
+  const quadro = bt('.p-quadro');
+  if (quadro) m.appendChild(elItem({ ic: 'quadro', nome: 'Quadro branco', tag: '⌘⇧E' }, () => quadro.click()));
+  const time = bt('.p-agentes');
+  if (time) m.appendChild(elItem({ ic: 'agentes', nome: 'Time de agentes', tag: agTotal(P) ? String(agAtivos(P) || agTotal(P)) : '' }, () => time.click()));
+}
+
 /* ---- a janela ---- */
 let agPaneAberto = null;
 let agDesenhoPedido = false;
@@ -7456,20 +7592,23 @@ function pintarUso(P) {
 
   const naSessao = ps !== null && ps >= USO_AVISO_SESSAO;
   const zera = naSessao ? u.sessao : u.semana;
+  /* Redesenho (README, "Aviso de limite"): anel de 12 cheio no % + "Semana 95%" + "zera em 23h"
+     + ×. Sem a frase ("Metade do limite da semana"), sem ▲ e sem âmbar: o número diz tudo. Mostra
+     a janela que passou do ponto; os dois números seguem no title e no rodapé da caixa. */
+  const pct = naSessao ? ps : pw;
+  const cheio = (Math.max(0, Math.min(100, pct || 0)) / 100 * 37.7).toFixed(1);
   faixa.className = 'p-uso aviso';
-  faixa.innerHTML = '<span class="uso-ic">▲</span>'
-    + '<span class="uso-alerta">' + (naSessao ? 'Limite da sessão chegando' : 'Metade do limite da semana') + '</span>'
-    + '<span class="uso-pt">·</span>'
-    // plano sem limite de sessao (Codex Pro hoje): nao mostra "Sessão —" como se tivesse falhado
-    + (u.semSessao && ps === null ? '' : '<span>Sessão <b>' + (ps === null ? '—' : ps + '%') + '</b></span>'
-      + '<span class="uso-pt">·</span>')
-    + '<span>Semana <b>' + (pw === null ? '—' : pw + '%') + '</b></span>'
-    + (zera && zera.reseta ? '<span class="uso-pt">·</span><span class="uso-zera">zera ' + quandoFuturo(zera.reseta) + '</span>' : '')
+  faixa.innerHTML = '<svg class="uso-anel" viewBox="0 0 16 16" aria-hidden="true">'
+    + '<circle class="ua-fundo" cx="8" cy="8" r="6"></circle>'
+    + '<circle class="ua-fio" cx="8" cy="8" r="6" stroke-dasharray="' + cheio + ' 37.7" transform="rotate(-90 8 8)"></circle></svg>'
+    + '<span class="uso-alerta">' + (naSessao ? 'Sessão ' : 'Semana ') + (pct === null ? '—' : pct + '%') + '</span>'
+    + (zera && zera.reseta ? '<span class="uso-zera">zera ' + quandoFuturo(zera.reseta) + '</span>' : '')
     // leitura atual falhou e este numero e' reaproveitado de antes: avisar que esta desatualizado,
     // senao a tarja mais importante da tela passa um numero velho como se fosse o de agora
-    + (u.velho ? '<span class="uso-pt">·</span><span class="uso-velho">dado de ' + haQuanto(u.velho) + ' atrás</span>' : '')
+    + (u.velho ? '<span class="uso-velho">dado de ' + haQuanto(u.velho) + ' atrás</span>' : '')
     + '<span class="uso-gap"></span>'
-    + '<button class="uso-x" title="Fechar este aviso">✕</button>';
+    + '<button class="uso-x" title="Fechar este aviso" aria-label="Fechar este aviso">'
+    + '<svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"></path></svg></button>';
   faixa.title = 'Plano do ' + nomeDoMotor(P.engine) + ': '
     + 'sessão ' + (ps === null ? 'sem dado' : ps + '%') + ', semana ' + (pw === null ? 'sem dado' : pw + '%') + '.';
   $('.uso-x', faixa).onclick = (e) => { e.stopPropagation(); fecharUso(P); };
@@ -10519,7 +10658,8 @@ function mostrarPastaNoPainel(P) {
 function pintarPasta(P, rotulo) {
   const bt = P && P.el && $('.p-cwd', P.el);
   if (!bt) return;
-  bt.innerHTML = ico('folder-open') + (P.worktree ? '<span class="cwd-wt">⎇</span>' : '');
+  // pasta fechada do redesenho; em worktree, o ramo pequeno no canto (antes era o ⎇ de texto)
+  bt.innerHTML = ico('folder') + (P.worktree ? '<span class="cwd-wt">' + ico('git-branch') + '</span>' : '');
   bt.title = rotulo + ' · clique para trocar a pasta deste chat';
   bt.setAttribute('aria-label', rotulo);
 }

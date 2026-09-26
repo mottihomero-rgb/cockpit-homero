@@ -4636,6 +4636,11 @@ function showApproval(P, ev) {
    depois é o mesmo do clique. Devolve true quando a tecla foi usada. */
 function teclaDoPedido(P, e) {
   if (!P || !P.aprovacaoAtual || e.defaultPrevented || e.isComposing || e.metaKey || e.ctrlKey || e.shiftKey) return false;
+  /* No telefone não há teclado (caixa.css, bloco "SÓ NO CELULAR", tira a dica esc / ↩ de lá): a
+     tecla sai junto com a dica. Sem isto o "return" do teclado da tela, com o campo vazio,
+     permitia o pedido (um "rm -rf" inclusive) sem ninguém tocar no Permitir. Mesma consulta da
+     dica (MQ_CELULAR): onde a dica some, a tecla não vale, e vice-versa. */
+  if (window.matchMedia && window.matchMedia(MQ_CELULAR).matches) return false;
   const bar = $('.pane-perm', P.el);
   if (!bar || bar.classList.contains('hidden')) return false;
   let bt = null;
@@ -5689,9 +5694,12 @@ document.addEventListener('keydown', (e) => {
 });
 /* ↩ / ⌥↩ do pedido com o foco FORA dos campos (clicou na conversa, por exemplo). Dentro do campo
    de escrever quem trata é o keydown dele; em outro campo, botão ou link o Enter é deles; e com
-   qualquer coisa aberta por cima o Enter é da camada da frente. */
+   qualquer coisa aberta por cima o Enter é da camada da frente. Menu, visor e janelinha moram no
+   painel dono: só contam os da aba da frente (a mesma conta do anel da caixa, caixa.css). O visor
+   esquecido numa aba de fundo está em display:none e não pode travar o ↩ da aba da frente. */
 const CAMADA_POR_CIMA = '#telaAtalhos:not(.hidden), #novaAba:not(.hidden), #qdPainel:not(.hidden), #agPainel:not(.hidden),'
-  + ' #modalGrupo:not(.hidden), #popGrupo:not(.hidden), .pane .p-modal:not(.hidden), .pane .p-visor:not(.hidden)';
+  + ' #modalGrupo:not(.hidden), #popGrupo:not(.hidden), .espaco:not(.oculta) .pane .p-modal:not(.hidden),'
+  + ' .espaco:not(.oculta) .pane .p-visor:not(.hidden)';
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' || e.defaultPrevented || !focusPane) return;
   const t = e.target;

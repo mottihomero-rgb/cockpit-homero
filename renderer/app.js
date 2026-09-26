@@ -4416,8 +4416,8 @@ function receberEventoPane(ev) {
     // rastro do turno: quanto ele consumiu e o diff agregado que o Codex manda pronto
     case 'turno-uso': P.usoTurno = { entrada: ev.entrada || 0, saida: ev.saida || 0 }; break;
     case 'diff-turno': P.diffTurno = ev.diff || ''; break;
-    case 'compactou': estadoCodex(P, 'compactacao', 'Conversa resumida', 'O resumo liberou espaço para continuar.', true); break;
-    case 'compacting': estadoCodex(P, 'compactacao', 'Resumindo a conversa', ev.message || 'Guardando o contexto para continuar.'); break;
+    case 'compactou': faixaResumo(P); break;
+    case 'compacting': estadoCodex(P, 'compactacao', 'Resumindo a conversa', ''); break;
     case 'question': perguntaCodex(P, ev); break;
     // 26/09: perguntas do Claude (janelinha, como no VS Code) e o plano pronto do modo Plano
     case 'perguntas': abrirPerguntas(P, ev); break;
@@ -4862,8 +4862,20 @@ function estadoCodex(P, chave, titulo, mensagem, encerrado) {
   if (!el || !el.isConnected) { el = cartaoCodex(P, 'cx-estado', titulo); P.codexEstados.set(chave, el); }
   el.classList.toggle('encerrado', !!encerrado); el.replaceChildren();
   const h = document.createElement('h3'); h.textContent = titulo;
-  const p = document.createElement('p'); p.textContent = mensagem || '';
-  el.append(h, p); return el;
+  el.append(h);
+  if (mensagem) { const p = document.createElement('p'); p.textContent = mensagem; el.append(p); }
+  return el;
+}
+/* 26/09: a faixa "Conversa resumida" (só o rótulo, nas 4 IAs). Ao vivo, o "Resumindo a conversa"
+   vira ela; no histórico cada resumo ganha a sua (o do Claude vinha como balão "Você" em inglês). */
+function faixaResumo(P) {
+  const atual = P.codexEstados && P.codexEstados.get('compactacao');
+  if (atual && atual.isConnected && !atual.classList.contains('encerrado')) return estadoCodex(P, 'compactacao', 'Conversa resumida', '', true);
+  const el = cartaoCodex(P, 'cx-estado', 'Conversa resumida');
+  el.classList.add('encerrado');
+  const h = document.createElement('h3'); h.textContent = 'Conversa resumida';
+  el.replaceChildren(h);
+  return el;
 }
 function esperaCodex(P, ev) {
   const terminou = ['done', 'completed', 'cancelled', 'interrupted', 'ended'].includes(ev.status);
@@ -5594,7 +5606,7 @@ function renderizarHistorico(P, m) {
   else if (role === 'goal') metaCodex(P, m);
   else if (role === 'settings') aplicarSettingsCodex(P, m);
   else if (role === 'waiting') esperaCodex(P, m);
-  else if (['compactou', 'compaction'].includes(role)) estadoCodex(P, 'compactacao', 'Conversa resumida', m.text || 'Resumo salvo no histórico.', true);
+  else if (['compactou', 'compaction'].includes(role)) faixaResumo(P);
   else if (role === 'note' && m.text) note(P, m.text, m.error);
 }
 

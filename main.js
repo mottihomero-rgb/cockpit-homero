@@ -1361,6 +1361,9 @@ function claudeMessage(paneId, m) {
     }
     return;
   }
+  // 26/09: o Claude resumiu a conversa (sozinho, quando encheu, ou pelo Resumir): a faixa "Conversa resumida"
+  if (m.type === 'system' && m.subtype === 'status' && m.status === 'compacting') { emit(paneId, 'compacting', {}); return; }
+  if (m.type === 'system' && m.subtype === 'compact_boundary') { emit(paneId, 'compactou', {}); return; }
   if (m.type === 'system' && m.subtype === 'init' && m.session_id) {
     // o numero REAL da conversa so aparece aqui (ao ramificar ele nasce diferente do pedido)
     marcarDonoDoFio(paneId, m.session_id, 'claude');
@@ -2647,10 +2650,10 @@ function fichaConversa(it) {
       if (!linha.includes('"type":"user"')) continue;
       try {
         const d = JSON.parse(linha);
-        if (d.isMeta) continue;
+        if (d.isMeta || d.isCompactSummary) continue;
         const c = d.message && d.message.content;
         const bruto = typeof c === 'string' ? c : Array.isArray(c) ? c.map(x => x && x.text || '').join(' ') : '';
-        const t = tiraBlocos(bruto);
+        const t = semResumoDaSessao(tiraBlocos(bruto));
         if (t && !ehTecnico(t)) { title = limparTitulo(t).slice(0, 90); break; }
       } catch {}
     }
@@ -2718,10 +2721,11 @@ function claudeHistory(file, maxFalas, maxTools) {
     // isMeta marca o que o proprio Claude Code escreveu se passando por usuario: prompt de
     // subagente, texto de skill, aviso de imagem colada. Nada disso e conversa.
     if (d.isMeta) continue;
+    if (d.isCompactSummary) { msgs.push({ role: 'compactou' }); continue; }
     if (d.type === 'user' && d.message) {
       const c = d.message.content;
       let t = typeof c === 'string' ? c : Array.isArray(c) ? c.filter(x => x && x.type === 'text').map(x => x.text).join('\n') : '';
-      t = tiraBlocos(t);
+      t = semResumoDaSessao(tiraBlocos(t));
       if (t && !ehTecnico(t)) msgs.push({ role: 'user', text: semContexto(t) || t });
     } else if (d.type === 'assistant' && d.message) {
       const c = d.message.content || [];
@@ -2860,6 +2864,20 @@ function semContexto(t) {
   return t;
 }
 const limparTitulo = (t) => (semContexto(t) || '').slice(0, 90);
+
+/* 26/09 (ele perguntou "por que fica dessa forma?"): quando a conversa enche, o Claude Code resume
+   tudo num texto em inglês ("This session is being continued from a previous conversation...") e
+   grava esse resumo como se fosse fala dele (isCompactSummary). Na tela virava um balão "Você"
+   gigante, e o texto chegou a ir de novo junto com a pergunta seguinte. Agora o resumo vira a faixa
+   "Conversa resumida"; e, se ele veio colado na frente de uma fala, sobra só a fala. */
+const RESUMO_DA_SESSAO = /^This session is being continued from a previous conversation/;
+const FIM_DO_RESUMO = 'Pick up the last task as if the break never happened.';
+function semResumoDaSessao(t) {
+  const s = String(t || '');
+  if (!RESUMO_DA_SESSAO.test(s.trim())) return s;
+  const i = s.indexOf(FIM_DO_RESUMO);
+  return i >= 0 ? s.slice(i + FIM_DO_RESUMO.length).trim() : '';
+}
 
 function fichaCodex(it) {
   const ind = lerIndice();
@@ -3081,10 +3099,10 @@ function fichaDoTexto(head, tail) {
       if (!linha.includes('"type":"user"')) continue;
       try {
         const d = JSON.parse(linha);
-        if (d.isMeta) continue;
+        if (d.isMeta || d.isCompactSummary) continue;
         const c = d.message && d.message.content;
         const bruto = typeof c === 'string' ? c : Array.isArray(c) ? c.map(x => (x && x.text) || '').join(' ') : '';
-        const t = tiraBlocos(bruto);
+        const t = semResumoDaSessao(tiraBlocos(bruto));
         if (t && !ehTecnico(t)) { title = limparTitulo(t).slice(0, 90); break; }
       } catch {}
     }
@@ -3145,10 +3163,11 @@ function claudeHistoryTexto(data, maxFalas, maxTools) {
     if (!line.startsWith('{')) continue;
     let d; try { d = JSON.parse(line); } catch { continue; }
     if (d.isMeta) continue;
+    if (d.isCompactSummary) { msgs.push({ role: 'compactou' }); continue; }
     if (d.type === 'user' && d.message) {
       const c = d.message.content;
       let t = typeof c === 'string' ? c : Array.isArray(c) ? c.filter(x => x && x.type === 'text').map(x => x.text).join('\n') : '';
-      t = tiraBlocos(t);
+      t = semResumoDaSessao(tiraBlocos(t));
       if (t && !ehTecnico(t)) msgs.push({ role: 'user', text: semContexto(t) || t });
     } else if (d.type === 'assistant' && d.message) {
       const c = d.message.content || [];

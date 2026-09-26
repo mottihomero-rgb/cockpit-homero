@@ -4112,7 +4112,12 @@ async function send(P) {
     else chipCont.scrollIntoView({ block: 'nearest' });
   }
   let text = inp.value.trim();
-  if (text || (P.anexos || []).length || P.quadroColado) limparSugestoes(P);
+  if (text || (P.anexos || []).length || P.quadroColado) {
+    limparSugestoes(P);
+    // 26/09: a fala dele vai entrar: o "Continuar" (ou o que ia nascer) sai antes, nunca fica no meio
+    if (P.contTimer) { clearTimeout(P.contTimer); P.contTimer = 0; }
+    if (!P.busy) limparContinuar(P);
+  }
   /* Print colado sozinho TEM de sair. Antes o envio exigia texto: ele colava a imagem, apertava
      Enter e nao acontecia nada — a fichinha ficava presa no campo e ele achava que tinha
      mandado. Agora o anexo (ou o desenho do quadro) ja basta; so o campo totalmente vazio,
@@ -4370,6 +4375,19 @@ window.addEventListener('unhandledrejection', (e) => {
 function receberEventoPane(ev) {
   const P = panes.get(ev.paneId); if (!P) return;
   if (ev.globalEvent && window.api.onCodexEvent) return;
+  /* 26/09 (pedido dele): o "Continuar" só aparece quando a conversa parou DE VERDADE. O Claude às
+     vezes fecha um turno e abre outro sozinho (mensagem na fila dele, tarefa de fundo, gancho de
+     parada): o botão nascia nesse intervalo e a resposta nova descia embaixo dele, com o chat
+     marcado como parado. Chegou coisa nova do motor: o botão sai; e no Claude o chat volta a
+     "trabalhando" (ele sempre fecha o turno com o 'result', então não fica preso). */
+  if (['busy', 'text-delta', 'think-delta', 'text-final', 'tool-start', 'tool-output', 'perguntas', 'plano-pronto',
+    'question', 'approval', 'compacting'].includes(ev.kind)) {
+    if (P.contTimer) { clearTimeout(P.contTimer); P.contTimer = 0; }
+    limparContinuar(P);
+    if (!P.busy && P.engine === 'claude' && ['text-delta', 'think-delta', 'tool-start'].includes(ev.kind)) {
+      P.busy = true; setDot(P, 'busy'); comecarTurno(P); trabalhando(P);
+    }
+  }
   switch (ev.kind) {
     case 'account': case 'connectors':
       if (!window.api.onCodexEvent) receberEventoGlobalCodex({ ...ev, destino: NA_VPS(P.cwd) ? 'vps' : 'local' });
@@ -4448,7 +4466,9 @@ function receberEventoPane(ev) {
       escondePerm(P, false);   // perguntas não bloqueantes continuam respondíveis
       marcarRespostaNova(P);   // antes do setDot: ele repinta o ponto já com o "nova"
       setDot(P, 'idle'); P.blocks.clear(); pararTrabalho(P); limparPassos(P);
-      mostrarContinuar(P);
+      /* o "Continuar" espera 1,5 s de silêncio: se o motor abrir outro turno na hora, ele nem nasce */
+      if (P.contTimer) clearTimeout(P.contTimer);
+      P.contTimer = setTimeout(() => { P.contTimer = 0; if (panes.get(P.id) === P && !P.busy && !P.queued) mostrarContinuar(P); }, 1500);
       planoAoFimDoTurno(P);   // Gemini/ACP no modo Plano: o "Executar" no fim da resposta
       atualizarGit(P);   // leva 10.4: o turno acabou; o chip mostra o que ele mexeu na pasta
       setTimeout(() => { if (!P.busy) { pararTrabalho(P); limparPassos(P); } }, 400);

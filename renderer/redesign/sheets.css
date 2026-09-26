@@ -65,6 +65,7 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
   box-shadow:inset 0 0 0 1px var(--separator);cursor:pointer;
   transition:background-color var(--dur-fast) ease-out}
 .na-motor:hover{background:var(--fill-3)}
+.na-motor:not(.on):active{background:var(--fill-2)}
 .na-motor.on{background:var(--fill-2);box-shadow:0 0 0 2px var(--accent)}
 .na-motor:focus-visible{box-shadow:inset 0 0 0 1px var(--separator),var(--anel-foco)}
 .na-motor.on:focus-visible{box-shadow:0 0 0 2px var(--accent),var(--anel-foco)}
@@ -79,6 +80,7 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
   font:400 13px/16px var(--font-sans);color:var(--label-2);
   transition:color var(--dur-fast) ease-out}
 .na-onde:hover{background:transparent;color:var(--label-1)}
+.na-onde:not(.on):active{background:var(--fill-2)}
 .na-onde.on{background:var(--control-selected);color:var(--label-1);font-weight:500;
   box-shadow:0 1px 2px rgba(0,0,0,.2),0 0 0 .5px var(--separator);border:0}
 .na-onde:focus-visible{box-shadow:var(--anel-foco)}
@@ -95,6 +97,7 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   transition:background-color var(--dur-fast) ease-out}
 .na-atalho:hover{background:var(--fill-2);color:var(--label-1);border:0}
+.na-atalho:not(.on):active{background:var(--separator-strong)}
 .na-atalho.on{background:var(--fill-1);color:var(--label-1);box-shadow:0 0 0 1.5px var(--accent);
   font-weight:600;border:0}
 .na-atalho:focus-visible{box-shadow:var(--anel-foco)}
@@ -105,6 +108,7 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
   color:var(--label-2);font:400 13px/16px var(--font-sans);text-align:left;
   transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
 .na-pasta:hover{background:var(--fill-3);color:var(--label-1);border:0}
+.na-pasta:active{background:var(--fill-2)}
 .na-pasta:focus-visible{box-shadow:var(--anel-foco)}
 .na-pasta-ic{width:14px;height:14px;color:currentColor;display:grid;place-items:center}
 .na-pasta-ic .ic,.na-pasta-ic svg{width:14px;height:14px}
@@ -121,6 +125,7 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
 .na-escolhida:hover .na-esc-x,.na-esc-x:focus-visible{opacity:1}
 .na-esc-x .ic{width:10px;height:10px}
 .na-esc-x:hover{background:var(--fill-3);color:var(--label-1)}
+.na-esc-x:active{background:var(--fill-2)}
 /* o motivo de não dar (motor que não roda ali): uma linha, sem frase de explicação */
 .na-dica{font:400 11px/14px var(--font-sans);color:var(--label-2);margin:0;text-align:left}
 
@@ -180,6 +185,7 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
   transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
 :is(.p-modal:not(.como-menu),.modal.global) .mo-gap ~ .mo-x{margin-left:0}
 :is(.p-modal:not(.como-menu),.modal.global) .mo-x:hover{background:var(--fill-3);color:var(--label-1)}
+:is(.p-modal:not(.como-menu),.modal.global) .mo-x:active{background:var(--fill-2)}
 :is(.p-modal:not(.como-menu),.modal.global) .mo-x .ic{width:14px;height:14px}
 /* Logo do assistente numa cor só (regra 8: o oficial, recolorido com --logo-*). O do Gemini vem
    com o degradê de várias cores (grupo com máscara por cima da estrela): nas sheets fica só a
@@ -224,6 +230,7 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
 /* destrutivo sem moldura: o "Sair" da conta (vermelho, nunca o azul) */
 :is(.p-modal:not(.como-menu),.modal.global) .mo-btn.perigo{padding:0 14px;background:transparent;color:var(--status-error)}
 :is(.p-modal:not(.como-menu),.modal.global) .mo-btn.perigo:hover{background:var(--fill-3)}
+:is(.p-modal:not(.como-menu),.modal.global) .mo-btn.perigo:active{background:var(--fill-2)}
 /* conectores: linhas de 36, botão pequeno de 24 (raio 6) */
 :is(.p-modal:not(.como-menu),.modal.global) .mo-lista{margin:0 -8px}
 :is(.p-modal:not(.como-menu),.modal.global) .co{min-height:36px;padding:6px 8px;border-radius:6px;gap:10px}
@@ -233,6 +240,7 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
 :is(.p-modal:not(.como-menu),.modal.global) .co-bt{height:24px;padding:0 10px;border:0;border-radius:6px;
   background:var(--fill-2);color:var(--label-1);font:500 12px/15px var(--font-sans)}
 :is(.p-modal:not(.como-menu),.modal.global) .co-bt:hover{background:var(--fill-1)}
+:is(.p-modal:not(.como-menu),.modal.global) .co-bt:not(.destaque):active{background:var(--separator-strong)}
 :is(.p-modal:not(.como-menu),.modal.global) .co-bt.destaque{background:var(--accent);color:var(--on-accent);font-weight:600}
 /* a pasta da VPS: o cartão antigo zerava o padding e empurrava o campo com margem */
 .p-modal:not(.como-menu) > .modal-cx.cx-vps{padding:20px}
@@ -252,6 +260,7 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
 .cx-conta .ct-linha + .ct-linha{border-top:1px solid var(--separator)}
 .cx-conta button.ct-linha{cursor:pointer;transition:background-color var(--dur-fast) ease-out}
 .cx-conta button.ct-linha:hover{background:var(--fill-3)}
+.cx-conta button.ct-linha:active{background:var(--fill-2)}
 .cx-conta button.ct-linha:focus-visible{box-shadow:inset var(--anel-foco)}
 /* radio de 14: marcado = branco com miolo azul de 4 */
 .cx-conta .ct-radio{flex:none;width:14px;height:14px;border-radius:50%;
@@ -269,6 +278,7 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
   display:inline-flex;align-items:center;gap:6px;color:var(--label-2);font:400 12px/16px var(--font-sans);
   transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
 .cx-conta .ct-acao:hover{background:var(--fill-3);color:var(--label-1)}
+.cx-conta .ct-acao:active{background:var(--fill-2)}
 .cx-conta .ct-acao:focus-visible{box-shadow:var(--anel-foco)}
 .cx-conta .ct-acao .ic{width:12px;height:12px}
 /* "Entrar com outra conta…" é um pouco mais justo que as outras cápsulas (0 14 no desenho) */
@@ -283,6 +293,7 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
   color:var(--label-2);font:400 13px/16px var(--font-sans);cursor:pointer;
   transition:color var(--dur-fast) ease-out}
 .cf-seg button:hover{color:var(--label-1)}
+.cf-seg button:not(.on):active{background:var(--fill-2)}
 .cf-seg button.on{background:var(--control-selected);color:var(--label-1);font-weight:500;
   box-shadow:0 1px 2px rgba(0,0,0,.2),0 0 0 .5px var(--separator)}
 .cf-seg button:focus-visible{box-shadow:var(--anel-foco)}
@@ -293,6 +304,7 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
   display:flex;flex-direction:column;align-items:stretch;gap:2px;text-align:left;cursor:pointer;
   color:var(--label-1);transition:background-color var(--dur-fast) ease-out}
 .cf-item:hover{background:var(--fill-3)}
+.cf-item:not(.on):active{background:var(--fill-2)}
 .cf-item.on{background:var(--fill-1)}
 .cf-item:focus-visible{box-shadow:var(--anel-foco)}
 .cf-item-t{font:400 13px/16px var(--font-sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -312,8 +324,12 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
   padding:0;display:flex;flex-direction:column;overflow:hidden;border-radius:14px;
   background:#0B0B0C;color:rgba(255,255,255,.9);
   box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 .5px rgba(255,255,255,.18)}
-.cx-terminal .mo-top{flex:none;height:39px;min-height:39px;box-sizing:border-box;margin:0;padding:0 8px 0 16px;gap:8px;
-  border-bottom:1px solid rgba(255,255,255,.08)}
+/* O seletor é comprido de propósito: a regra genérica da janelinha (:is(.p-modal…) .mo-top, peso
+   0,3,0 — o :is conta o argumento mais forte) dava margem de 16 embaixo e ganhava do
+   ".cx-terminal .mo-top" (0,2,0). O texto do terminal descia 16px e sobrava uma faixa vazia
+   embaixo do cabeçalho. Com 0,5,0 o cabeçalho de 39 fica colado no corpo, como no desenho (E5). */
+.p-modal:not(.como-menu) > .modal-cx.cx-terminal > .mo-top{flex:none;height:39px;min-height:39px;
+  box-sizing:border-box;margin:0;padding:0 8px 0 16px;gap:8px;border-bottom:1px solid rgba(255,255,255,.08)}
 .cx-terminal .term-ic{flex:none;display:flex;color:rgba(255,255,255,.6)}
 .cx-terminal .term-ic .ic{width:14px;height:14px}
 :is(.p-modal:not(.como-menu),.modal.global) .cx-terminal .mo-tit{flex:none;font:600 13px/16px var(--font-sans);color:rgba(255,255,255,.9)}
@@ -338,6 +354,21 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
 .cx-terminal .term-link button:hover{background:rgba(255,255,255,.16)}
 .cx-terminal .term-link.destaque button{background:var(--accent);color:var(--on-accent)}
 .cx-terminal .term-link.destaque button:hover{background:color-mix(in srgb,var(--accent) 88%,white);filter:none}
+/* pressionado: um degrau acima do hover (o terminal tem cor própria, igual nos quatro temas) */
+.cx-terminal .term-cancela:active,
+:is(.p-modal:not(.como-menu),.modal.global) .cx-terminal .mo-x:active{background:rgba(255,255,255,.14)}
+.cx-terminal .term-link button:active{background:rgba(255,255,255,.22)}
+.cx-terminal .term-link.destaque button:active{background:color-mix(in srgb,var(--accent) 80%,black)}
+/* Contraste aumentado: o terminal é preto nos quatro temas e não usa os tokens, então os rótulos
+   sobem aqui como o -hc faz com --label-2/--label-3 (.4 → .62, .6 → .8) e a linha do cabeçalho
+   e do rodapé fica visível (a do -hc é ~3× a normal). O comando a .4 dava 3,78:1 sobre #0B0B0C. */
+html[data-theme$="-hc"] .cx-terminal .term-cmd{color:rgba(255,255,255,.62)}
+html[data-theme$="-hc"] .cx-terminal :is(.term-ic,.term-link){color:rgba(255,255,255,.8)}
+/* nos botões, só parado: no hover continua o branco cheio */
+html[data-theme$="-hc"] .cx-terminal .term-cancela:not(:hover),
+html[data-theme$="-hc"] :is(.p-modal:not(.como-menu),.modal.global) .cx-terminal .mo-x:not(:hover){color:rgba(255,255,255,.8)}
+html[data-theme$="-hc"] .p-modal:not(.como-menu) > .modal-cx.cx-terminal > .mo-top{border-bottom-color:rgba(255,255,255,.24)}
+html[data-theme$="-hc"] .cx-terminal .term-link{border-top-color:rgba(255,255,255,.24)}
 
 /* ---------- 8. Visor de arquivo ---------- */
 .visor-cx{background:var(--bg-content);border:0;border-radius:14px;box-shadow:var(--shadow-float)}
@@ -355,9 +386,11 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
   background:var(--fill-2);color:var(--label-1);font:500 13px/16px var(--font-sans);
   transition:background-color var(--dur-fast) ease-out}
 .visor-abrir:hover{background:var(--fill-1);color:var(--label-1)}
+.visor-abrir:active{background:var(--separator-strong)}
 .visor-abrir .ic,.visor-x .ic{width:14px;height:14px}
 .visor-x{width:28px;height:28px;border-radius:7px;color:var(--label-2)}
 .visor-x:hover{background:var(--fill-3);color:var(--label-1)}
+.visor-x:active{background:var(--fill-2)}
 .visor-corpo{padding:12px 0;background:var(--code-bg)}
 /* código com número de linha: coluna de 52 alinhada à direita + 16 de respiro, mono 12,5/21 */
 /* o .visor-corpo é grade centrada (imagem e recado no meio); o código ocupa a largura toda e
@@ -378,21 +411,28 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
 .qd-mini{color:var(--label-2)}
 .qd-mini:hover,.qd-x:hover{background:var(--fill-3);color:var(--label-1)}
 .qd-mini:disabled:hover{background:transparent;color:var(--label-2)}
+.qd-mini:not(:disabled):active{background:var(--fill-2);color:var(--label-1)}
 /* o zoom mora na barra de cima (quadro.js): sem a pílula flutuante de antes */
 .qd-top .qd-zoom{position:static;display:flex;align-items:center;gap:0;padding:0;border:0;
   border-radius:0;background:transparent;box-shadow:none}
 .qd-zoom-bt{color:var(--label-2)}
 .qd-zoom-bt:hover{background:var(--fill-3);color:var(--label-1)}
+.qd-zoom-bt:active{background:var(--fill-2)}
 .qd-zoom-n{font:400 12px/16px var(--font-sans);font-variant-numeric:tabular-nums;color:var(--label-1)}
 .qd-zoom-n:hover{color:var(--label-1)}
 .qd-rodape{background:transparent;border-top:1px solid var(--separator)}
 .qd-conta{font:400 12px/16px var(--font-sans);font-variant-numeric:tabular-nums;color:var(--label-3)}
 .qd-rodape .qd-bt{border:0;background:var(--fill-2);color:var(--label-1);font:500 13px/16px var(--font-sans)}
 .qd-rodape .qd-bt:not(.qd-mandar):hover{background:var(--fill-1);color:var(--label-1)}
+.qd-rodape .qd-bt:not(.qd-mandar):not(.perigo):active{background:var(--separator-strong)}
 /* Limpar: sem moldura; vira vermelho só no "Confirmar?" */
 .qd-rodape .qd-bt.perigo{background:transparent}
 .qd-rodape .qd-bt.perigo:hover{background:var(--fill-3);color:var(--label-1)}
-.qd-rodape .qd-bt.perigo.confirmando{background:var(--status-error);color:#fff;font-weight:600}
+.qd-rodape .qd-bt.perigo:not(.confirmando):active{background:var(--fill-2)}
+/* --erro-fundo (ponte do style.css): no escuro é o vermelho a 40% sobre o fundo, feito para levar
+   texto branco (9:1); no claro é o vermelho cheio (5,4:1). O --status-error no escuro é vermelho
+   de TEXTO (#FF6961): com branco por cima dava 2,8:1 e o "Confirmar?" quase sumia. */
+.qd-rodape .qd-bt.perigo.confirmando{background:var(--erro-fundo);color:#fff;font-weight:600}
 /* Mandar pro chat: cápsula azul, sem ícone e sem sombra colorida */
 .qd-rodape .qd-mandar{border:0;background:var(--accent);color:var(--on-accent);font:600 13px/16px var(--font-sans);
   box-shadow:none;filter:none}
@@ -411,6 +451,14 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
 .ag-corpo{background:transparent}
 .ag-vazio-tit{margin:0;font:var(--f-headline);color:var(--label-2)}
 .ag-x:hover{background:var(--fill-3);color:var(--label-1)}
+.ag-x:active{background:var(--fill-2)}
+
+/* ---------- 10b. Pressionado dos botões pequenos de fora das sheets ----------
+   A conferência (rodada 1) achou estes sem o estado pressionado: ao apertar ficavam iguais ao
+   hover. Moram aqui, e não no arquivo de cada área, para o conserto entrar sem tocar nas outras
+   áreas; carregando depois delas, o :active de mesmo peso ganha do :hover de lá. Folha de
+   componentes: botão sem moldura ou ícone pressionado = --fill-2. */
+.uso-x:active,.pn-edit:active,.info:active{background:var(--fill-2)}
 
 /* ---------- 11. SÓ NO MAC: tamanho e lugar ----------
    Mesma condição do celular.css, negada: o que está aqui nunca vale no iPhone/iPad. */
@@ -481,6 +529,8 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
   /* balde e espessura são interruptores, não ferramenta: acendem em --fill-1 (um azul só) */
   .qd-fundo.ativa,.qd-esp-bt.ativa{background:var(--fill-1);color:var(--label-1);border:0;box-shadow:none}
   .qd-fer.perigo:hover{background:var(--fill-3);color:var(--status-error)}
+  /* pressionado: --fill-2 (a ferramenta ligada continua azul) */
+  .qd-fer:not(.ativa):active,.qd-esp-bt:not(.ativa):active{background:var(--fill-2)}
   .qd-fer-tecla{display:none}          /* a letra do atalho mora no balão do botão */
   .qd-sep,.qd-fer-sep{width:20px;height:1px;margin:3px 0;background:var(--separator)}
   /* cores numa coluna só: bolinhas de 14 a cada 26 (área de clique de 32×26). O !important vence
@@ -499,6 +549,11 @@ html[data-theme$="-hc"] :is(.na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.
 
   /* time de agentes: o véu também escurece a barra do topo */
   #agPainel{padding:22px}
+
+  /* parar (caixa.css): parado --fill-1, hover --separator-strong; pressionado sobe mais um degrau
+     (o --fill-2 por cima do --separator-strong). Só no Mac: no telefone o botão é de 32×44 com o
+     círculo desenhado no fundo (celular), e um fundo cheio ali viraria um retângulo. */
+  .p-stop:active{background:linear-gradient(var(--fill-2),var(--fill-2)) var(--separator-strong)}
 }
 
 /* telefone: a largura da sheet é a do style.css/celular.css (a caixa dentro da tela, com o

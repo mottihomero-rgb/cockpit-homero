@@ -6636,6 +6636,7 @@ window.api.onTermEvent(({ id, kind, data, code }) => {
   if (kind === 'exit') {
     t.vivo = false;
     t.term.write('\r\n\x1b[90m— terminou' + (code ? ' (código ' + code + ')' : ', tudo certo') + ' —\x1b[0m\r\n');
+    if (t.acabou) t.acabou();
   }
 });
 
@@ -6741,6 +6742,9 @@ function janelaTerminal(P, linha, titulo, aoFechar, opcoes) {
   const elLink = $('.term-link', cx), txtLink = $('.mono', elLink);
   const reg = {
     term, buf: '', vivo: true,
+    /* O ■ de parar so vale enquanto o comando roda. Acabou (ou nem comecou), ele sai da barra e
+       fica so o × — no desenho (E5) o terminal que terminou tem so o fechar. */
+    acabou() { const b = $('#tmCancela', cx); if (b) b.classList.add('hidden'); },
     viu(d) {
       this.buf = (this.buf + d).slice(-8000);
       const achou = semEscapes(this.buf).match(REG_LINK);
@@ -6784,7 +6788,7 @@ function janelaTerminal(P, linha, titulo, aoFechar, opcoes) {
   $('#tmCancela', cx).onclick = () => { window.api.termInput({ id, data: '\x03' }); term.focus(); };
 
   window.api.termRun({ id, linha, cols: tam.cols, rows: tam.rows }).then((r) => {
-    if (r && r.error) term.write('\r\n\x1b[31m[não consegui rodar: ' + r.error + ']\x1b[0m\r\n');
+    if (r && r.error) { term.write('\r\n\x1b[31m[não consegui rodar: ' + r.error + ']\x1b[0m\r\n'); reg.acabou(); }
   });
   setTimeout(() => term.focus(), 60);
 }
@@ -11543,6 +11547,9 @@ function alternarTelaAtalhos() {
     };
   }
   tela.classList.remove('hidden');
+  /* abre com o cursor no "Buscar atalho": com a tela aberta a letra solta e barrada de proposito
+     (o teclado nao vai para o chat de tras), entao sem o foco aqui digitar nao fazia nada */
+  if (busca) busca.focus({ preventScroll: true });
 }
 
 /* QUEM GANHA A TECLA, do mais perto do dedo para o mais longe. (1) Campo de texto em foco —
@@ -11846,7 +11853,8 @@ document.addEventListener('keydown', (e) => {
   for (const eng of MOTORES_VISIVEIS) $('#naIc' + CAIXA_MOTOR[eng]).innerHTML = svgMotor(eng);
   $('#naDoisA').innerHTML = svgMotor('claude');
   $('#naDoisB').innerHTML = svgMotor('codex');
-  $('.na-pasta-ic').innerHTML = ico('folder-open');
+  // pasta fechada, como no desenho (a aberta é a do visor de arquivo)
+  $('.na-pasta-ic').innerHTML = ico('folder');
   $('#naPastaX').innerHTML = ico('x');
   // barra de icones aparece, a lateral comeca fechada
   $('#sidebar').classList.add('hidden'); $('#dragbar').classList.add('hidden');

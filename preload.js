@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('api', {
   // 26/09: janelinha de perguntas do Claude e o plano pronto do modo Plano
   panePerguntas: (o) => ipcRenderer.invoke('pane:perguntas', o),
   panePlano: (o) => ipcRenderer.invoke('pane:plano', o),
+  // 26/09: tempo total de trabalho de uma conversa (lido do arquivo dela)
+  sessionTempo: (o) => ipcRenderer.invoke('sessions:tempo', o),
   paneSettings: (o) => ipcRenderer.invoke('pane:settings', o),
   paneInterrupt: (o) => ipcRenderer.invoke('pane:interrupt', o),
   paneSteer: (o) => ipcRenderer.invoke('pane:steer', o),

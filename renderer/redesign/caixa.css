@@ -478,3 +478,11 @@
 .p-citacao .pc-x{flex:none;width:18px;height:18px;display:grid;place-items:center;border:0;border-radius:5px;background:transparent;color:var(--label-3)}
 .p-citacao .pc-x:hover{background:var(--fill-2);color:var(--label-1)}
 .p-citacao .pc-x .ic{width:10px;height:10px}
+
+/* tempo total de trabalho do chat (26/09): no meio do rodapé, entre a pasta e o quadro — relógio
+   de 11 + "1h 23min" em 11, --label-3, número tabular. Some com o chat que ainda não trabalhou. */
+.cmp-gap{display:flex;align-items:center;justify-content:center;min-width:4px;overflow:hidden}
+.p-tempo{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;font:400 11px/14px var(--font-sans);
+  color:var(--label-3);font-variant-numeric:tabular-nums;cursor:default}
+.p-tempo .ic{width:11px;height:11px}
+.p-tempo.hidden{display:none}

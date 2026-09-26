@@ -20,7 +20,7 @@ const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
    Mexeu no renderer/web.js? Ponha o nome novo aqui tambem, senao o telefone nao alcanca. */
 const PERMITIDOS = new Set([
   'config:get', 'sys:home', 'fs:list', 'fs:read', 'fs:buscarArquivos',
-  'pane:start', 'pane:send', 'pane:respond', 'pane:perguntas', 'pane:plano', 'pane:settings', 'pane:steer',
+  'pane:start', 'pane:send', 'pane:respond', 'pane:perguntas', 'pane:plano', 'sessions:tempo', 'pane:settings', 'pane:steer',
   'pane:compactar', 'pane:interrupt', 'pane:stop', 'pane:approve',
   // so LEITURA (R2-012): o celular usa isso so pra reconciliar no reconnect, nunca muda nada no Mac
   'pane:estado',

@@ -114,6 +114,7 @@ function contextoOpenSession() {
   ctx.window.api.sessionHistoryRemoto = async () => [];
   // 25/09: sem ligacao nenhuma, a cadeia de uma conversa e ela mesma
   ctx.partesDaCadeia = s => [s]; ctx.refDaParte = p => p;
+  ctx.somarTempoDoHistorico = () => {};   // 26/09: o tempo total do chat é lido à parte
   vm.runInContext(pegar('openSession') + '\nthis.openSession = openSession;', ctx);
   return ctx;
 }

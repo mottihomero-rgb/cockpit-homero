@@ -378,7 +378,7 @@ function contextoAbrir() {
       el: el(), chat: el(), ...o }; panes.set(P.id, P); return P; },
     invalidarConversa() {}, painelAindaAtual: () => true, escondePerm() {}, fillModels() {}, paintEngine() {},
     setDot() {}, pintarPasta() {}, mostrarPastaNoPainel() {}, atualizarGit() {}, pintarModo() {}, pintarNome() {},
-    setFocus: (P) => { ctx.focusPane = P; }, savePanes() {}, marcarAbertas() {}, note() {}, scroll() {},
+    setFocus: (P) => { ctx.focusPane = P; }, savePanes() {}, marcarAbertas() {}, note() {}, scroll() {}, somarTempoDoHistorico() {},
     limparPlano() {}, limparSugestoes() {}, piscar() {}, ico: () => '', $: () => el(), $$: () => [],
     renderizarHistorico: (P, m) => ctx.feito.push(P.engine + ':' + m.text),
     marcaTroca: () => ctx.feito.push('troca'), nomeDoMotor: m => m,
@@ -430,6 +430,7 @@ function contextoReabrir(chats, ligacoes, historicos) {
       panes.set(P.id, P); o.aba.ordem.push(P.id); return P; },
   });
   ctx.window.api.sessionHistory = async (o) => historicos[o.id] || [];
+  ctx.somarTempoDoHistorico = () => {};   // 26/09: o tempo total do chat é lido à parte
   vm.runInContext([pegar('lerHistoricoDaParte'), pegar('lerPartes'), pegar('desenharPartes'), pegar('restaurarAbasCorpo')].join('\n')
     + '\nthis.restaurarAbasCorpo = restaurarAbasCorpo;', ctx);
   return ctx;

@@ -1390,6 +1390,7 @@ async function restaurarAbasCorpo(salvas) {
   await Promise.all(paraCarregar.map(async ({ P, arquivo, id, cwd, revisao, partes, soAntes, semDono }) => {
     if (!painelAindaAtual(P, revisao)) return;
     note(P, 'Trazendo a conversa de volta…');
+    somarTempoDoHistorico(P, partes && partes.length ? partes : [{ engine: P.engine, file: arquivo, id, cwd }]);
     try {
       if (partes && (partes.length > 1 || soAntes)) {
         // 25/09: a cadeia inteira, da parte mais velha para a mais nova, com a faixa da troca
@@ -3761,6 +3762,8 @@ function marcarFimDoTurno(P) {
   if (!P.t0) return;
   const levou = Date.now() - P.t0;
   P.t0 = 0;
+  // 26/09: o turno entra no tempo total de trabalho do chat (rodapé da caixa)
+  tempoDoChat(P).vivo += levou; pintarTempo(P);
   const temMudanca = !!(P.diffTurno || (P.mudancasTurno && P.mudancasTurno.length));
   const prints = (P.printsTurno || []).slice();      // congela: o turno seguinte zera a lista
   // resposta curta, sem mudanca e sem print nao precisa de carimbo
@@ -5479,6 +5482,52 @@ function pintarSeloTorre() {
   selo.classList.toggle('hidden', !n);
   selo.textContent = n > 9 ? '9+' : String(n || '');
 }
+
+/* ================= tempo total de trabalho do chat (26/09, pedido dele) =================
+   No meio do rodapé da caixa, entre a pasta e o quadro: quanto tempo a IA já trabalhou nesta
+   conversa, somando TODAS as respostas (não o tempo com o chat aberto). A conta: o que veio do
+   arquivo da conversa ao reabrir (base, lido no main: só os trechos em que ela trabalhava) + os
+   turnos desta sessão do app (vivo) + o turno rodando agora. Presa ao P.hist: conversa nova no
+   mesmo painel começa do zero. */
+function tempoDoChat(P) {
+  if (!P.tempo || P.tempo.dono !== P.hist) P.tempo = { dono: P.hist, base: 0, vivo: 0 };
+  return P.tempo;
+}
+function tempoTotalMs(P) {
+  const t = tempoDoChat(P);
+  return t.base + t.vivo + (P.busy && P.t0 ? Math.max(0, Date.now() - P.t0) : 0);
+}
+function fmtTempoTotal(ms) {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return s + 's';
+  const min = Math.floor(s / 60);
+  if (min < 60) return min + 'min';
+  const h = Math.floor(min / 60), r = min % 60;
+  return h + 'h' + (r ? ' ' + r + 'min' : '');
+}
+function pintarTempo(P) {
+  const el = P && P.el && $('.p-tempo', P.el);
+  if (!el) return;
+  const ms = tempoTotalMs(P);
+  el.classList.toggle('hidden', ms < 1000);
+  const txt = fmtTempoTotal(ms);
+  if (el.dataset.txt !== txt) { el.dataset.txt = txt; el.innerHTML = ico('clock') + '<span></span>'; el.lastChild.textContent = txt; }
+}
+async function somarTempoDoHistorico(P, partes) {
+  const t = tempoDoChat(P), dono = P.hist;
+  if (!window.api.sessionTempo) return;
+  let soma = 0;
+  try {
+    const r = await Promise.all((partes || []).filter(Boolean).map(p =>
+      window.api.sessionTempo({ engine: p.engine, file: p.file, id: p.id, cwd: p.cwd }).catch(() => 0)));
+    soma = r.reduce((a, b) => a + (Number(b) || 0), 0);
+  } catch {}
+  if (P.hist !== dono) return;           // trocou de conversa no meio da leitura
+  t.base = soma;
+  pintarTempo(P);
+}
+// enquanto trabalha, o relógio anda (só repinta quando o texto muda)
+setInterval(() => { for (const P of panes.values()) if (P.busy) pintarTempo(P); }, 1000);
 
 function renderizarHistorico(P, m) {
   const role = m.role || m.kind || m.type;
@@ -11010,6 +11059,7 @@ async function openSession(s, el) {
   marcarAbertas();   // repinta a borda de "aberta" na lista, senao so aparece depois do 1o redesenho
 
   note(P, 'Conversa: ' + s.title);
+  somarTempoDoHistorico(P, partes.length > 1 ? partes : [s]);
   /* Conversa que rodou na VPS mora no disco DELA: o arquivo daqui não existe, e sem este
      desvio clicar nela abria um chat vazio. O caminho local segue exatamente como era. */
   try {

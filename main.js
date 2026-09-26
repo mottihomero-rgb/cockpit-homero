@@ -2972,6 +2972,54 @@ function acharConversaClaude(id, cwd) {
   return '';
 }
 
+/* ---- tempo total de trabalho de uma conversa (26/09, pedido dele) ----
+   A soma do tempo em que a IA esteve de fato trabalhando, lida do próprio arquivo da conversa:
+   de cada fala dele até o último registro antes da fala seguinte. Só contam os intervalos
+   curtos entre um registro e o próximo (< 10 min): parada longa no meio (esperando ele aprovar,
+   o Mac dormindo) não é trabalho. Fala dele zera o relógio (o tempo entre a resposta e a próxima
+   pergunta é dele, não da IA). Claude e Codex têm o carimbo de hora em cada linha; nos outros
+   motores o app soma só o tempo ao vivo. Guardado por arquivo+tamanho: reabrir não relê. */
+const TEMPO_PAUSA_MAX = 10 * 60 * 1000;
+const tempoCache = new Map();
+function falaDeGenteClaude(o) {
+  if (!o || o.type !== 'user' || o.isMeta || o.isSidechain) return false;
+  const c = o.message && o.message.content;
+  if (typeof c === 'string') return !!c.trim() && !/^<(command-|local-command)/.test(c.trim());
+  return Array.isArray(c) && c.some(x => x && x.type === 'text' && String(x.text || '').trim()) && !c.some(x => x && x.type === 'tool_result');
+}
+function tempoDeTrabalho(engine, file) {
+  let st; try { st = fs.statSync(file); } catch { return 0; }
+  const chave = engine + '|' + file;
+  const c = tempoCache.get(chave);
+  if (c && c.size === st.size && c.mtime === st.mtimeMs) return c.total;
+  let total = 0, ultimo = 0, emTurno = false;
+  let texto = ''; try { texto = fs.readFileSync(file, 'utf8'); } catch { return 0; }
+  for (const linha of texto.split('\n')) {
+    if (!linha || linha.indexOf('"timestamp"') < 0) continue;
+    let o; try { o = JSON.parse(linha); } catch { continue; }
+    const ts = Date.parse(o.timestamp || '');
+    if (!ts) continue;
+    // Codex: cada resposta vem marcada (task_started … task_complete); Claude: a fala dele abre
+    const tipoCodex = engine === 'codex' && o.type === 'event_msg' && o.payload ? o.payload.type : '';
+    const deGente = engine === 'codex' ? (tipoCodex === 'task_started' || tipoCodex === 'user_message') : falaDeGenteClaude(o);
+    if (deGente) { if (!(emTurno && tipoCodex === 'user_message')) ultimo = ts; emTurno = true; continue; }
+    if (!emTurno) continue;
+    const passo = ts - ultimo;
+    if (passo > 0 && passo < TEMPO_PAUSA_MAX) total += passo;
+    if (passo > 0) ultimo = ts;
+    if (tipoCodex === 'task_complete' || tipoCodex === 'turn_aborted') emTurno = false;
+  }
+  tempoCache.set(chave, { size: st.size, mtime: st.mtimeMs, total });
+  return total;
+}
+handle('sessions:tempo', async (_e, { engine, file, id, cwd } = {}) => {
+  if (!['claude', 'codex'].includes(engine) || ehRemoto(cwd)) return 0;
+  let alvo = file && fs.existsSync(file) ? file : '';
+  if (!alvo && engine === 'claude') alvo = acharConversaClaude(id, cwd) || '';
+  if (!alvo && engine === 'codex' && id) { try { const s = codexSessions(true, {}).find(x => x.id === id); if (s) alvo = s.file; } catch {} }
+  return alvo ? tempoDeTrabalho(engine, alvo) : 0;
+});
+
 handle('sessions:history', async (_e, { engine, file, id, cwd }) => {
   let alvo = file && fs.existsSync(file) ? file : '';
   /* a 1a fala depois de uma troca de IA leva o contexto colado pelo app ("Estou continuando uma

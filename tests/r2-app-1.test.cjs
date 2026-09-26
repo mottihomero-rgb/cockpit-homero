@@ -26,7 +26,8 @@ function func(nome, src = source) {
 function deferred() { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; }
 
 function context(names, extras = {}) {
-  const c = { console, Map, Set, Promise, Array, Math, String, Number, JSON };
+  // somarTempoDoHistorico (26/09): o tempo total do chat é lido à parte; aqui não interessa
+  const c = { console, Map, Set, Promise, Array, Math, String, Number, JSON, somarTempoDoHistorico() {} };
   Object.assign(c, extras);
   vm.createContext(c);
   vm.runInContext(names.map(n => func(n)).join('\n'), c);

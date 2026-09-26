@@ -298,3 +298,10 @@
   .modal.p-modal.como-menu > .modal-cx,.pop-global,.menu-fantasma{animation:none}
   .menu-fantasma{display:none}
 }
+
+/* 26/09: o menu do + tem só dois itens e cada um mostra o seu ícone (clipe e câmera), traço fino
+   em label-2 — os outros menus continuam sem ícone */
+:is(.modal.p-modal.como-menu > .modal-cx).menu-anexo .mi-ic{display:grid;place-items:center;width:16px;flex:none;
+  color:var(--label-2);opacity:1}
+:is(.modal.p-modal.como-menu > .modal-cx).menu-anexo .mi-ic .ic{width:14px;height:14px}
+:is(.modal.p-modal.como-menu > .modal-cx).menu-anexo .mi{gap:10px}

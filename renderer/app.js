@@ -55,7 +55,7 @@ const ICONE_NOVO = {
   'refresh-cw': 'retry', 'rotate-cw': 'retry', 'panel-left': 'sidebar', 'columns-2': 'columns',
   'plug': 'plug', 'book': 'book', 'star': 'star', 'server': 'server', 'key-round': 'key',
   'log-out': 'log-out', 'circle-help': 'question', 'square': 'stop', 'agentes': 'team',
-  'quadro': 'board', 'crop': 'crop', 'camera': 'camera', 'git-branch': 'branch',
+  'quadro': 'board', 'crop': 'crop', 'camera': 'camera', 'git-branch': 'branch', 'clip': 'clip',
 };
 // sem o icones.js carregado (os testes rodam o app.js solto) os ícones saem vazios, sem quebrar
 const CK_TRACOS = (typeof window !== 'undefined' && window.CK_ICONES) || {};
@@ -4380,16 +4380,6 @@ function receberEventoPane(ev) {
     case 'tool-end': toolEnd(P, ev.id, ev.output, ev.error, ev.imagens); break;
     // o agente te chamou no meio do trabalho (PushNotification interceptada no main)
     case 'aviso-agente': avisoDoAgente(P, ev.texto); break;
-    /* o recorte da tela ficou pronto no main e virou arquivo: entra como anexo DESTE painel.
-       R4: o recado de sucesso vai por avisoTemp — note() sem `true` nao aparece na tela. */
-    case 'anexo-pronto':
-      anexar(P, [ev.arquivo]).then(() => {
-        if ((P.anexos || []).some((x) => x && x.path === ev.arquivo)) {
-          avisoTemp(P, (ev.origem === 'recorte' ? 'Recorte' : 'Imagem') + ' anexado. Escreva o que quer que ele faça.');
-        }
-        const campo = $('.p-input', P.el); if (campo) campo.focus();
-      });
-      break;
     // rastro do turno: quanto ele consumiu e o diff agregado que o Codex manda pronto
     case 'turno-uso': P.usoTurno = { entrada: ev.entrada || 0, saida: ev.saida || 0 }; break;
     case 'diff-turno': P.diffTurno = ev.diff || ''; break;
@@ -6038,42 +6028,24 @@ async function menuModelos(P) {
   }
 }
 
-/* ---- menu do + ---- */
-/* Redesenho 26/09: sem título nem frase de explicação (o design não tem), uma linha por item com
-   os nomes do design ("…" = abre outra janela) e uma linha separando o que CAPTURA (recortar,
-   fotografar) do que escolhe arquivo. A explicação de cada item continua no balão do mouse. */
+/* ---- menu do + ----
+   26/09 (pedido dele): só dois itens, cada um com o seu ícone. "Anexar arquivo" abre UMA janela
+   do Mac que aceita tudo (arquivo, pasta, imagem, vídeo, documento, vários de uma vez) — antes
+   eram quatro portas (do computador, imagem, pasta, pasta deste painel). "Recortar a tela" saiu:
+   ele tira print com o atalho do próprio Mac. No celular o "Anexar arquivo" é a galeria/arquivos. */
 function menuAnexo(P) {
   const m = novoMenu(P, '.p-plus');
   m.classList.add('menu-anexo', 'menu-1linha');
   m.setAttribute('aria-label', 'Anexar');
   const itens = [
-    /* Escolher arquivo e escolher pasta sao janelas do MAC. No telefone os dois so davam um
-       alerta dizendo que nao dava: dois becos sem saida dentro do menu. Fora da lista, do
-       mesmo jeito que o "Recortar a tela" ja fazia. */
-    ...(window.SEM_ELECTRON ? [] : [{ ic: 'upload', nome: 'Do computador…', desc: 'escolher arquivos', act: 'file' }]),
-    /* No telefone este vira o UNICO caminho de arquivo, e a galeria do iPhone tambem entrega
-       video — por isso o nome muda la. No Mac o seletor continua aceitando so imagem. */
-    { ic: 'image', nome: window.SEM_ELECTRON ? 'Foto ou vídeo…' : 'Imagem…',
-      desc: window.SEM_ELECTRON ? 'da galeria do celular' : 'png, jpg, webp', act: 'image' },
-    ...(window.SEM_ELECTRON ? [] : [{ ic: 'folder', nome: 'Pasta…', desc: 'manda o caminho da pasta', act: 'folder' }]),
-    { ic: 'map-pin', nome: 'Pasta deste painel', desc: shortPath(P.cwd), act: 'cwd' },
-    /* Recortar a tela esconde a janela do MAC e abre uma tela preta por cima de tudo la: pelo
-       telefone isso ficaria preso a quilometros de distancia. Por isso o item nem existe la. */
-    ...(window.SEM_ELECTRON ? [] : [{ ic: 'crop', nome: 'Recortar a tela', desc: 'esconde o Cockpit, você arrasta o pedaço e ele vira anexo', act: 'recorte' }]),
+    { ic: 'clip', nome: 'Anexar arquivo', desc: 'arquivo, pasta, imagem, vídeo ou documento', act: 'tudo' },
     { ic: 'camera', nome: 'Fotografar', desc: 'pela câmera: rascunho no papel, quadro físico, o que estiver na sua frente', act: 'foto' },
   ];
-  let separou = false;
   for (const i of itens) {
-    if (!separou && (i.act === 'recorte' || i.act === 'foto')) { separou = true; m.appendChild(elLinha()); }
     m.appendChild(elItem(i, async () => {
-      if (i.act === 'cwd') return inserirNoInput(P, P.cwd);
-      if (i.act === 'recorte') return recortarTela(P);
       if (i.act === 'foto') return fotografar(P);
-      const files = await window.api.pickFiles(i.act);
-      if (files && files.length) {
-        if (i.act === 'folder') inserirNoInput(P, files.join(' '));
-        else await anexar(P, files);
-      }
+      const files = await window.api.pickFiles('tudo');
+      if (files && files.length) await anexar(P, files);
     }));
   }
 }
@@ -6472,18 +6444,9 @@ async function apagarPromptSalvo(P) {
 }
 
 /* ================== ENTRADA VISUAL (leva 4) ==================
-   Outras portas alem de digitar: recortar um pedaco da tela, fotografar pela camera e tirar
-   o texto de dentro de uma imagem. Tudo local; o que vira imagem cai em colados/, na mesma
+   Outras portas alem de digitar: fotografar pela camera e tirar o texto de dentro de uma
+   imagem. Tudo local; o que vira imagem cai em colados/, na mesma
    faxina de 7 dias do print colado. */
-
-/* ---- recortar a tela: esconde o Cockpit e voce arrasta o pedaco ---- */
-async function recortarTela(P) {
-  fecharMenus();
-  let r = null;
-  try { r = await window.api.recortarTela({ paneId: P.id }); } catch (e) { r = { error: String(e && e.message || e) }; }
-  // o sucesso nao volta por aqui: o recorte chega depois, pelo evento 'anexo-pronto'
-  if (r && r.error) note(P, 'Não consegui recortar: ' + r.error, true);
-}
 
 /* ---- foto pela camera: rascunho no papel, quadro fisico, o que estiver na sua frente ---- */
 async function fotografar(P) {

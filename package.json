@@ -38,7 +38,6 @@
       "contas-cli.js",
       "codex-*.js",
       "preload.js",
-      "preload-recorte.js",
       "plataforma.js",
       "nomes-conversa.js",
       "servidor-web.js",

@@ -30,27 +30,24 @@ function itensDoMenu(noTelefone) {
 // a lista nasce dentro do vm (outro mundo): comparar como texto evita a briga de prototipo
 const atos = (l) => l.map(i => i.act).join(',');
 
-test('no Mac o menu do + continua inteiro, na mesma ordem', () => {
-  const l = itensDoMenu(false);
-  assert.equal(atos(l), 'file,image,folder,cwd,recorte,foto');
-  const img = l.find(i => i.act === 'image');
-  // redesenho 26/09: os nomes do menu Anexar passaram a ser os do design ("Imagem…", "Pasta…"),
-  // com "…" porque abrem outra janela; o que o item faz e a explicação continuam iguais
-  assert.equal(img.nome, 'Imagem…');
-  assert.equal(img.desc, 'png, jpg, webp');
+/* 26/09 (pedido dele): o + ficou com dois itens, cada um com o seu ícone — "Anexar arquivo"
+   (uma janela só, que aceita arquivo, pasta, imagem e vídeo) e "Fotografar". Iguais no Mac e
+   no telefone: lá o "Anexar arquivo" abre a galeria/arquivos do próprio celular. */
+test('o + tem só Anexar arquivo e Fotografar, com ícone, no Mac e no telefone', () => {
+  for (const tel of [false, true]) {
+    const l = itensDoMenu(tel);
+    assert.equal(atos(l), 'tudo,foto');
+    assert.equal(l.map(i => i.nome).join('|'), 'Anexar arquivo|Fotografar');
+    assert.equal(l.map(i => i.ic).join('|'), 'clip|camera');
+  }
+  assert.doesNotMatch(src, /Recortar a tela'|recortarTela\(/, 'o recorte de tela saiu do app');
 });
 
-test('no telefone nao sobra nenhum item que so daria um alerta', () => {
-  const l = itensDoMenu(true);
-  assert.equal(atos(l), 'image,cwd,foto');
-  // 'file' e 'folder' sao os dois que o web.js so responde com alert()
-  assert.equal(l.filter(i => i.act === 'file' || i.act === 'folder').length, 0);
-});
-
-test('no telefone o item de imagem avisa que video tambem vale', () => {
-  const img = itensDoMenu(true).find(i => i.act === 'image');
-  assert.match(img.nome, /vídeo/);
-  assert.doesNotMatch(img.desc, /webp/, 'no celular quem manda e a galeria, nao a lista de extensoes');
+test('Anexar arquivo pede ao Mac uma janela que aceita arquivo E pasta, vários de uma vez', () => {
+  const main = fs.readFileSync(path.resolve(__dirname, '../main.js'), 'utf8');
+  assert.match(main, /else if \(kind === 'tudo'\) opt\.properties\.push\('openFile', 'openDirectory'\)/);
+  const web = fs.readFileSync(path.resolve(__dirname, '../renderer/web.js'), 'utf8');
+  assert.match(web, /tipo === 'image' \|\| tipo === 'tudo'/, 'no celular o tudo abre a galeria');
 });
 
 /* A trava do outro lado: o nome "Enviar foto ou vídeo" so e verdade se o seletor do telefone

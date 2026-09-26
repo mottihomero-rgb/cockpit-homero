@@ -4576,133 +4576,15 @@ handle('dialog:pickFiles', async (_e, kind) => {
   if (souRemoto(_e)) return [];
   const opt = { properties: ['multiSelections'], defaultPath: HOME };
   if (kind === 'folder') opt.properties = ['openDirectory'];
+  // 26/09: "Anexar arquivo" do + é uma janela só para tudo — arquivo, pasta, vídeo, vários juntos
+  else if (kind === 'tudo') opt.properties.push('openFile', 'openDirectory');
   else opt.properties.push('openFile');
   if (kind === 'image') opt.filters = [{ name: 'Imagens', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'heic'] }];
   const r = await dialog.showOpenDialog(win, opt);
   return r.canceled ? [] : r.filePaths;
 });
 
-/* ===================== recortar a tela =====================
-   Esconde o Cockpit, fotografa a tela onde esta' o mouse (desktopCapturer), abre uma janela
-   sem moldura por cima com essa foto, voce arrasta o retangulo, o pedaco vira PNG em colados/
-   e entra como anexo no painel que pediu. (⇧⌘4 + ⌘V ja funcionava; isto poupa a ida ao
-   clipboard e nao encosta na area de transferencia dele.)
-
-   R1: os quatro canais entram por ipcMain.handle DIRETO, fora do mapa HANDLERS. Se entrassem
-   por handle(), um toque no iPhone esconderia a janela do Mac e deixaria uma tela preta presa
-   por cima de tudo, a quilometros de distancia. */
-const { desktopCapturer, screen, systemPreferences } = require('electron');
-let recorte = null;      // { janela, imagem, paneId, estavaVisivel, boundsW, boundsH, pediuDados }
-let recortando = false;  // entre o pedido e a janela existir (o guarda de cima nao cobre o await)
-/* Este recado precisa dizer as tres coisas: onde liberar, que tem de reabrir o app depois, e
-   que isso volta a acontecer a cada reinstalacao — o Cockpit e assinado na hora do build, e o
-   Mac trata cada assinatura nova como um programa diferente. Sem a ultima frase, ele acha que
-   quebrou. */
-const RECADO_TELA = 'O Mac ainda não deixou o Cockpit fotografar a tela. Libere em Ajustes do Sistema › Privacidade e Segurança › Gravação de Tela (marque o Cockpit), feche e abra o app. Isso é pedido de novo a cada vez que o app é reinstalado.';
-ipcMain.handle('tela:recortar', async (_e, { paneId } = {}) => {
-  if (recorte || recortando) return { error: 'já tem um recorte aberto' };
-  /* No Mac, sem a permissao de Gravacao de Tela o getSources devolve o PAPEL DE PAREDE em
-     silencio — ninguem dá erro, e o recorte sai de uma tela que nao e a dele. A conferencia
-     vem ANTES de esconder a janela; se escondesse primeiro, o app sumiria para dar um recado. */
-  if (process.platform === 'darwin') {
-    let estado = 'granted';
-    try { estado = systemPreferences.getMediaAccessStatus('screen'); } catch {}
-    if (estado !== 'granted') {
-      // o macOS so pergunta quando alguem TENTA capturar: este pedido minusculo faz a caixa aparecer
-      try { desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1, height: 1 } }).catch(() => {}); } catch {}
-      return { error: RECADO_TELA };
-    }
-  }
-  recortando = true;
-  const estavaVisivel = !!(win && !win.isDestroyed() && win.isVisible());
-  let janela = null;
-  try {
-    const ponto = screen.getCursorScreenPoint();
-    const tela = screen.getDisplayNearestPoint(ponto);
-    const escala = tela.scaleFactor || 1;
-    if (estavaVisivel) win.hide();
-    await new Promise((r) => setTimeout(r, 350));   // a janela precisa sumir de verdade antes da foto
-    const fontes = await desktopCapturer.getSources({
-      types: ['screen'],
-      thumbnailSize: { width: Math.round(tela.size.width * escala), height: Math.round(tela.size.height * escala) },
-    });
-    // so' a tela onde esta' o mouse: cair na primaria em silencio recortava a foto de OUTRO
-    // monitor por cima deste
-    const fonte = fontes.find((f) => String(f.display_id) === String(tela.id));
-    if (!fonte || fonte.thumbnail.isEmpty()) {
-      if (estavaVisivel) win.show();
-      return { error: fontes.length ? 'não achei a tela onde está o mouse (' + fontes.length + (fontes.length === 1 ? ' tela' : ' telas') + ')' : RECADO_TELA };
-    }
-    janela = new BrowserWindow({
-      x: tela.bounds.x, y: tela.bounds.y, width: tela.bounds.width, height: tela.bounds.height,
-      frame: false, alwaysOnTop: true, skipTaskbar: true, resizable: false, movable: false,
-      hasShadow: false, backgroundColor: '#000000', show: false,
-      webPreferences: { preload: path.join(__dirname, 'preload-recorte.js'), contextIsolation: true, nodeIntegration: false },
-    });
-    recorte = { janela, imagem: fonte.thumbnail, paneId, estavaVisivel, boundsW: tela.bounds.width, boundsH: tela.bounds.height, pediuDados: false };
-    janela.setAlwaysOnTop(true, 'screen-saver');
-    // no Mac o recorte tem de valer no Space em que ele estiver, inclusive em cima de um app
-    // em tela cheia — senao a janela nasce num Space vazio e a tela dele nem pisca
-    try { janela.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true }); } catch {}
-    /* Vigia de 15 s. Cobre os dois jeitos de a janela ficar PRESA: nunca pintar (renderer
-       morreu antes do primeiro quadro) ou pintar preta sem a ponte (preload que nao entrou no
-       pacote). Nos dois casos o Cockpit ficaria escondido atras de uma tela preta sem tecla
-       que responda. Quem desarma e' o pedido da foto, que chega em milissegundos. */
-    const vigia = setTimeout(() => {
-      if (recorte && recorte.janela === janela && !janela.isDestroyed() && !recorte.pediuDados) {
-        anota('recorte preso: fechando pelo vigia de 15 s');
-        try { janela.close(); } catch {}
-      }
-    }, 15000);
-    janela.once('closed', () => clearTimeout(vigia));
-    janela.once('ready-to-show', () => { try { janela.show(); janela.focus(); app.focus({ steal: true }); } catch {} });   // sem flash preto
-    janela.webContents.on('did-fail-load', () => { try { janela.close(); } catch {} });        // sem tela preta presa
-    janela.webContents.on('render-process-gone', () => { try { janela.close(); } catch {} });
-    janela.loadFile(path.join(__dirname, 'renderer', 'recorte.html'));
-    janela.on('closed', () => {
-      const r = recorte; recorte = null;
-      if (r && r.estavaVisivel && win && !win.isDestroyed()) { win.show(); win.focus(); }
-    });
-    return { ok: true };
-  } catch (e) {
-    recorte = null;
-    if (janela) { try { janela.close(); } catch {} }
-    if (estavaVisivel && win && !win.isDestroyed()) win.show();
-    return { error: String(e && e.message || e) };
-  } finally { recortando = false; }
-});
-// so' a janela do recorte fala nestes canais (o preload principal nem os expoe; e' defesa barata)
-const daJanelaDeRecorte = (e) => !!(recorte && recorte.janela && !recorte.janela.isDestroyed() && e.sender === recorte.janela.webContents);
-ipcMain.handle('recorte:dados', (e) => {
-  if (!daJanelaDeRecorte(e)) return null;
-  recorte.pediuDados = true;   // desarma o vigia de 15 s: a janela esta viva e com ponte
-  const tam = recorte.imagem.getSize();
-  return { png: recorte.imagem.toDataURL(), escala: tam.width / (recorte.boundsW || tam.width) };
-});
-ipcMain.handle('recorte:pronto', (e, { x, y, w, h } = {}) => {
-  const r = recorte;
-  if (!r || !daJanelaDeRecorte(e)) return { error: 'sem recorte aberto' };
-  try {
-    // escala REAL da foto (pixels por px de CSS), por eixo, medida na propria imagem — nao no
-    // scaleFactor, que pode divergir entre monitores
-    const tam = r.imagem.getSize();
-    const kx = tam.width / (r.boundsW || tam.width), ky = tam.height / (r.boundsH || tam.height);
-    const rect = {
-      x: Math.max(0, Math.min(tam.width - 1, Math.round(x * kx))), y: Math.max(0, Math.min(tam.height - 1, Math.round(y * ky))),
-      width: Math.max(1, Math.round(w * kx)), height: Math.max(1, Math.round(h * ky)),
-    };
-    rect.width = Math.min(rect.width, tam.width - rect.x); rect.height = Math.min(rect.height, tam.height - rect.y);
-    const png = r.imagem.crop(rect).toPNG();
-    const dir = path.join(app.getPath('userData'), 'colados');
-    fs.mkdirSync(dir, { recursive: true });
-    const destino = path.join(dir, 'recorte-' + Date.now() + '.png');
-    fs.writeFileSync(destino, png);
-    emit(r.paneId, 'anexo-pronto', { arquivo: destino, origem: 'recorte' });
-    try { r.janela.close(); } catch {}
-    return { ok: true, arquivo: destino };
-  } catch (e2) { try { r.janela.close(); } catch {} return { error: String(e2 && e2.message || e2) }; }
-});
-ipcMain.handle('recorte:cancelar', (e) => { const r = recorte; if (r && daJanelaDeRecorte(e)) { try { r.janela.close(); } catch {} } return { ok: true }; });
+/* 26/09: "Recortar a tela" saiu do app (ele tira print com o atalho do Mac). */
 
 /* ===================== texto que está DENTRO da imagem (OCR local) =====================
    Print de erro, foto de um papel, tabela num screenshot: em vez de ele redigitar, o texto

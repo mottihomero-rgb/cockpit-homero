@@ -127,7 +127,7 @@ function contextoConta(extras = {}) {
     ...extras,
   };
   vm.createContext(ctx);
-  vm.runInContext(['entrarNaConta', 'pintarContaLateral', 'pintarUsoLateral', 'pintarBlocoDeUso', 'abrirContaDaLateral']
+  vm.runInContext(['entrarNaConta', 'pintarContaLateral', 'pintarUsoLateral', 'pintarBlocoDeUso', 'abrirContaDaLateral', 'textoDoZera']
     .map(n => pegar(n)).join('\n\n'), ctx);
   return { ctx, cx, acoes, bloco: (m) => cx.children.find(b => b.dataset.motor === m) };
 }
@@ -164,18 +164,30 @@ test('com login: logo + nome da IA + plano (a conta na dica), com as barras quan
   assert.deepEqual(acoes, ['janela:codex'], 'clicar no bloco abre a conta daquela IA');
 });
 
-test('Gemini/Grok logados sem número de uso e consulta segurada continuam aparecendo', () => {
+/* 26/09 (revisão da área lateral, depois do desenho novo): IA com login mas SEM número de uso
+   não ocupa linha. Antes ela ficava como logo + nome solto entre as barras e a pasta (o Grok
+   nunca tem número; o Claude antes da primeira leitura ou com a consulta segurada), e os quatro
+   blocos empurravam a lista para baixo. A conta dela continua no menu do chat (Conta), e sem
+   login o bloco com o "Entrar" fica (teste acima). */
+test('IA logada sem número de uso não ocupa linha; com número ela aparece, na ordem dos motores', () => {
   const { ctx, cx, bloco } = contextoConta();
-  ctx.pintarBlocoDeUso(cx, 'gemini', { entrou: true, email: 'g@x.com' });
-  assert.ok(bloco('gemini'), 'sumir por completo tirava o único clique que abria a conta dele');
+  ctx.pintarBlocoDeUso(cx, 'grok', { entrou: true, email: 'k@x.com' });
+  assert.equal(bloco('grok'), undefined, 'logo + nome solto, sem barra nenhuma, não entra');
+  ctx.pintarBlocoDeUso(cx, 'gemini', { entrou: true, email: 'g@x.com', semana: { pct: 100, reseta: Date.now() + 3600e3 } });
+  assert.ok(bloco('gemini'));
   assert.equal(bloco('gemini').parts['.cv-uso-nome'].textContent, 'Gemini');
   assert.match(bloco('gemini').title, /g@x\.com/);
-  assert.ok(!/cv-uso-janela/.test(bloco('gemini').innerHTML));
+  // o reset sai na hora em que zera; quanto falta fica na dica
+  assert.match(bloco('gemini').innerHTML, /<span class="cv-uso-zera" title="zera em 2 h">zera (\S+ )?\d\d:\d\d<\/span>/);
   ctx.pintarBlocoDeUso(cx, 'claude', { entrou: true, nome: 'Homero', plano: 'Max', limitado: true, voltaEm: 1 });
-  assert.ok(bloco('claude'));
-  assert.match(bloco('claude').title, /segurou as consultas/, 'o porquê vai no title, sem frase na coluna');
+  assert.equal(bloco('claude'), undefined, 'consulta segurada sem número guardado: nada no topo');
+  ctx.pintarBlocoDeUso(cx, 'claude', { entrou: true, nome: 'Homero', plano: 'Max', sessao: { pct: 24 }, velho: 1 });
+  assert.match(bloco('claude').title, /Última leitura 5 min/, 'número guardado: o quando vai no title');
   // a ordem dos blocos é a dos motores, chegue quem chegar primeiro
   assert.deepEqual(cx.children.map(b => b.dataset.motor), ['claude', 'gemini']);
+  // o número sumiu numa leitura nova: o bloco sai, em vez de virar a linha solta
+  ctx.pintarBlocoDeUso(cx, 'gemini', { entrou: true, email: 'g@x.com' });
+  assert.deepEqual(cx.children.map(b => b.dataset.motor), ['claude']);
 });
 
 test('IA que não está instalada neste Mac não aparece', () => {

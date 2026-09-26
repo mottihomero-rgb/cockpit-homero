@@ -85,6 +85,13 @@
 .cv-uso-cab{min-height:20px;gap:8px;font:var(--f-body)}
 .cv-uso-logo{width:16px;height:16px}
 .cv-uso-logo svg{width:16px;height:16px}
+/* Logo da IA numa cor só (regra 8: o oficial, recolorido com --logo-*). O do Gemini vem com o
+   degradê de várias cores (grupo com máscara por cima de uma estrela de fill branco): no bloco de
+   uso, na cadeia de IAs da lista e na Torre fica só a estrela, pintada com a cor do motor, como o
+   seletor do painel e os menus já faziam. O fill do path tem de vir junto: sem ele a estrela
+   sairia branca e sumiria no tema claro. */
+:is(.cv-uso-logo,.hi-motor,.ti-logo) .logo-motor > g[mask]{display:none}
+:is(.cv-uso-logo,.hi-motor,.ti-logo) .logo-motor > path{fill:currentColor}
 .cv-uso-nome{font:var(--f-headline);color:var(--label-1)}
 .cv-uso-plano{font:400 11px/16px var(--font-sans);color:var(--label-2);text-transform:capitalize}
 .cv-uso-entrar{flex:none;height:22px;padding:0 10px;border:0;border-radius:6px;background:var(--fill-2);
@@ -196,7 +203,10 @@ html[data-theme$="-hc"] .side-pastas{box-shadow:var(--shadow-float),inset 0 0 0 
 .hi-t{order:1;font:var(--f-body);color:var(--label-1)}
 .hist-item.favorita .hi-t{color:var(--label-1)}
 .hi-motores{order:2;gap:3px}
-.hi-w{order:3;font:var(--f-sub);color:var(--label-3);font-variant-numeric:tabular-nums}
+/* o tempo tem largura fixa, alinhado à direita: sem isso os logos da cadeia andavam conforme o
+   texto ("2 d", "14 d", "ontem" = até 16 de zigue-zague). 36 é o mais largo que o quandoCurto
+   escreve ("59 min"; "ontem" tem 33), então o logo fica na mesma coluna em toda linha. */
+.hi-w{order:3;min-width:36px;text-align:right;font:var(--f-sub);color:var(--label-3);font-variant-numeric:tabular-nums}
 .hi-fav{order:4}
 .hi-edit{order:5}
 .hi-grupo{order:6}
@@ -364,7 +374,9 @@ html[data-theme$="-hc"] .side-pastas{box-shadow:var(--shadow-float),inset 0 0 0 
 .ri-acao{flex:none;width:26px;height:26px;margin:0;padding:0;display:grid;place-items:center;align-self:flex-start;
   border:0;border-radius:6px;background:var(--fill-3);color:var(--label-2);
   transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
-.ri-acao .ic{width:12px;height:12px}
+/* o ▶ é só preenchido, como o i-play do desenho: o ico() põe contorno de 1,4 em todo ícone, e o
+   triângulo saía 1,4 maior e com as pontas arredondadas */
+.ri-acao .ic{width:12px;height:12px;stroke:none}
 .ri-acao .rd-anel{width:10px;height:10px}
 .ri-acao:hover{background:var(--fill-2);color:var(--label-1);border-color:transparent}
 .ri-acao:active{background:var(--fill-1)}
@@ -386,7 +398,10 @@ html[data-theme$="-hc"] .side-pastas{box-shadow:var(--shadow-float),inset 0 0 0 
 /* 36 de linha + o fio de 1 em cima = 37 a partir da segunda (o cartão Geral mede 110, como no
    desenho); o fio é borda, então sem isto ele comia 1pt da linha */
 .aj + .aj{border-top:1px solid var(--separator);min-height:37px}
-.aj-tit{flex:1;min-width:0;min-height:0;margin:0;display:flex;align-items:center;justify-content:space-between;gap:8px;
+/* O título não encolhe abaixo da palavra mais comprida + (i): com a alça no mínimo (220), o
+   min-width:0 deixava "Caixa de entrada" com 56 de largura, o (i) vazava para baixo do botão da
+   pasta e o balão não abria. Agora quem cede é o pop-up (ele corta o caminho). */
+.aj-tit{flex:1;min-height:0;margin:0;display:flex;align-items:center;justify-content:space-between;gap:8px;
   font:var(--f-body);color:var(--label-1);text-transform:none;letter-spacing:0}
 .aj-txt{flex:none;font:400 12px/15px var(--font-sans);color:var(--label-2);font-variant-numeric:tabular-nums}
 /* (i): a explicação fica no tooltip, nunca na tela */
@@ -443,8 +458,10 @@ html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inse
   transition:background-color var(--dur-fast) ease-out}
 .foto-btns .btn-wide:hover,.aj-pop:hover{background:var(--fill-1)}
 .foto-btns .btn-wide:active,.aj-pop:active{background:var(--separator-strong)}
-/* pop-up com a pasta dentro: 22 de altura, até 120 de largura, corta pelo começo do caminho */
-.aj-pop{flex:0 1 auto;min-width:0;max-width:120px;padding:0 4px 0 8px;display:flex;align-items:center;gap:2px}
+/* pop-up com a pasta dentro: 22 de altura, até 120 de largura, corta pelo começo do caminho.
+   Na coluna estreita ele fica com no máximo metade da linha: o título ainda quebra em 2 linhas
+   ("Caixa de / entrada", como no desenho) em vez de 3. Na largura normal os 120 valem igual. */
+.aj-pop{flex:0 1 auto;min-width:0;max-width:min(120px,50%);padding:0 4px 0 8px;display:flex;align-items:center;gap:2px}
 .aj-pop .path-box{flex:0 1 auto;min-width:0;padding:0;border:0;border-radius:0;background:none;
   font:400 12px/15px var(--font-sans);color:var(--label-1);user-select:none}
 .aj-seta{flex:none;display:flex;color:var(--label-3)}

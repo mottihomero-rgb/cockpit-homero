@@ -125,8 +125,9 @@
   flex:1;min-width:0;width:auto;height:100%;margin:0;padding:0;border:0;border-radius:0;
   background:transparent;box-shadow:none;outline:none;color:var(--label-1);font:400 12px/16px var(--font-sans)}
 :is(.modal.p-modal.como-menu > .modal-cx, .menu-fantasma) .menu-filtro .menu-search::placeholder{color:var(--label-3)}
-/* campo de busca com foco: o anel de foco da folha de componentes */
-.modal.p-modal.como-menu > .modal-cx .menu-filtro:focus-within{box-shadow:var(--anel-foco)}
+/* sem anel de foco no campo: o foco vem sozinho quando o menu abre, e a referência mostra o
+   campo só com o fundo. É a regra da casa para campo de texto (base.css, "anel de foco de
+   teclado"): quem mostra o foco é o cursor piscando */
 
 /* ---- slider Esforço (menu Modelo): trilho de 3, 5 marcas, botão branco de 16 ----
    O "?" com a explicação saiu (o texto foi para o balão da linha "Esforço"). O campo de pixels
@@ -229,6 +230,14 @@
     /* a barra de rolagem (6) mora no recuo de 6 do menu: os itens ficam da largura do campo de
        filtro, com ou sem barra (o gutter fica sempre reservado) */
     margin-right:-6px;scrollbar-gutter:stable}
+
+  /* o botão da caixa que abriu o menu fica marcado enquanto ele está aberto, como no Mac
+     (Janela.dc, telas 11 a 14: "/", Modelo, cadeado e "+"): --fill-1, o fundo de selecionado.
+     Quem põe a marca é o app.js (.menu-dono, no posicionarMenu); o :has só deixa pintar com um
+     menu aberto de verdade neste painel, e o .cmp-bar deixa de fora o nome do chat e o campo de
+     texto (o "@" nasce dele), que também servem de âncora. Mais forte que o :hover/:active do
+     caixa.css de propósito: com o menu aberto o botão fica marcado, com ou sem o mouse */
+  .pane:has(> .p-modal.como-menu:not(.hidden)) .cmp-bar .menu-dono{background:var(--fill-1)}
 
   /* a cópia que esmaece ao fechar: no mesmo lugar, sem clique, 120ms */
   .menu-fantasma{position:absolute;z-index:75;pointer-events:none;overflow:hidden;

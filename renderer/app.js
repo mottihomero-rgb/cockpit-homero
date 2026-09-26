@@ -5577,6 +5577,9 @@ function fecharMenus() {
       if (!m.classList.contains('hidden')) menuSaindo($('.modal-cx', m), P.el);
       m.classList.add('hidden'); m.classList.remove('como-menu'); $('.modal-cx', m).innerHTML = '';
     }
+    // menu fechado: o botão que o abriu deixa de ficar marcado (fora do if de propósito: se
+    // algum caminho tirou o como-menu sem passar por aqui, a marca sai no próximo clique)
+    soltarDonoMenu(P);
     // menu fechado nao pode deixar o atalho de setas do "@" preso ao campo: preso, ele engole
     // o Enter e a mensagem nunca sai
     soltarNavArquivos(P);
@@ -5674,6 +5677,22 @@ function ancoraDoMenu(P, modal, padrao) {
   if (visivel(P._ancoraMenu)) return P._ancoraMenu;
   return $('.pane-cmp', P.el);
 }
+/* O botão dono do menu ganha .menu-dono ao abrir (posicionarMenu) e perde ao fechar
+   (fecharMenus). A marca só existe no P._ancoraMenu, então basta limpar ali. */
+function soltarDonoMenu(P) {
+  const a = P && P._ancoraMenu;
+  if (a && a.classList) a.classList.remove('menu-dono');
+}
+/* Na referência os menus da caixa não param todos no mesmo vão: Comandos e Permissão ficam
+   28 acima dela, mas Modelo desce até 2 acima (e fica 20 da borda direita, não 16) e Anexar
+   para a 18. Vale só quando o menu nasce do próprio botão: aberto pelo "/" ("/" → Modelo),
+   ele fica no lugar do "/". */
+function lugarProprioNaCaixa(anc) {
+  if (!anc || !anc.matches) return {};
+  if (anc.matches('.p-model')) return { vao: 2, dir: 20 };
+  if (anc.matches('.p-plus')) return { vao: 18 };
+  return {};
+}
 function posicionarMenu(P, modal, cx, padrao) {
   const s = cx.style;
   for (const k of ['--menu-l', '--menu-r', '--menu-t', '--menu-b', '--menu-alt', '--menu-ox', '--menu-oy']) s.removeProperty(k);
@@ -5684,7 +5703,11 @@ function posicionarMenu(P, modal, cx, padrao) {
   let anc;
   try { anc = ancoraDoMenu(P, modal, padrao); } catch { anc = null; }
   if (!anc || !anc.getBoundingClientRect) return;
+  soltarDonoMenu(P);
   P._ancoraMenu = anc;
+  // o botão que abriu o menu fica marcado enquanto ele está aberto, como no Mac (menus.css,
+  // .menu-dono: só os botões da caixa pintam; o nome do chat e o campo de texto, não)
+  if (anc.classList) anc.classList.add('menu-dono');
   const mr = modal.getBoundingClientRect(), ar = anc.getBoundingClientRect();
   if (!mr.width || !mr.height) return;
   s.removeProperty('--menu-l'); s.removeProperty('--menu-b');
@@ -5693,13 +5716,15 @@ function posicionarMenu(P, modal, cx, padrao) {
   const base = naCaixa ? cmp.getBoundingClientRect() : ar;
   // botões da esquerda (e faixas largas, como o nome da conversa): o menu cresce para a direita
   const esquerda = ar.width > mr.width / 2 || (ar.left + ar.width / 2) < (mr.left + mr.width / 2);
+  const proprio = naCaixa ? lugarProprioNaCaixa(anc) : {};
   // medidas do design (tela de 1470): 10 da borda esquerda do painel, 16 da direita, 8 do botão
   if (esquerda) s.setProperty('--menu-l', Math.max(10, naCaixa ? 10 : Math.round(ar.left - mr.left - 8)) + 'px');
-  else s.setProperty('--menu-r', Math.max(16, naCaixa ? 16 : Math.round(mr.right - ar.right - 8)) + 'px');
+  else s.setProperty('--menu-r', Math.max(16, naCaixa ? (proprio.dir || 16) : Math.round(mr.right - ar.right - 8)) + 'px');
   const sobe = naCaixa || (ar.top + ar.height / 2) > (mr.top + mr.height * 0.55);
   /* vão até o que abriu o menu, medido no design: os menus da caixa de escrever param 28 acima
-     dela (/ a 29, Permissão a 27) e o do nome do chat fica 4 abaixo da linha do nome */
-  const vao = naCaixa ? 28 : sobe ? 8 : 4;
+     dela (/ a 29, Permissão a 27; Modelo e Anexar têm o vão deles) e o do nome do chat fica 4
+     abaixo da linha do nome */
+  const vao = naCaixa ? (proprio.vao ?? 28) : sobe ? 8 : 4;
   if (sobe) {
     s.setProperty('--menu-b', Math.round(mr.bottom - base.top + vao) + 'px');
     s.setProperty('--menu-alt', Math.max(120, Math.round(base.top - mr.top - vao - 10)) + 'px');

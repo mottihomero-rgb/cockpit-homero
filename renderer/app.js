@@ -2409,6 +2409,7 @@ function pintarPonta(b) {
 }
 
 function textDelta(P, key, text) {
+  P.trabFazendo = 'Escrevendo';                     // a linha do trabalhando diz o que ele faz agora
   let b = P.blocks.get('resp');
   const depoisDeComando = P.execEl && P.execEl.isConnected;
   if (!b || P.blocks.get('respKey') !== key || depoisDeComando) {
@@ -2420,7 +2421,6 @@ function textDelta(P, key, text) {
     P.execEl = null;                                  // proximo comando abre cartao novo
   }
   b.raw += text; pintarPonta(b);
-  P.trabFazendo = 'Escrevendo';                     // a linha do trabalhando diz o que ele faz agora
   // o texto ACUMULADO, nao o pedaco de 50ms que chegou agora: sozinho ele quase nunca
   // e uma frase inteira
   legendarTrabalho(P, b.raw);

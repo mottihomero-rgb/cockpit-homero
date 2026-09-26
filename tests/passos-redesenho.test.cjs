@@ -124,6 +124,12 @@ test('esperando ele (autorizacao ou pergunta), a linha do trabalhando some', () 
   assert.match(css, /\.trab\.espera\{display:none\}/);
 });
 
+test('trabalhando sem objeto: o span vazio sai do flex e o tempo fica a 8 do verbo, nao a 16', () => {
+  const semComent = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.match(semComent, /\.trab\{[^}]*gap:8px/);
+  assert.match(semComent, /\.trab-obj:empty\{display:none\}/, '"Organizando tarefas 6s" ganhava o dobro do espaco antes do tempo');
+});
+
 test('o bloco "$" mostra comando de verdade: cat e rg no lugar de ler e buscar, com "~"', () => {
   const c = rodar(['comandoDoPasso'], { HOME: '/Users/homero' }, ['comTil', 'aspasShell']);
   const cmd = (n, a) => ({ ...c.comandoDoPasso(n, a) });

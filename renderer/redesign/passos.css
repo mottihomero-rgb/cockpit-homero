@@ -225,6 +225,9 @@
 .trab-txt{flex:none;min-width:0;overflow:visible;white-space:nowrap;color:var(--label-2)}
 .trab-obj{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   font:400 12px/16px var(--font-mono);color:var(--label-1)}
+/* Sem objeto ("Pensando", "Organizando tarefas") o span vazio ainda ocupava um lugar no flex e
+   o tempo ficava a 16 do verbo (8 + 8). Fora do fluxo, o tempo volta para 8 como no design. */
+.trab-obj:empty{display:none}
 .trab-tempo{flex:none;color:var(--label-3);font-variant-numeric:tabular-nums;white-space:nowrap}
 /* esperando ele (autorização ou pergunta na tela): um sinal por chat, e o de espera ganha */
 .trab.espera{display:none}

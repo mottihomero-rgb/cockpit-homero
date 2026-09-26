@@ -62,7 +62,9 @@ function contextoTroca() {
 
 test('troca de IA: a parte anterior fica guardada e a ligação nova → anterior é gravada quando o motor novo abre', () => {
   const { ctx, gravadas } = contextoTroca();
-  const P = { engine: 'claude', cwd: '/p', sessaoId: 'A', resumeId: 'A', sessaoFile: '/c/A.jsonl', partesAnteriores: [] };
+  // 25/09 (consertos): a conversa de antes tem conteúdo na tela — é dele que sai o contexto
+  const P = { engine: 'claude', cwd: '/p', sessaoId: 'A', resumeId: 'A', sessaoFile: '/c/A.jsonl', partesAnteriores: [],
+    hist: [{ quem: 'Você', texto: 'quero o vídeo' }] };
   ctx.guardarParteAnterior(P);                                  // trocarMotor, antes de zerar o número
   P.engine = 'codex'; P.sessaoId = null; P.resumeId = null; P.sessaoFile = '';
   // o Codex abriu a conversa dele (evento 'sessao')
@@ -80,7 +82,8 @@ test('troca de IA: a parte anterior fica guardada e a ligação nova → anterio
 
 test('trocar duas vezes sem mandar nada não cria ligação fantasma', () => {
   const { ctx, gravadas } = contextoTroca();
-  const P = { engine: 'claude', cwd: '/p', sessaoId: 'A', resumeId: 'A', sessaoFile: '', partesAnteriores: [] };
+  const P = { engine: 'claude', cwd: '/p', sessaoId: 'A', resumeId: 'A', sessaoFile: '', partesAnteriores: [],
+    hist: [{ quem: 'Você', texto: 'quero o vídeo' }] };
   ctx.guardarParteAnterior(P);                                  // Claude → Codex
   P.engine = 'codex'; P.sessaoId = null; P.resumeId = null;
   ctx.guardarParteAnterior(P);                                  // Codex → Gemini, sem ter mandado nada no Codex
@@ -112,12 +115,80 @@ test('ligação em círculo é recusada já na tela', () => {
   assert.equal(gravadas.length, 0);
 });
 
-test('trocarMotor guarda a parte anterior ANTES de zerar o número, e o evento sessao costura', () => {
-  const troca = pegar('trocarMotor');
-  const iGuarda = troca.indexOf('guardarParteAnterior(P)');
-  const iZera = troca.indexOf('P.sessaoId = null; P.resumeId = null;');
-  assert.ok(iGuarda > 0 && iZera > iGuarda, 'sem guardar antes, a conversa de antes some da costura');
+/* O trocarMotor DE VERDADE numa VM (antes era só regex no texto dele): a ordem "guardar a
+   parte anterior ANTES de zerar o número" é conferida pelo que ele faz, não por onde está escrito. */
+function contextoTrocarMotor() {
+  const gravadas = [];
+  const panes = new Map();
+  const ctx = contexto({
+    panes, cfg: {}, MOTORES_VISIVEIS: ['claude', 'codex', 'gemini', 'grok'],
+    window: { api: { ligacoesGravar: async (o) => { gravadas.push(o); return { ok: true }; },
+      paneStop: async () => {}, setConfig() {} } },
+    lateralAberta: () => false, pintarConversas() {},
+    nomeDoMotor: (m) => m, modeloNovo: (m) => m + '-modelo', esforcoNovo: () => 'medio',
+    motorIndisponivelNaPasta: () => '', confirmarCorte: () => true,
+    montarContexto: (P) => 'CTX:' + P.hist.map(h => h.texto).join('|'),
+  });
+  for (const n of ['avisoTemp', 'vozSoltar', 'invalidarConversa', 'marcaTroca', 'limparPlano', 'limparSugestoes',
+    'zerarContexto', 'escondePerm', 'devolverFilaAoCampo', 'pararTrabalho', 'limparPassos', 'limparContinuar',
+    'fillModels', 'paintEngine', 'pintarModo', 'setDot', 'avisarInstalacaoMotor', 'pintarUso', 'lerUso', 'savePanes',
+    'pintarPasta', 'nomePasta', 'pintarNome', 'faixaDeRamo']) ctx[n] = () => {};
+  ctx.novoChatNaAba = (engine) => {
+    const Q = { id: 'q' + (panes.size + 1), engine, cwd: '', hist: [], partesAnteriores: [], parteAnterior: null,
+      blocks: new Map(), tools: new Map() };
+    panes.set(Q.id, Q);
+    return Q;
+  };
+  vm.runInContext([pegar('guardarParteAnterior'), pegar('ligarParteAnterior'), pegar('trocarMotor'), pegar('forkClaude')].join('\n'), ctx);
+  // o que o evento 'sessao' faz quando o motor novo abre a conversa dele
+  const sessao = (P, id) => { P.sessaoId = id; P.resumeId = id; P.sessaoFile = '/x/' + id + '.jsonl'; if (P.parteAnterior) ctx.ligarParteAnterior(P); };
+  const painel = (o) => { const P = { id: 'p' + (panes.size + 1), cwd: '/p', hist: [], partesAnteriores: [], parteAnterior: null,
+    blocks: new Map(), tools: new Map(), ...o }; panes.set(P.id, P); return P; };
+  return { ctx, gravadas, sessao, painel };
+}
+
+test('trocarMotor (rodando de verdade) guarda a parte anterior ANTES de zerar o número, e o evento sessao costura', async () => {
+  const { ctx, gravadas, sessao, painel } = contextoTrocarMotor();
+  const P = painel({ engine: 'claude', sessaoId: 'A', resumeId: 'A', sessaoFile: '/c/A.jsonl',
+    hist: [{ quem: 'Você', texto: 'quero o vídeo' }, { quem: 'claude', texto: 'feito' }] });
+  await ctx.trocarMotor(P, 'codex');
+  assert.equal(P.engine, 'codex');
+  assert.equal(P.sessaoId, null, 'o número do Claude não atravessa a troca');
+  assert.deepEqual(JSON.parse(JSON.stringify(P.parteAnterior)), { engine: 'claude', id: 'A', file: '/c/A.jsonl', cwd: '/p' },
+    'sem guardar antes de zerar, a conversa de antes some da costura');
+  assert.equal(P.passarContexto, 'CTX:quero o vídeo|feito', 'e o Codex recebe o contexto do que já foi conversado');
+  sessao(P, 'C');
+  assert.equal(gravadas.length, 1);
+  assert.equal(gravadas[0].nova.id, 'C'); assert.equal(gravadas[0].anterior.id, 'A');
   assert.match(pegar('receberEventoPane'), /case 'sessao': \{[\s\S]{0,400}if \(P\.parteAnterior\) ligarParteAnterior\(P\);/);
+});
+
+test('ramificar e trocar de IA antes da 1a mensagem NÃO costura o ramo na conversa de origem', async () => {
+  const { ctx, gravadas, sessao, painel } = contextoTrocarMotor();
+  const P = painel({ engine: 'claude', sessaoId: 'ORIG', resumeId: 'ORIG', titulo: 'Vídeo',
+    hist: [{ quem: 'Você', texto: 'quero o vídeo' }] });
+  ctx.forkClaude(P, 'ORIG');                                    // o ramo Q nasce com resumeId = ORIG e forkPendente
+  const Q = [...ctx.panes.values()].find(x => x !== P);
+  assert.equal(Q.resumeId, 'ORIG'); assert.equal(Q.forkPendente, true);
+  await ctx.trocarMotor(Q, 'codex');                            // troca antes de mandar qualquer coisa
+  assert.ok(!Q.parteAnterior, 'o resumeId do ramo é o da ORIGEM, que continua viva no outro chat');
+  sessao(Q, 'CX');
+  assert.equal(gravadas.length, 0, 'nenhuma ligação CX → ORIG: a origem não pode sumir da lista nem ir junto no Apagar');
+});
+
+test('ramo pendente trocando de cobrança ou de agente também não costura na origem', () => {
+  const { ctx } = contextoTroca();
+  const Q = { engine: 'codex', cwd: '/p', sessaoId: null, resumeId: 'ORIG', forkPendente: true, partesAnteriores: [],
+    hist: [{ quem: 'Você', texto: 'x' }] };
+  ctx.guardarParteAnterior(Q);                                  // menuModelos (troca de cobrança / agente ACP)
+  assert.ok(!Q.parteAnterior);
+});
+
+test('chat cuja conversa não tem nada na tela (o motor novo não recebe contexto) não costura', () => {
+  const { ctx } = contextoTroca();
+  const P = { engine: 'claude', cwd: '/p', sessaoId: 'A', resumeId: 'A', partesAnteriores: [], hist: [] };
+  ctx.guardarParteAnterior(P);
+  assert.ok(!P.parteAnterior, 'costurar juntaria duas conversas que não se conhecem');
 });
 
 test('ramificar e conversa nova não herdam a costura', () => {
@@ -338,13 +409,71 @@ test('número solto (reabrir fechado, celular) acha a cadeia pelas ligações', 
   assert.deepEqual([...ctx.feito], ['claude:A', 'troca', 'codex:C']);
 });
 
-test('reabrir o app traz a cadeia inteira nos chats que voltam sozinhos', () => {
-  const corpo = pegar('restaurarAbasCorpo');
-  assert.match(corpo, /partesDaCadeia\(\{ engine: c\.engine, id: c\.sessao/);
-  assert.match(corpo, /const lidas = await lerPartes\(partes\);[\s\S]{0,200}desenharPartes\(P, lidas\)/);
-  assert.match(corpo, /if \(c\.parteAnterior && c\.parteAnterior\.id\) P\.parteAnterior = c\.parteAnterior;/,
-    'trocou de IA e fechou antes de mandar: a costura pendente volta junto');
-  // e o celular, ao voltar, relê a cadeia inteira (senão apagava da tela as outras IAs)
+/* O restaurarAbasCorpo DE VERDADE numa VM, com partesDaCadeia, lerPartes e desenharPartes reais
+   (antes era só regex no texto dele: uma troca de nome ou de ordem passava calada). */
+function contextoReabrir(chats, ligacoes, historicos) {
+  const panes = new Map(), abas = new Map();
+  const ctx = contexto({ panes, abas, cfg: { abaAberta: 0 }, HOME: '/h', clienteQueEstavaAberto: '', abasQueNaoVoltaram: [],
+    feito: [], window: { api: {} } });
+  ctx.LIGACOES = ligacoes;
+  Object.assign(ctx, {
+    NA_VPS: () => false, clienteDe: () => '', mostrarPastaNoPainel() {}, pintarNome() {}, ativarAbaProjeto() {},
+    removerAbaVazia() {}, painelAindaAtual: () => true, clearEmpty() {}, scroll() {}, ico: () => '',
+    $: () => null, $$: () => [], nomeDoMotor: (m) => m,
+    note: (P, t) => P.notas.push(t),
+    marcaTroca: (P, de, para) => ctx.feito.push('troca:' + de + '>' + para),
+    montarContexto: (P) => 'CTX:' + P.hist.map(h => h.texto).join('|'),
+    renderizarHistorico: (P, m) => { ctx.feito.push(P.engine + ':' + m.text); P.hist.push({ quem: m.role === 'user' ? 'Você' : P.engine, texto: m.text }); },
+    novaAbaProjeto: (cwd) => { const A = { id: 'a' + (abas.size + 1), cwd, ordem: [] }; abas.set(A.id, A); return A; },
+    newPane: (o) => { const P = { id: 'p' + (panes.size + 1), engine: o.engine, cwd: o.cwd, titulo: o.titulo || '', hist: [],
+      partesAnteriores: [], parteAnterior: null, passarContexto: null, notas: [], chat: {}, el: {} };
+      panes.set(P.id, P); o.aba.ordem.push(P.id); return P; },
+  });
+  ctx.window.api.sessionHistory = async (o) => historicos[o.id] || [];
+  vm.runInContext([pegar('lerHistoricoDaParte'), pegar('lerPartes'), pegar('desenharPartes'), pegar('restaurarAbasCorpo')].join('\n')
+    + '\nthis.restaurarAbasCorpo = restaurarAbasCorpo;', ctx);
+  return ctx;
+}
+const HIST = { A: [{ role: 'user', text: 'pedido 1' }, { role: 'bot', text: 'resp claude' }],
+  C: [{ role: 'user', text: 'pedido 2' }, { role: 'bot', text: 'resp codex' }],
+  ORIG: [{ role: 'user', text: 'origem' }], X: [{ role: 'user', text: 'antes da origem' }] };
+
+test('reabrir o app: chat com conversa costurada volta com TODAS as partes, parado na mais nova', async () => {
+  const ctx = contextoReabrir(null, lig(C, A), HIST);
+  await ctx.restaurarAbasCorpo([{ cwd: '/p', chats: [{ engine: 'codex', cwd: '/p', sessao: 'C', arquivo: '/x/C.jsonl' }] }]);
+  const P = [...ctx.panes.values()][0];
+  assert.deepEqual([...ctx.feito], ['claude:pedido 1', 'claude:resp claude', 'troca:claude>codex', 'codex:pedido 2', 'codex:resp codex']);
+  assert.equal(P.engine, 'codex'); assert.equal(P.resumeId, 'C');
+  assert.deepEqual([...P.partesAnteriores.map(p => p.id)], ['A']);
+  assert.ok(!P.parteAnterior);
+  assert.equal(P.passarContexto, null, 'o Codex já tem a conversa dele: nada de contexto colado de novo');
+  assert.equal(P.carregandoHistorico, false);
+});
+
+test('reabrir o app: trocou de IA e fechou ANTES de mandar — volta a cadeia, a faixa da troca e o contexto', async () => {
+  const ctx = contextoReabrir(null, lig(C, A), HIST);
+  // o chat estava no Gemini, esperando a 1a mensagem; a parte de antes era a C (que continua A)
+  await ctx.restaurarAbasCorpo([{ cwd: '/p', chats: [{ engine: 'gemini', cwd: '/p', sessao: '',
+    parteAnterior: { engine: 'codex', id: 'C', file: '/x/C.jsonl', cwd: '/p' } }] }]);
+  const P = [...ctx.panes.values()][0];
+  assert.deepEqual([...ctx.feito], ['claude:pedido 1', 'claude:resp claude', 'troca:claude>codex', 'codex:pedido 2',
+    'codex:resp codex', 'troca:codex>gemini']);
+  assert.equal(P.parteAnterior.id, 'C', 'a costura pendente volta: a próxima mensagem grava Gemini → C');
+  assert.deepEqual([...P.partesAnteriores.map(p => p.id)], ['A']);
+  assert.equal(P.passarContexto, 'CTX:pedido 1|resp claude|pedido 2|resp codex', 'o Gemini recebe o que já foi conversado');
+  assert.ok(P.notas.includes('— daqui pra baixo é a conversa de agora —'));
+});
+
+test('reabrir o app: ramo pendente volta como ramo, sem herdar a cadeia da origem', async () => {
+  const ctx = contextoReabrir(null, lig({ engine: 'claude', id: 'ORIG' }, { engine: 'codex', id: 'X' }), HIST);
+  await ctx.restaurarAbasCorpo([{ cwd: '/p', chats: [{ engine: 'claude', cwd: '/p', sessao: 'ORIG', arquivo: '/c/ORIG.jsonl', fork: true }] }]);
+  const P = [...ctx.panes.values()][0];
+  assert.equal(P.forkPendente, true);
+  assert.deepEqual([...P.partesAnteriores], [], 'o número guardado é o da ORIGEM: o ramo não herda a costura dela');
+  assert.deepEqual([...ctx.feito], ['claude:origem']);
+});
+
+test('o celular, ao voltar, relê a cadeia inteira (senão apagava da tela as outras IAs)', () => {
   assert.match(mobile, /lerPartes\(\[\.\.\.antes, \{ engine, id/);
 });
 

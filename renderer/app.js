@@ -1286,8 +1286,10 @@ async function restaurarAbasCorpo(salvas) {
         // mesmo com a conversa inteira intacta no disco.
         P.sessaoFile = c.arquivo || '';
         /* 25/09: conversa costurada (trocou de IA no meio) volta INTEIRA: as partes de antes
-           saem das ligacoes, e o painel continua na parte mais nova */
-        const partes = partesDaCadeia({ engine: c.engine, id: c.sessao, file: c.arquivo || '', cwd: c.cwd || a.cwd });
+           saem das ligacoes, e o painel continua na parte mais nova. Ramo pendente (c.fork)
+           nao: o numero guardado e o da ORIGEM, e o ramo nao herda a costura dela. */
+        const ref = { engine: c.engine, id: c.sessao, file: c.arquivo || '', cwd: c.cwd || a.cwd };
+        const partes = c.fork ? [ref] : partesDaCadeia(ref);
         P.partesAnteriores = partes.slice(0, -1);
         paraCarregar.push({ P, arquivo: c.arquivo || '', id: c.sessao, cwd: c.cwd || a.cwd, revisao: P.revisaoConversa || 0, partes });
       } else if (P.parteAnterior) {
@@ -3988,7 +3990,9 @@ function receberEventoPane(ev) {
       setTimeout(() => lerUsoAposResposta(P.engine), 1500);
       salvarNomeCurto(P);
       setTimeout(() => buscarNome(P), 1200);
-      if (lateralAberta(P.engine)) loadHist(P.engine, true);
+      /* 25/09: com a lateral aberta, relê tambem a costura das conversas antes da lista: uma
+         troca de IA gravada por outro chat ou pelo celular so entrava ao fechar e abrir a lateral */
+      if (lateralAberta()) lerLigacoes().then(() => loadHist(P.engine, true));
       agendarFila(P);
       break;
     case 'engine-down': {
@@ -4858,6 +4862,10 @@ function salvarNomeCurto(P) {
   if (!P.nomeCurto || P.nomeManual || !id || P.nomeCurtoSalvo === id + '|' + P.titulo) return;
   P.nomeCurtoSalvo = id + '|' + P.titulo;
   window.api.renomear({ engine: P.engine, id, nome: P.titulo }).catch(() => {});
+  /* 25/09: numa conversa costurada o titulo da lista sai do nome salvo das partes (NOMES_LIGADOS),
+     que so era lido ao abrir a lateral. Sem avisar aqui, o chat trocava para "Criação de Vídeo
+     com IA" e a lista continuava no nome velho da parte de antes da troca. */
+  lembrarNomeDaParte({ engine: P.engine, id, file: P.sessaoFile || '' }, P.titulo);
 }
 
 async function buscarNome(P) {
@@ -6456,32 +6464,52 @@ function agDesenhar() {
 /* ============ conta e limite fixos na barra lateral ============ */
 const contaCache = { claude: null, codex: null, acp: null, gemini: null, grok: null };
 
-/* ---- uso do plano no topo da lista de conversas (25/09) ----
-   Cada coluna de motor tinha a conta dela no topo. Na lista unica fica UM bloco curto por IA
-   que tem numero: logo + Sessao e Semana (%, barra fina, "zera …"). Sem frase: quem nao tem
-   numero (sem login, consulta segurada) simplesmente nao aparece; o detalhe mora no title e
-   na janela da conta, que abre ao clicar no bloco.
+/* O "Entrar" do cartao da conta chamava contaAcao(focusPane) — o motor do CHAT EM FOCO, nao o
+   da IA do cartao. Com um chat do Codex em foco, clicar em "Entrar" no cartao do Claude rodava
+   "codex login". O login e' sempre o do motor daquele cartao, e sem chat desse motor a tela
+   diz isso em vez de errar calada. (Voltou em 25/09: a lista unica tinha perdido o Entrar.) */
+function entrarNaConta(engine) {
+  let P = (focusPane && focusPane.engine === engine)
+    ? focusPane
+    : [...panes.values()].find((q) => q.engine === engine);
+  if (!P && ['gemini', 'grok'].includes(engine)) {
+    P = focusPane || novoChatNaAba(engine);
+  }
+  if (P) { setFocus(P); contaAcao(P, 'login', engine); return; }
+  const recado = 'Abra um chat do ' + nomeDoMotor(engine) + ' para entrar na conta dele.';
+  if (focusPane) note(focusPane, recado, true);
+}
+
+/* ---- conta e uso do plano no topo da lista de conversas (25/09) ----
+   Cada coluna de motor tinha a conta dela no topo. Na lista unica fica UM bloco curto por IA:
+     - com login: logo + nome (ou e-mail) + plano, e embaixo Sessao e Semana quando houver
+       numero (%, barra fina, "zera …"). Consulta segurada ou que falhou: so a linha da conta,
+       e o porque vai no title. Clicar abre a janela da conta daquela IA.
+     - sem login: logo + botao "Entrar", que roda o login do motor CERTO (entrarNaConta).
+     - IA que nao esta instalada neste Mac: nao aparece.
+   Sem frase na tela: o detalhe mora no title.
    O nome ficou pintarContaLateral porque o lerUso, o login e o trocar de conta ja chamam por
    ele quando o numero de um motor muda: continua sendo o jeito de repintar UM motor. */
 const contaLidaEm = porMotor(0);
+/* forcar = reler a conta agora (evento de conta do Codex, login, troca de conta): sempre rele.
+   A trava de um minuto e so do ABRIR a vista (pintarUsoLateral), senao abrir e fechar a coluna
+   viraria uma consulta de limite atras da outra (a Anthropic responde 429). */
 async function pintarContaLateral(engine, forcar) {
   const cx = $('#cvUso');
   if (!cx || !MOTORES_VISIVEIS.includes(engine)) return;
-  // forcar = abrir a vista: no maximo uma leitura por minuto por IA, senao abrir e fechar a
-  // coluna viraria uma consulta de limite atras da outra (a Anthropic responde 429)
-  if (!contaCache[engine] || (forcar && Date.now() - contaLidaEm[engine] > 60000)) {
+  if (!contaCache[engine] || forcar) {
     contaLidaEm[engine] = Date.now();
     try { contaCache[engine] = await window.api.contaLer(engine); } catch { /* fica o que ja tinha */ }
   }
   pintarBlocoDeUso(cx, engine, contaCache[engine]);
 }
 function pintarUsoLateral(forcar) {
-  for (const m of MOTORES_VISIVEIS) pintarContaLateral(m, forcar);
+  for (const m of MOTORES_VISIVEIS) pintarContaLateral(m, !!forcar && Date.now() - contaLidaEm[m] > 60000);
 }
 function pintarBlocoDeUso(cx, engine, c) {
   let bloco = $('.cv-uso-motor[data-motor="' + engine + '"]', cx);
-  const tem = c && c.entrou !== false && (c.sessao || c.semana);
-  if (!tem) { if (bloco) bloco.remove(); return; }
+  // conta ainda nao lida, ou IA que nao esta instalada neste Mac: nada no topo
+  if (!c || (MOTORES_OK && MOTORES_OK[engine] === false)) { if (bloco) bloco.remove(); return; }
   if (!bloco) {
     bloco = document.createElement('div');
     bloco.className = 'cv-uso-motor';
@@ -6490,8 +6518,19 @@ function pintarBlocoDeUso(cx, engine, c) {
     const depois = MOTORES_VISIVEIS.slice(MOTORES_VISIVEIS.indexOf(engine) + 1)
       .map(m => $('.cv-uso-motor[data-motor="' + m + '"]', cx)).find(Boolean);
     cx.insertBefore(bloco, depois || null);
-    bloco.addEventListener('click', () => abrirContaDaLateral(engine));
+    // sem login o clique e so o do botao "Entrar"; com login, o bloco inteiro abre a conta
+    bloco.addEventListener('click', () => { if (!bloco.classList.contains('sem-conta')) abrirContaDaLateral(engine); });
   }
+  const motor = nomeDoMotor(engine);
+  const logo = '<span class="cv-uso-logo">' + svgMotor(engine) + '</span>';
+  if (!c.entrou) {
+    bloco.classList.add('sem-conta');
+    bloco.innerHTML = '<div class="cv-uso-cab">' + logo + '<button class="cv-uso-entrar">Entrar</button></div>';
+    bloco.title = 'Sem conta do ' + motor + ' neste Mac';
+    $('.cv-uso-entrar', bloco).onclick = (e) => { e.stopPropagation(); entrarNaConta(engine); };
+    return;
+  }
+  bloco.classList.remove('sem-conta');
   const janela = (rotulo, j) => {
     if (!j) return '';
     const pct = Math.min(100, Math.max(0, Math.round(j.pct || 0)));
@@ -6500,10 +6539,19 @@ function pintarBlocoDeUso(cx, engine, c) {
       + (j.reseta ? '<span class="cv-uso-zera">zera ' + escaparAtributo(quandoFuturo(j.reseta)) + '</span>' : '')
       + '</div><div class="cv-uso-barra"><span style="width:' + pct + '%"></span></div></div>';
   };
-  bloco.innerHTML = '<span class="cv-uso-logo">' + svgMotor(engine) + '</span>'
-    + '<div class="cv-uso-janelas">' + janela('Sessão', c.sessao) + janela('Semana', c.semana) + '</div>';
-  bloco.title = [nomeDoMotor(engine), c.plano, c.email].filter(Boolean).join(' · ')
-    + (c.velho ? '\nÚltima leitura ' + haQuanto(c.velho) : '');
+  const janelas = janela('Sessão', c.sessao) + janela('Semana', c.semana);
+  bloco.innerHTML = '<div class="cv-uso-cab">' + logo + '<span class="cv-uso-nome"></span>'
+    + (c.plano ? '<span class="cv-uso-plano"></span>' : '') + '</div>'
+    + (janelas ? '<div class="cv-uso-janelas">' + janelas + '</div>' : '');
+  $('.cv-uso-nome', bloco).textContent = c.nome || c.email || motor;
+  if (c.plano) $('.cv-uso-plano', bloco).textContent = c.plano;
+  // o que antes era frase na coluna ("segurou as consultas", "não consegui ler") vai no title
+  const semNumero = !c.sessao && !c.semana;
+  const porque = semNumero && c.limitado
+    ? 'O ' + motor + ' segurou as consultas agora · tento de novo ' + (c.voltaEm ? quandoFuturo(c.voltaEm) : 'em alguns minutos')
+    : semNumero && ['claude', 'codex'].includes(engine) ? 'Não consegui ler o uso agora'
+    : c.velho ? 'Última leitura ' + haQuanto(c.velho) : '';
+  bloco.title = [motor, c.plano, c.email].filter(Boolean).join(' · ') + (porque ? '\n' + porque : '');
 }
 /* clicar no bloco abre a janela da conta daquela IA. A janelinha nasce DENTRO de um chat: tem
    de ser um que esteja na tela, senao o clique parece nao fazer nada. */
@@ -7557,6 +7605,28 @@ function lateralAberta() {
   return !!v && !v.classList.contains('hidden');
 }
 
+/* 25/09: a lista de UMA IA que nao veio (app-server do Codex fora do ar, arquivo ilegivel). Na
+   coluna por motor a caixa dizia "Não consegui ler"; na lista unica, trocar tudo pelo erro
+   apagaria as conversas das outras IAs, e calar fazia as do Codex sumirem sem aviso. Fica uma
+   linha curta no topo: logo + "indisponível" (o motivo no title), e o clique tenta de novo. */
+const erroDaLista = {};
+function pintarErrosDaLista() {
+  const cx = $('#cvErros');
+  if (!cx) return;
+  cx.replaceChildren();
+  for (const m of MOTORES) {
+    // IA que nem esta instalada neste Mac nao tem lista para dar erro
+    if (!erroDaLista[m] || (MOTORES_OK && MOTORES_OK[m] === false)) continue;
+    const b = document.createElement('button');
+    b.className = 'cv-erro';
+    b.dataset.motor = m;
+    b.title = 'Não consegui ler as conversas do ' + nomeDoMotor(m) + ': ' + erroDaLista[m] + '\nClique para tentar de novo.';
+    b.innerHTML = '<span class="cv-uso-logo">' + svgMotor(m) + '</span><span>indisponível</span>';
+    b.addEventListener('click', () => loadHist(m, true));
+    cx.appendChild(b);
+  }
+}
+
 async function loadHist(engine, force) {
   const pedido = leituraHistorico[engine] = (leituraHistorico[engine] || 0) + 1;
   const box = caixaHist();
@@ -7575,11 +7645,16 @@ async function loadHist(engine, force) {
     if (r && r.error) throw new Error(r.error);
     if (r && !Array.isArray(r)) throw new Error('A lista de conversas está indisponível.');
   } catch (e) {
-    if (leituraHistorico[engine] === pedido && box && !algumaPronta()) box.replaceChildren(Object.assign(document.createElement('div'),
+    if (leituraHistorico[engine] !== pedido) return;
+    if (box && !algumaPronta()) box.replaceChildren(Object.assign(document.createElement('div'),
       { className: 'hist-load', textContent: 'Não consegui ler: ' + (e.message || e) }));
+    // com a lista das outras IAs na tela, a falha desta vira uma linha curta no topo
+    erroDaLista[engine] = String((e && e.message) || e || 'sem resposta');
+    pintarErrosDaLista();
     return;
   }
   if (leituraHistorico[engine] !== pedido) return;
+  if (erroDaLista[engine]) { delete erroDaLista[engine]; pintarErrosDaLista(); }
   histCache[engine] = juntarComVps(engine, r || []);
   pintarConversas();
   /* de propósito SEM o `force`: o turn-end também chama loadHist(engine, true), então passar
@@ -7789,11 +7864,28 @@ function mapaDasCadeias(lista) {
    filtro, busca) chama esta, e nunca mais o paintHist de um motor so. */
 function pintarConversas() { return paintHist(VISTA_CONVERSAS, listaUnica()); }
 
-/* Le as conversas de todas as IAs visiveis e a costura entre elas. As listas chegam cada uma
-   no seu tempo (o Codex demora mais): a lista vai se completando, cada chegada redesenha. */
+/* O ACP (Qwen, OpenCode…) nao tem botao na barra, mas as conversas dele sao do proprio Cockpit
+   e entram na lista unica tambem: antes o ⌘P com um chat ACP em foco abria a coluna dele, e sem
+   ler aqui elas sumiam da lista e da busca (e a parte ACP de uma cadeia virava fantasma). E
+   barato: e um JSONL por sessao que o Cockpit mesmo grava. */
+const MOTORES_DA_LISTA = [...MOTORES_VISIVEIS, 'acp'];
+let costuraAntigaPedida = false;
+/* Le as conversas de todas as IAs e a costura entre elas. As listas chegam cada uma no seu
+   tempo (o Codex demora mais): a lista vai se completando, cada chegada redesenha. */
 async function recarregarConversas(forcar) {
   await lerLigacoes();
-  await Promise.all(MOTORES_VISIVEIS.map(m => loadHist(m, forcar).catch(() => {})));
+  await Promise.all(MOTORES_DA_LISTA.map(m => loadHist(m, forcar).catch(() => {})));
+  /* Uma vez por abertura do app: as conversas partidas numa troca de IA ANTES da costura
+     existir sao ligadas pelo main (so trabalha na primeira vez de todas; depois responde na
+     hora). Achou alguma: a lista relê a costura e junta os pedacos. So no Mac (o preload). */
+  if (!costuraAntigaPedida && window.api && window.api.ligacoesAntigas) {
+    costuraAntigaPedida = true;
+    Promise.resolve(window.api.ligacoesAntigas()).then(async (r) => {
+      if (!r || !r.novas) return;
+      await lerLigacoes();
+      if (lateralAberta()) pintarConversas();
+    }).catch(() => {});
+  }
 }
 
 // os logos oficiais das IAs da conversa, 12px, cada um na cor da sua IA
@@ -7821,7 +7913,8 @@ function lembrarNomeDaParte(p, nome) {
   if (Object.values(LIGACOES).some(l => (l.engine === p.engine && l.id === p.id) || (l.anterior.engine === p.engine && l.anterior.id === p.id))) {
     NOMES_LIGADOS[p.id] = nome;
   }
-  pintarConversas();
+  // o nome curto chega a cada 2a/4a/8a mensagem: com a lateral fechada nao ha o que redesenhar
+  if (lateralAberta()) pintarConversas();
 }
 // parte que foi para a Lixeira: a costura dela sai tambem da memoria desta tela
 function esquecerLigacoesLocais(p) {
@@ -7839,8 +7932,16 @@ function esquecerCadeiaDoPainel(P) { P.parteAnterior = null; P.partesAnteriores 
    conversa (trocou duas vezes sem mandar nada) nao guarda nada: a parte pendente continua a
    mesma, e nao nasce ligacao fantasma. */
 function guardarParteAnterior(P) {
+  /* Ramo que ainda nao mandou a 1a mensagem (forkPendente): o resumeId dele e o da conversa de
+     ORIGEM, porque o fork so acontece no start. Guardar aqui costurava o ramo na origem — que
+     continua viva no outro chat e sumia da lista como item proprio (e o Apagar do ramo levava
+     a origem junto para a Lixeira). */
+  if (P.forkPendente) return;
   const id = P.sessaoId || P.resumeId;
   if (!id) return;
+  /* Sem nada na tela o motor novo nao recebe contexto nenhum (o passarContexto sai do P.hist):
+     nao e continuacao, e costurar juntaria duas conversas que nao se conhecem. */
+  if (!Array.isArray(P.hist) || !P.hist.length) return;
   P.parteAnterior = { engine: P.engine, id, file: P.sessaoFile || '', cwd: P.cwd || '' };
 }
 /* O motor novo anunciou a conversa dele (evento 'sessao'): costura nova → anterior no disco. */
@@ -7906,7 +8007,7 @@ let lendoTodoHistorico = false;
 const historicoJaPedido = new Set();
 async function lerHistoricoDeTodosOsMotores(engine) {
   if (lendoTodoHistorico) return;
-  const faltam = MOTORES_VISIVEIS.filter(m => !histCache[m] && !historicoJaPedido.has(m));
+  const faltam = MOTORES_DA_LISTA.filter(m => !histCache[m] && !historicoJaPedido.has(m));
   if (!faltam.length) return;
   lendoTodoHistorico = true;
   for (const m of faltam) historicoJaPedido.add(m);
@@ -8159,6 +8260,16 @@ async function esquecerParteApagada(s) {
     setDot(Q, 'off');
     note(Q, 'Esta conversa foi apagada. A próxima mensagem começa uma nova.', true);
   }
+  /* 25/09: chat que trocou de IA e ainda nao mandou nada guarda esta conversa como a parte de
+     antes (parteAnterior), com o numero de conversa ja zerado — o laco de cima nao o acha. Sem
+     soltar aqui, a proxima mensagem gravava a costura para uma conversa que esta na Lixeira
+     (parte fantasma na lista, e apagar depois tentava mandar ela de novo). Quem tem esta parte
+     na cadeia (partesAnteriores) larga ela tambem. */
+  const ehEsta = (p) => !!p && p.engine === s.engine && p.id === s.id && !(p.file && s.file && p.file !== s.file);
+  for (const Q of panes.values()) {
+    if (ehEsta(Q.parteAnterior)) Q.parteAnterior = null;
+    if (Array.isArray(Q.partesAnteriores) && Q.partesAnteriores.some(ehEsta)) Q.partesAnteriores = Q.partesAnteriores.filter(p => !ehEsta(p));
+  }
   /* R10: o savePanes() remonta cfg.abas DO ZERO a partir dos chats vivos — limpar antes dele
      seria trabalho jogado fora. Depois dele sobram as abas gravadas que ainda não voltaram
      (abasQueNaoVoltaram), preservadas às cegas: nelas o número da conversa apagada continuaria
@@ -8167,6 +8278,8 @@ async function esquecerParteApagada(s) {
   for (const ab of (cfg.abas || [])) {
     // R2-008: só limpa se o arquivo bater também (fallback sem arquivo salvo = registro antigo)
     for (const c of (ab.chats || [])) if (c && c.sessao === s.id && (!c.arquivo || c.arquivo === s.file)) { c.sessao = ''; c.arquivo = ''; }
+    // e a costura pendente guardada da aba que ainda nao voltou (25/09)
+    for (const c of (ab.chats || [])) if (c && ehEsta(c.parteAnterior)) delete c.parteAnterior;
   }
   // R2-008: filtra por id E arquivo — senão a conversa irmã (arquivo diferente, mesmo id) sumia da lista
   if (Array.isArray(histCache[s.engine])) histCache[s.engine] = histCache[s.engine].filter(x => !(x.id === s.id && (x.file || '') === (s.file || '')));
@@ -8781,9 +8894,10 @@ document.addEventListener('click', (e) => {
   $$('.side-pastas').forEach(x => x.classList.add('hidden'));
 });
 
-// 25/09: um ↻ só, que relê as conversas de todas as IAs (e a costura entre elas)
+// 25/09: um ↻ só, que relê as conversas de todas as IAs (e a costura entre elas) e, como o ↻ do
+// cartão de conta que saiu, a conta de cada IA (no máximo uma vez por minuto, por causa do 429)
 document.querySelectorAll('[data-reload]').forEach(b =>
-  b.addEventListener('click', () => recarregarConversas(true)));
+  b.addEventListener('click', () => { recarregarConversas(true); pintarUsoLateral(true); }));
 /* "Novo chat nesta aba" da lista unica: nasce na IA do chat em foco (ou na ultima usada),
    o mesmo motor que o "+ chat" da barra de abas escolheria */
 document.querySelectorAll('[data-new]').forEach(b =>
@@ -9938,6 +10052,12 @@ setInterval(() => {
   // 25/09: a vista única mostra o uso de todas: relê as duas que têm limite de sessão e semana
   for (const eng of ['claude', 'codex']) if (contaCache[eng]) lerUso(eng, true);   // o lerUso repinta a lateral
 }, 120000);
+/* 25/09: ele trocou de IA no celular e voltou para o Mac com a lateral aberta: a costura gravada
+   la entra na lista na hora, sem precisar fechar e abrir a coluna (no celular quem faz isso e o
+   voltou() do mobile.js). */
+if (!window.SEM_ELECTRON) window.addEventListener('focus', () => {
+  if (lateralAberta()) lerLigacoes().then(() => pintarConversas());
+});
 function toggleSidebar() {
   $('#sidebar').classList.toggle('hidden'); $('#dragbar').classList.toggle('hidden');
   sincronizarIconesLaterais();

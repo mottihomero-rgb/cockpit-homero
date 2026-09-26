@@ -1972,23 +1972,156 @@ handle('ligacoes:ler', () => {
   }
   return { ligacoes, nomes: deles };
 });
-// Vai pelo handle(): trocar de IA no iPhone tambem costura a conversa, e nao apaga nada.
-handle('ligacoes:gravar', (_e, dados) => {
-  const nova = parteDaLigacao(dados && dados.nova), anterior = parteDaLigacao(dados && dados.anterior);
-  if (!nova || !anterior) return { error: 'ligação incompleta' };
-  if (nova.engine === anterior.engine && nova.id === anterior.id) return { error: 'uma conversa não continua ela mesma' };
-  const todas = lerLigacoes();
+/* Poe a ligacao nova -> anterior em `todas` (sem gravar), ou diz por que nao pode. Separado do
+   handler porque a costura das conversas antigas (aqui embaixo) passa pelas MESMAS recusas. */
+function juntarLigacao(todas, nova, anterior) {
+  if (!nova || !anterior) return 'ligação incompleta';
+  if (nova.engine === anterior.engine && nova.id === anterior.id) return 'uma conversa não continua ela mesma';
   /* Ciclo (A continua B que continua A) faria a cadeia andar em roda. Se a anterior ja
      descende da nova, a ligacao e recusada: a tela so perde a costura, nunca trava. */
   let k = anterior.engine + ':' + anterior.id;
   for (let passos = 0; todas[k] && passos < 200; passos++) {
     const a = todas[k].anterior;
-    if (a.engine === nova.engine && a.id === nova.id) return { error: 'ligação em círculo' };
+    if (a.engine === nova.engine && a.id === nova.id) return 'ligação em círculo';
     k = a.engine + ':' + a.id;
   }
   todas[nova.engine + ':' + nova.id] = { ...nova, anterior, quando: Date.now() };
+  return '';
+}
+// Vai pelo handle(): trocar de IA no iPhone tambem costura a conversa, e nao apaga nada.
+handle('ligacoes:gravar', (_e, dados) => {
+  const nova = parteDaLigacao(dados && dados.nova), anterior = parteDaLigacao(dados && dados.anterior);
+  const todas = lerLigacoes();
+  const erro = juntarLigacao(todas, nova, anterior);
+  if (erro) return { error: erro };
   return salvarLigacoes(todas) ? { ok: true } : { error: 'Não consegui gravar a ligação.' };
 });
+
+/* ======================= costura das conversas ANTIGAS (25/09) =======================
+   A costura so nasce nas trocas de IA feitas depois que ela existe: as conversas partidas antes
+   continuavam em dois pedacos soltos na lista. So que cada pedaco novo guarda a prova da troca:
+   a 1a fala dele e o contexto que o app colou ("Estou continuando uma conversa que vinha sendo
+   tocada por outro assistente…", montarContexto no app.js), com o nome da IA que respondia antes
+   e as ultimas falas. UMA vez so (marcada em costura-antiga.json), le o comeco de cada conversa,
+   acha as que nasceram assim e liga cada uma na conversa daquela IA, na mesma pasta, terminada
+   antes dela E que tem dentro a mesma ultima fala. Sem essa prova nao liga nada: dois pedacos
+   soltos sao melhores que uma conversa costurada na errada. So le; nenhuma conversa e mexida. */
+const MARCA_DA_TROCA = 'Estou continuando uma conversa que vinha sendo tocada por outro assistente';
+const MOTOR_PELO_NOME = { Claude: 'claude', Codex: 'codex', ACP: 'acp', Gemini: 'gemini', Grok: 'grok' };
+const COSTURA_ANTIGA_PATH = () => path.join(app.getPath('userData'), 'costura-antiga.json');
+
+/* O texto colado, tirado do comeco CRU do arquivo (o JSONL de qualquer motor). A fala tem de
+   COMECAR pela marca — a string JSON abre logo antes dela, ou vem logo depois do "---" que
+   separa o recado do esforço máximo (ULTRACODE_MSG, que o app cola na frente de tudo). Uma
+   conversa que so fala da frase (codigo do Cockpit, um print colado) tem a marca no meio de
+   outra string, e fica de fora. */
+function contextoColadoNoInicio(bruto) {
+  bruto = String(bruto || '');
+  const abre = (i) => (bruto[i - 1] === '"' && bruto[i - 2] !== '\\') || bruto.slice(Math.max(0, i - 7), i) === '---\\n\\n';
+  let i = bruto.indexOf(MARCA_DA_TROCA);
+  while (i > 0 && !abre(i)) i = bruto.indexOf(MARCA_DA_TROCA, i + 1);
+  if (i <= 0) return '';
+  let j = i;
+  for (; j < bruto.length; j++) {
+    if (bruto[j] === '\\') { j++; continue; }
+    if (bruto[j] === '"') break;
+  }
+  if (j >= bruto.length) return '';          // a fala nao coube no pedaco lido: melhor nao adivinhar
+  try { return JSON.parse('"' + bruto.slice(i, j) + '"'); } catch { return ''; }
+}
+/* Do contexto colado: a IA que respondia por ultimo (o "### Claude:" mais de baixo) e as
+   ultimas falas, que sao a prova para achar a conversa de antes. So nomes de IA conhecidos
+   contam como cabecalho: um "### Titulo:" dentro de uma fala nao engana. */
+function lerContextoColado(texto) {
+  texto = String(texto || '');
+  const ABRE = '--- conversa até aqui ---', FECHA = '--- fim da conversa anterior ---';
+  const ini = texto.indexOf(ABRE), fim = texto.lastIndexOf(FECHA);
+  if (!texto.startsWith(MARCA_DA_TROCA) || ini < 0 || fim <= ini) return null;
+  const corpo = texto.slice(ini + ABRE.length, fim);
+  const cab = /^### (Você|Claude|Codex|ACP|Gemini|Grok):$/gm;
+  const blocos = [];
+  for (let m; (m = cab.exec(corpo));) {
+    if (blocos.length) blocos[blocos.length - 1].fim = m.index;
+    blocos.push({ quem: m[1], ini: m.index + m[0].length, fim: corpo.length });
+  }
+  for (const b of blocos) b.texto = corpo.slice(b.ini, b.fim).trim();
+  const daIa = blocos.filter(b => b.quem !== 'Você');
+  const suas = blocos.filter(b => b.quem === 'Você' && b.texto);
+  if (!daIa.length) return null;
+  return { motor: MOTOR_PELO_NOME[daIa[daIa.length - 1].quem],
+    fala: suas.length ? suas[suas.length - 1].texto : '', resposta: daIa[daIa.length - 1].texto };
+}
+/* A prova: a 1a linha com corpo da ultima fala dele (e da ultima resposta), do jeito que ela
+   aparece escrita no arquivo (escapada como JSON). Corta por letra, nao por byte, para um
+   emoji partido nao virar um \ud83d que nunca bate. */
+function provasDaTroca(ctx) {
+  const linha = (t) => Array.from(String(t || '').split('\n').map(x => x.trim()).find(x => x.length >= 12) || '').slice(0, 80).join('');
+  return [linha(ctx.fala), linha(ctx.resposta)].filter(Boolean).map(t => JSON.stringify(t).slice(1, -1));
+}
+/* A conversa de antes: da IA que o contexto diz, na mesma pasta, que parou antes de a nova
+   nascer (2 min de folga: o motor velho ainda grava ao ser desligado), da mais recente para a
+   mais velha — e so a que tem a prova dentro. */
+function acharParteAntiga(nova, ctx, lista, lerTexto) {
+  const provas = provasDaTroca(ctx);
+  if (!ctx.motor || !provas.length) return null;
+  const pasta = (c) => String(c || '').replace(/\/+$/, '');
+  const limite = (nova.nasceu || nova.when || 0) + 120000;
+  const candidatas = lista.filter(s => s && s.file && s.engine === ctx.motor && !(s.engine === nova.engine && s.id === nova.id)
+      && (!nova.cwd || !s.cwd || pasta(s.cwd) === pasta(nova.cwd)) && (s.when || 0) <= limite)
+    .sort((a, b) => (b.when || 0) - (a.when || 0)).slice(0, 6);
+  for (const s of candidatas) {
+    const texto = lerTexto(s);
+    if (texto && provas.some(p => texto.includes(p))) return s;
+  }
+  return null;
+}
+async function costurarConversasAntigas() {
+  if (fs.existsSync(COSTURA_ANTIGA_PATH())) return { feito: true, novas: 0 };
+  const lista = [];
+  try { lista.push(...claudeSessions(5000, false)); } catch {}
+  try { lista.push(...codexSessions(false, {})); } catch {}
+  try { lista.push(...cli.sessoes()); } catch {}
+  try { for (const s of (acp.sessoes() || [])) lista.push(ehSessaoGrok(s) ? { ...s, engine: 'grok' } : s); } catch {}
+  const jaLigadas = lerLigacoes();
+  const achadas = new Map();
+  let vistas = 0;
+  for (let n = 0; n < lista.length; n++) {
+    // de 40 em 40 arquivos devolve a vez: o app continua respondendo enquanto isto roda
+    if (n % 40 === 39) await new Promise(r => setImmediate(r));
+    const x = lista[n];
+    if (!x || !x.file || jaLigadas[x.engine + ':' + x.id]) continue;
+    // o Codex abre o arquivo com as instrucoes da sessao (AGENTS.md…) antes da 1a fala
+    const colado = contextoColadoNoInicio(headRead(x.file, (x.engine === 'codex' ? 192 : 64) * 1024));
+    const ctx = lerContextoColado(colado);
+    if (!ctx) continue;
+    vistas++;
+    let nasceu = 0;
+    try { nasceu = fs.statSync(x.file).birthtimeMs || 0; } catch {}
+    const anterior = acharParteAntiga({ ...x, nasceu }, ctx, lista, (s) => tailRead(s.file, 8 * 1024 * 1024));
+    if (!anterior) continue;
+    /* O ramo (fork) de uma conversa que nasceu da troca copia a 1a fala dela, com o MESMO
+       contexto colado: medido no Mac dele, ate 5 conversas do Codex comecando igual. So a que
+       nasceu primeiro e a continuacao; os ramos nao herdam a costura (a mesma regra da troca
+       ao vivo), senao a lista ganhava 5 itens com o nome da conversa de antes. */
+    const chave = anterior.engine + ':' + anterior.id + '\n' + colado;
+    const ja = achadas.get(chave), idade = nasceu || x.when || 0;
+    if (!ja || idade < ja.idade) achadas.set(chave, { nova: parteDaLigacao(x), anterior: parteDaLigacao(anterior), idade });
+  }
+  /* rele na hora de gravar: uma troca de IA feita enquanto isto rodava gravou o arquivo, e
+     gravar a copia do comeco apagaria a costura dela */
+  const todas = lerLigacoes();
+  let novas = 0;
+  for (const { nova, anterior } of achadas.values()) {
+    if (nova && !todas[nova.engine + ':' + nova.id] && !juntarLigacao(todas, nova, anterior)) novas++;
+  }
+  if (novas && !salvarLigacoes(todas)) return { error: 'Não consegui gravar a costura das conversas antigas.' };
+  gravarSeguro(COSTURA_ANTIGA_PATH(), JSON.stringify({ feito: Date.now(), vistas, novas }));
+  return { feito: true, novas };
+}
+let costurandoAntigas = null;
+handle('ligacoes:antigas', () => costurandoAntigas || (costurandoAntigas = costurarConversasAntigas()
+  .catch((e) => ({ error: String((e && e.message) || e) }))
+  .finally(() => { costurandoAntigas = null; })));
 
 handle('sessao:renomear', async (_e, { engine, id, nome }) => {
   const todos = lerNomes();
@@ -5249,8 +5382,10 @@ const cli = require('./cli-motors').criarCli({ HOME, emit: (paneId, kind, data) 
   aoConfirmarConta: () => contasCli.confirmar('gemini'), aoFalharConta: () => contasCli.invalidar('gemini') });
 // o titulo do Gemini sai da 1a fala, como no ACP: depois de uma troca de IA ela comeca com o
 // contexto colado, e o tituloAcp rele o arquivo so nesse caso para mostrar o pedido de verdade
+/* a sessao do Grok roda pelo ACP (mesmo JSONL do Cockpit): quem diz que e dele e o comando */
+const ehSessaoGrok = (s) => /(?:^|[\\/])grok(?:\s|$)/.test(String((s && s.comando) || ''));
 handle('sessions:cli', (_e, engine) => engine === 'gemini' ? cli.sessoes().map(s => ({ ...s, title: tituloAcp(s) }))
-  : engine === 'grok' ? acp.sessoes().filter(s => /(?:^|[\\/])grok(?:\s|$)/.test(s.comando)).map(s => ({ ...s, engine: 'grok', title: tituloAcp(s) })) : []);
+  : engine === 'grok' ? acp.sessoes().filter(ehSessaoGrok).map(s => ({ ...s, engine: 'grok', title: tituloAcp(s) })) : []);
 
 
 /* Pedido de permissão do ACP que não vale mais: responde ao agente (senão ele fica esperando
@@ -5358,7 +5493,10 @@ function tituloAcp(s) {
 }
 
 handle('sessions:acp', () => {
-  try { return (acp.sessoes() || []).map((s) => ({ ...s, title: tituloAcp(s) })); }
+  /* 25/09: a lista lateral virou uma so, e le o ACP junto com o Grok. As sessoes do Grok ja
+     entram pela lista dele (engine 'grok'): aqui repetidas como 'acp', a mesma conversa
+     aparecia duas vezes, uma com o logo errado. */
+  try { return (acp.sessoes() || []).filter((s) => !ehSessaoGrok(s)).map((s) => ({ ...s, title: tituloAcp(s) })); }
   catch (e) { return { error: String(e && e.message || e) }; }
 });
 

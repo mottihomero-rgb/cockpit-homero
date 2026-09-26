@@ -272,6 +272,8 @@ function listContext() {
   const c = context(['loadHist']), box = element();
   c.histCache = {}; c.leituraHistorico = {}; c.caixaHist = () => box;
   c.paintHist = () => {}; c.buscarConversasVps = () => {}; c.juntarComVps = (e, list) => list;
+  // 25/09: a falha de UMA IA vira linha curta no topo da lista única (pintarErrosDaLista)
+  c.erroDaLista = {}; c.pintarErrosDaLista = () => {};
   return { c, box };
 }
 test('lista de histórico mais nova prevalece quando a leitura anterior atrasa', async () => {

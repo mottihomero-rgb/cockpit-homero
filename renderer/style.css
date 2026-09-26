@@ -1862,10 +1862,19 @@ html[data-tema="jornal"] { --gemini:#39764b; --grok:#586e75; }
    até lá valem as cores de sempre. */
 .cv-uso{flex:none;display:flex;flex-direction:column;gap:8px;padding:2px 12px 8px}
 .cv-uso:empty{display:none}
-.cv-uso-motor{display:flex;align-items:flex-start;gap:8px;cursor:pointer;border-radius:6px}
-.cv-uso-logo{flex:none;width:12px;height:12px;margin-top:1px;display:grid;place-items:center}
+.cv-uso-motor{display:flex;flex-direction:column;gap:6px;cursor:pointer;border-radius:6px}
+/* a linha da conta: logo + nome (ou e-mail) + plano à direita; sem login, logo + "Entrar" */
+.cv-uso-cab{display:flex;align-items:center;gap:8px;min-width:0;font-size:12px;line-height:16px}
+.cv-uso-logo{flex:none;width:12px;height:12px;display:grid;place-items:center}
 .cv-uso-logo svg{width:12px;height:12px}
-.cv-uso-janelas{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.cv-uso-nome{flex:1;min-width:0;font-weight:600;color:var(--label-1,var(--fg-strong));
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cv-uso-plano{flex:none;font-size:11px;color:var(--label-3,var(--fg-fraco))}
+.cv-uso-entrar{height:22px;padding:0 10px;border-radius:6px;font-size:12px;
+  background:var(--fill-2,var(--bg3));color:var(--label-1,var(--fg))}
+.cv-uso-entrar:hover{background:var(--fill-1,var(--bg4))}
+.cv-uso-motor.sem-conta{cursor:default}
+.cv-uso-janelas{min-width:0;display:flex;flex-direction:column;gap:6px}
 .cv-uso-janela{display:flex;flex-direction:column;gap:3px}
 .cv-uso-top{display:flex;align-items:baseline;font-size:11px;line-height:14px;font-variant-numeric:tabular-nums}
 .cv-uso-rot{flex:1;color:var(--label-2,var(--fg-dim))}
@@ -1873,15 +1882,33 @@ html[data-tema="jornal"] { --gemini:#39764b; --grok:#586e75; }
 .cv-uso-zera{margin-left:6px;color:var(--label-3,var(--fg-fraco))}
 .cv-uso-barra{height:3px;border-radius:2px;background:var(--fill-1,var(--bg4));overflow:hidden}
 .cv-uso-barra span{display:block;height:3px;border-radius:2px;background:var(--label-2,var(--fg-dim))}
-.cv-uso-motor:hover .cv-uso-rot{color:var(--label-1,var(--fg))}
+.cv-uso-motor:not(.sem-conta):hover .cv-uso-rot{color:var(--label-1,var(--fg))}
+/* A estrela e o lápis ficavam na fila com opacity:0, mas ocupando 20px cada (+ os vãos): com os
+   logos das IAs na linha, o título caía para ~10 letras ("Página do Man…") e ele não achava a
+   conversa. Fora do :hover os dois encolhem a zero, a mesma técnica da pastinha e do "⋯" (ver
+   .hi-grupo); a estrela ligada continua sempre à vista. Só com mouse: no toque (celular) não
+   existe :hover, e lá os quatro ficam sempre visíveis (celular.css). A linha de busca
+   (com-trecho/com-onde) ancora os botões no canto e não muda. */
+@media (hover:hover){
+  .hist-item:not(.com-trecho):not(.com-onde) .hi-fav:not(.on),
+  .hist-item:not(.com-trecho):not(.com-onde) .hi-edit{width:0;margin-left:-7px;overflow:hidden;transition:width .12s,opacity .12s}
+  .hist-item:not(.com-trecho):not(.com-onde):hover .hi-fav,
+  .hist-item:not(.com-trecho):not(.com-onde):hover .hi-edit{width:20px;margin-left:0}
+}
+/* a IA cuja lista não veio: uma pílula curta por IA, sem frase (o motivo fica no title) */
+.cv-erros{flex:none;display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 6px}
+.cv-erros:empty{display:none}
+.cv-erro{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:6px;
+  font-size:11px;color:var(--label-2,var(--fg-dim));background:var(--fill-2,var(--bg3))}
+.cv-erro:hover{color:var(--label-1,var(--fg))}
 .hi-motores{flex:none;display:inline-flex;align-items:center;gap:3px}
 .hi-motor{width:12px;height:12px;display:grid;place-items:center}
 .hi-motor svg{width:12px;height:12px}
-.cv-uso-motor[data-motor="claude"] .cv-uso-logo,.hi-motor[data-motor="claude"]{color:var(--logo-claude,var(--claude))}
-.cv-uso-motor[data-motor="codex"] .cv-uso-logo,.hi-motor[data-motor="codex"]{color:var(--logo-codex,var(--codex))}
-.cv-uso-motor[data-motor="gemini"] .cv-uso-logo,.hi-motor[data-motor="gemini"]{color:var(--logo-gemini,var(--gemini))}
-.cv-uso-motor[data-motor="grok"] .cv-uso-logo,.hi-motor[data-motor="grok"]{color:var(--logo-grok,var(--grok))}
-.hi-motor[data-motor="acp"]{color:var(--acp)}
+.cv-uso-motor[data-motor="claude"] .cv-uso-logo,.cv-erro[data-motor="claude"] .cv-uso-logo,.hi-motor[data-motor="claude"]{color:var(--logo-claude,var(--claude))}
+.cv-uso-motor[data-motor="codex"] .cv-uso-logo,.cv-erro[data-motor="codex"] .cv-uso-logo,.hi-motor[data-motor="codex"]{color:var(--logo-codex,var(--codex))}
+.cv-uso-motor[data-motor="gemini"] .cv-uso-logo,.cv-erro[data-motor="gemini"] .cv-uso-logo,.hi-motor[data-motor="gemini"]{color:var(--logo-gemini,var(--gemini))}
+.cv-uso-motor[data-motor="grok"] .cv-uso-logo,.cv-erro[data-motor="grok"] .cv-uso-logo,.hi-motor[data-motor="grok"]{color:var(--logo-grok,var(--grok))}
+.hi-motor[data-motor="acp"],.cv-erro[data-motor="acp"] .cv-uso-logo{color:var(--acp)}
 /* na linha de resultado de busca o item vira bloco: os logos ficam à esquerda do título,
    na mesma linha, em vez de ganhar uma linha só para eles */
 .hist-item.com-onde .hi-motores,.hist-item.com-trecho .hi-motores{float:left;margin:2px 6px 0 0}

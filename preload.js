@@ -41,6 +41,8 @@ contextBridge.exposeInMainWorld('api', {
   // a costura das conversas quando se troca de IA no meio (ligacoes.json)
   ligacoesLer: () => ipcRenderer.invoke('ligacoes:ler'),
   ligacoesGravar: (o) => ipcRenderer.invoke('ligacoes:gravar', o),
+  // uma vez so: costura as conversas antigas que ja tinham sido partidas numa troca de IA
+  ligacoesAntigas: () => ipcRenderer.invoke('ligacoes:antigas'),
   skills: (e) => ipcRenderer.invoke('skills:list', e),
   // prompts salvos com nome (~/.claude/cockpit-prompts.json): reaproveitar pedidos longos
   promptsLer: () => ipcRenderer.invoke('prompts:ler'),

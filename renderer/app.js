@@ -324,9 +324,11 @@ function abaDe(P) { return abas.get(P.aid); }
 function pintarAba(A) {
   const n = A.ordem.length;
   const naVps = NA_VPS(A.cwd);
-  A.el.classList.toggle('vps', naVps);   // a bolinha da aba fica verde (style.css)
+  A.el.classList.toggle('vps', naVps);   // aparece o ícone de servidor antes do nome (janela.css)
   $('.aba-proj', A.el).textContent = nomeProjeto(A.cwd);
-  $('.aba-tit', A.el).textContent = (naVps ? 'VPS · ' : '') + (n === 0 ? 'sem chat' : (n === 1 ? '1 chat' : n + ' chats'));
+  /* Cápsula do redesenho: o contador é só o número (tabular, em --label-3). "3 chats" por extenso
+     não cabe numa aba de 28 e repetia o que o title já diz. Aba sem chat não mostra número. */
+  $('.aba-tit', A.el).textContent = n ? String(n) : '';
   A.el.title = shortPath(A.cwd) + '\n' + (n === 1 ? '1 chat aberto' : n + ' chats abertos');
   /* A bolinha da aba mostra se algum chat dela esta trabalhando — inclusive quando só os
      agentes em segundo plano seguem rodando e o turno do chat já acabou.
@@ -7215,6 +7217,10 @@ function avisoTemp(P, texto, ehErro) {
    - nivel: se a coisa piorar, volta a avisar.
    - reseta: quando a semana (ou a sessão) vira, a dispensa antiga morre junto. */
 const avisosFechados = new Map();
+/* Ícone da tarja (README, "Faixa de aviso" e "Estados"): a bandeja da caixa de entrada para o
+   aviso comum; alerta e erro usam o triângulo, e quem diz qual é qual é a cor (janela.css) mais o
+   texto. Antes era um círculo com "?" e um X, que parecia botão de fechar. */
+function icoDoAviso(tipo) { return tipo === 'alerta' || tipo === 'erro' ? 'warn' : 'tray'; }
 function mostrarAviso({ id, texto, tipo, acao, aoClicar, fixo, nivel, reseta, aoFechar }) {
   const caixa = $('#faixaAvisos');
   if (!caixa) return;
@@ -7241,7 +7247,7 @@ function mostrarAviso({ id, texto, tipo, acao, aoClicar, fixo, nivel, reseta, ao
     if (typeof nivel === 'number') existente.dataset.nivel = String(nivel);
     if (reseta) existente.dataset.reseta = String(reseta);
     const ic = $('.fx-ic', existente);
-    if (ic) ic.innerHTML = ico(tipo === 'alerta' ? 'circle-help' : tipo === 'erro' ? 'x' : 'circle');
+    if (ic) ic.innerHTML = ico(icoDoAviso(tipo));
     // o texto novo vem com ação nova: o botão e o X têm de apontar para ESTA chamada
     const btAntigo = $('.fx-acao', existente);
     if (acao) {
@@ -7267,7 +7273,7 @@ function mostrarAviso({ id, texto, tipo, acao, aoClicar, fixo, nivel, reseta, ao
   d.innerHTML = '<span class="fx-ic"></span><span class="fx-txt"></span>'
     + (acao ? '<button class="fx-acao"></button>' : '')
     + '<button class="fx-x"></button>';
-  $('.fx-ic', d).innerHTML = ico(tipo === 'alerta' ? 'circle-help' : tipo === 'erro' ? 'x' : 'circle');
+  $('.fx-ic', d).innerHTML = ico(icoDoAviso(tipo));
   // textContent, nunca innerHTML: o texto carrega nome de arquivo escrito por outra máquina
   $('.fx-txt', d).textContent = texto;
   if (acao) {
@@ -7302,8 +7308,9 @@ function chegouNaInbox(m) {
   mostrarAviso({
     // id por arquivo E hora: o mesmo nome noutro dia não herda o "fechado" do anterior
     id: idAviso, tipo: 'info', fixo: true,
-    texto: (m.tipo === 'texto' ? '📱 Chegou do celular: ' : '📱 Imagem do celular: ') + resumo,
-    acao: 'usar',
+    // sem emoji: o ícone da bandeja na frente da tarja já diz de onde veio (só SF Pro na tela)
+    texto: (m.tipo === 'texto' ? 'Chegou do celular: ' : 'Imagem do celular: ') + resumo,
+    acao: 'Usar no chat',
     aoClicar: () => usarDaInbox(m),
     // o X descarta de verdade (apaga da caixa); só esconder faria o arquivo voltar a cada
     // abertura do app, para sempre

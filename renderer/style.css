@@ -1140,78 +1140,17 @@ html[data-theme^="light"] .ef-thumb{background:var(--puxador);border-color:var(-
    ABAS DE PROJETO no topo + chats lado a lado dentro de cada aba
    ============================================================ */
 
-/* Visual das abas igual ao Cockpit do Hugo (10/09): cartao quadrado de duas linhas,
-   e a barra de titulo do Mac saiu. A faixa das abas virou a barra de titulo: e ela que
+/* A barra de titulo do Mac saiu (10/09): a barra das abas virou a barra de titulo, e ela que
    arrasta a janela, e o recuo da esquerda e o lugar dos tres semaforos.
-   --topo-altura = tudo que fica acima do #shell. No Mac so a faixa (50px); o
-   index-web.html ainda tem a barra de titulo e redefine no celular.css. */
-:root{--topo-altura:50px;--veu-topo:50px;--recuo-semaforo:80px}
-#abasTopo{height:50px;flex:none;display:flex;align-items:center;gap:8px;
-  padding:0 10px 0 var(--recuo-semaforo);background:var(--bg2);border-bottom:1px solid var(--line);
-  -webkit-app-region:drag}
-#abasLista{flex:0 1 auto;min-width:0;display:flex;align-items:center;gap:8px;
-  overflow-x:auto;overflow-y:hidden}
-.abas-gap{flex:1;min-width:8px}
-#abasLista::-webkit-scrollbar{height:0;display:none}
-/* o + logo depois das abas: abre aba nova (cartao tracejado) */
-.aba-mais{flex:none;width:34px;height:36px;border-radius:10px;border:1px dashed var(--line2);
-  background:var(--bg2);display:grid;place-items:center;color:var(--fg-fraco);-webkit-app-region:no-drag}
-.aba-mais:hover{color:var(--fg);border-color:var(--fg-dim);border-style:solid}
-.aba-mais .ic{width:15px;height:15px}
-/* o + do canto abre chat na aba de agora, e leva um rotulo para nao confundir com o outro */
-.aba-mais.canto{width:auto;height:28px;padding:0 9px;gap:5px;grid-auto-flow:column;
-  border:1px solid transparent;border-radius:7px;background:none;color:var(--fg-dim)}
-.aba-mais.canto:hover{background:var(--hover2);color:var(--fg);border-color:var(--line2)}
-.am-txt{font-size:11px}
+   --topo-altura = tudo que fica acima do #shell. No Mac so a barra do topo, de 52pt no
+   redesenho (25/09); o recuo de 92 = semaforos a x=20 + 60 deles + 12 de folga. O
+   index-web.html ainda tem a barra de titulo e redefine tudo no celular.css.
+   O desenho da barra, das abas e dos botoes + mora no redesign/janela.css. */
+:root{--topo-altura:52px;--veu-topo:52px;--recuo-semaforo:92px}
 
-/* o shell perde a altura do que fica em cima dele */
+/* o shell perde a altura do que fica em cima dele (no Mac a faixa de avisos entra no fluxo e
+   o janela.css troca esta conta por flex; no celular continua esta) */
 #shell{display:flex;height:calc(100% - var(--topo-altura))}
-
-/* --- a aba (um projeto): cartao de duas linhas, igual o do Hugo ---
-   linha 1: bolinha da cor + nome + ponto de "trabalhando"; linha 2: quantos chats.
-   Nao encolhe (encolher cortava o nome em 3 letras): cada aba tem a largura do nome, de
-   104 a 190px, e quando nao cabem todas a faixa rola de lado. */
-.aba{position:relative;flex:none;min-width:104px;max-width:190px;height:36px;
-  display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:1px;
-  padding:3px 12px;border-radius:10px;border:1px solid var(--line2);background:var(--bg2);
-  color:var(--fg-dim);cursor:pointer;-webkit-app-region:no-drag;
-  /* sem isto vale o 1.55 do body e as duas linhas nao cabem nos 36px: a de baixo era cortada */
-  line-height:1.2;
-  --aba-cor:var(--cor-foco, var(--aba-neon));
-  border-color:color-mix(in srgb, var(--aba-cor) 40%, var(--line2))}
-.aba:hover{background:var(--bg3)}
-.aba.ativa{background:var(--bg3);color:var(--fg-strong);border-color:var(--aba-cor);
-  box-shadow:0 0 0 1px var(--aba-cor)}
-
-/* .aba-ic sozinho tambem e usado no fantasma do arraste (com icone dentro) */
-.aba-ic{flex:none;display:grid;place-items:center}
-.aba-ic .ic{width:100%;height:100%}
-/* o X e absoluto no canto e tem fundo solido: a folga da direita impede que ele cubra o ponto */
-.aba-topo{display:flex;align-items:center;gap:6px;width:100%;padding-right:14px}
-/* Redesenho: a bolinha era a cor do motor em foco; com a ponte o --aba-cor virou o --accent, e
-   um ponto azul fixo em toda aba e o sinal de "resposta nova" do README (falso aqui). Fica sem
-   cor, ocupando o lugar para a aba nao mudar de largura, ate a janela redesenhar as abas.
-   So a aba da VPS continua marcada (verde), que e o que a bolinha dizia de verdade. */
-.aba .aba-ic{width:8px;height:8px;border-radius:50%;background:transparent}
-.aba.vps .aba-ic{background:var(--green)}
-.aba-proj{flex:1;min-width:0;font-size:12.5px;font-weight:600;text-align:left;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* --fg-dim, nao --fg-fraco: em 10px o contador sumia. Na aba aberta sobe pra --fg */
-.aba-tit{max-width:100%;font-size:10px;color:var(--fg-dim);padding-left:14px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.aba.ativa .aba-tit{color:var(--fg)}
-/* o ponto ocupa lugar mesmo apagado: senao a aba mudava de largura ao comecar e
-   terminar o trabalho, e as vizinhas pulavam de lugar. So aparece trabalhando. */
-.aba .aba-dot{width:6px;height:6px}
-.aba .aba-dot.off,.aba .aba-dot.idle{visibility:hidden}
-.aba-x{position:absolute;top:3px;right:4px;width:16px;height:16px;border-radius:4px;
-  display:grid;place-items:center;color:var(--fg-fraco);background:var(--bg2);opacity:0}
-.aba-x .ic{width:9px;height:9px}
-.aba:hover .aba-x,.aba.ativa .aba-x{opacity:1}
-.aba.ativa .aba-x{background:var(--bg3)}
-.aba-x:hover{background:var(--hover3);color:var(--red)}
-/* aba de outro projeto que recebeu resposta enquanto voce estava em outra */
-.aba.nova .aba-proj{color:var(--fg-strong)}
 
 /* --- espaco de cada aba: os chats lado a lado, igual antes --- */
 #panes{flex:1;display:flex;min-width:0;overflow:hidden}
@@ -1730,32 +1669,17 @@ body.arrastando-aba,body.arrastando-aba *{cursor:grabbing !important}
    usada aqui pela tarja de limite do plano (`.p-uso aviso`, app.js) e o CSS de lá a
    repintaria inteira (padding, fundo, borda, tamanho de letra).
    `position:fixed`: #shell tem altura calculada na mão (100% - --topo-altura); um elemento a
-   mais no fluxo do body empurraria a tela toda para baixo.
-   O top segue --topo-altura: no Mac 50px (só a faixa de abas); no telefone a barra de título
+   mais no fluxo do body empurraria a tela toda para baixo. No Mac o redesenho quer a faixa
+   ENTRE a barra do topo e os chats, empurrando tudo (36pt): lá o janela.css põe o body em
+   coluna flex e a faixa no fluxo. Esta regra continua valendo para o celular.
+   O top segue --topo-altura: no Mac 52px (só a barra do topo); no telefone a barra de título
    é mais alta (46px + o recorte da câmera) e quem soma isso é o celular.css — é o único que
    conhece o --sat. Antes aqui havia um calc com --sat que, sem o celular.css (no Mac, janela
    estreita ou com zoom), ficava inválido e enterrava a barra de abas. */
 #faixaAvisos{position:fixed;left:0;right:0;top:var(--topo-altura);z-index:60;display:flex;flex-direction:column;
   max-height:30vh;overflow-y:auto}
 #faixaAvisos:empty{display:none}
-.fx{display:flex;align-items:center;gap:9px;padding:7px 12px;font-size:12px;
-  border-bottom:1px solid var(--line);background:var(--bg3);color:var(--fg)}
-.fx-alerta{background:color-mix(in srgb,var(--yellow) 16%,var(--bg3));
-  border-bottom-color:color-mix(in srgb,var(--yellow) 40%,var(--line))}
-.fx-erro{background:color-mix(in srgb,var(--red) 14%,var(--bg3));
-  border-bottom-color:color-mix(in srgb,var(--red) 40%,var(--line))}
-.fx-ic{flex:none;display:grid;place-items:center;color:var(--fg-dim)}
-.fx-ic .ic{width:13px;height:13px}
-.fx-alerta .fx-ic{color:var(--yellow)}
-.fx-erro .fx-ic{color:var(--red)}
-.fx-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fx-acao{flex:none;padding:3px 10px;border-radius:6px;font-size:11px;
-  border:1px solid var(--line2);color:var(--fg);background:transparent;cursor:pointer}
-.fx-acao:hover{background:var(--hover2)}
-.fx-x{flex:none;width:20px;height:20px;border-radius:5px;color:var(--fg-fraco);display:grid;
-  place-items:center;border:0;background:transparent;cursor:pointer}
-.fx-x:hover{background:var(--hover3);color:var(--fg)}
-.fx-x .ic{width:10px;height:10px}
+/* o desenho das tarjas (.fx, .fx-ic, .fx-txt, .fx-acao, .fx-x) mora no redesign/janela.css */
 
 /* ======== leva 11: rotinas (os robôs agendados do launchd) ======== */
 /* Cópia da torre com prefixo próprio: mesma linguagem visual, e a mudança de uma não arrasta a

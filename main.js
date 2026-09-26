@@ -4730,8 +4730,12 @@ function createWindow() {
     width: 1500, height: 900, minWidth: 900, minHeight: 560,
     backgroundColor: fundoDaJanela(),
     titleBarStyle: 'hiddenInset',
-    // os semaforos moram na faixa de abas (58px) desde que a barra de titulo saiu (10/09)
-    trafficLightPosition: { x: 16, y: 17 },
+    /* Os semaforos moram na barra do topo desde que a barra de titulo saiu (10/09). Redesenho
+       (25/09): barra de 52pt, bolinhas de 12 a x=20, centradas na barra. O Electron posiciona o
+       QUADRO do botao do Mac (14 de largura x 16 de altura, a bolinha de 12 no meio), nao a
+       bolinha: x=19 poe a bolinha em 20, e y=18 poe o centro em 18+8 = 26, o meio dos 52.
+       (Com a barra de 50 era y=17, centro em 25: mesma conta.) */
+    trafficLightPosition: { x: 19, y: 18 },
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, spellcheck: false },
   });
   win.loadFile(path.join(__dirname, 'renderer/index.html'));

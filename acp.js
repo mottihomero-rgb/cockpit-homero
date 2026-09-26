@@ -477,6 +477,8 @@ function criarAcp(dep) {
     aoPedirPermissao(st.paneId, m.id, {
       title: (st.info.title || st.info.name || 'O agente') + ' quer: ' + (passo.titulo || rotulo),
       detail: passo.arg, tool: chave, rotulo, mudanca,
+      // o cartao so mostra "Sempre permitir" quando o agente oferece essa opcao
+      sempre: opcoes.some((o) => o && o.kind === 'allow_always'),
     });
   }
 
@@ -914,14 +916,15 @@ function criarAcp(dep) {
     return espera;
   }
 
-  function responderPermissao(paneId, rpcId, allow) {
+  // sempre: o "Sempre permitir" do cartao escolhe o allow_always do proprio agente
+  function responderPermissao(paneId, rpcId, allow, sempre) {
     const st = paineis.get(paneId);
     if (!st) return false;
     const pedido = st.pedidos.get(rpcId);
     if (!pedido) return false;
     st.pedidos.delete(rpcId);
     if (allow == null) return responder(st, rpcId, { outcome: { outcome: 'cancelled' } });
-    const op = escolherOpcao(pedido.opcoes, !!allow, false);
+    const op = escolherOpcao(pedido.opcoes, !!allow, !!allow && sempre === true);
     if (!op) return responder(st, rpcId, { outcome: { outcome: 'cancelled' } });
     return responder(st, rpcId, { outcome: { outcome: 'selected', optionId: op.optionId } });
   }

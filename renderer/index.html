@@ -325,7 +325,9 @@
       <div class="pp-cab"><span class="rd-espera" aria-hidden="true"></span><span class="pp-tit"></span><span class="pp-ha"></span></div>
       <div class="pp-obj"><div class="pp-txt"></div><div class="pp-cam"></div><div class="pp-por"></div></div>
       <div class="pp-diff hidden"></div>
-      <div class="pp-btns"><button class="pp-no">Negar</button><button class="pp-yes">Permitir</button></div>
+      <!-- "Sempre permitir" à esquerda, só quando o motor oferece; a tecla de cada botão vai junto
+           (esc, ↩, ⌥↩: showApproval e teclaDoPedido no app.js) -->
+      <div class="pp-btns"><button class="pp-sempre hidden" aria-keyshortcuts="Alt+Enter" title="Permitir e não perguntar de novo por pedidos como este (⌥↩)">Sempre permitir</button><button class="pp-no" aria-keyshortcuts="Escape">Negar<span class="pp-tecla" aria-hidden="true">esc</span></button><button class="pp-yes" aria-keyshortcuts="Enter">Permitir<span class="pp-tecla" aria-hidden="true">↩</span></button></div>
     </div>
     <!-- aviso de limite do plano: linha própria entre a autorização e a caixa (antes era tarja grudada nela) -->
     <div class="p-uso hidden"></div>

@@ -268,6 +268,32 @@ function montar(roteiro, opts) {
     try { fs.rmSync(pastaDados, { recursive: true, force: true }); } catch {}
   }
 
+  /* ---- "Sempre permitir" do cartao (26/09): o pedido diz se o agente oferece allow_always, e o
+     clique no "sempre" escolhe essa opcao dele (sem o "sempre", continua allow_once) ---- */
+  {
+    const t = montar();
+    await t.acp.start('p11', { comando: 'falso --acp', cwd, approval: 'manual' });
+    const proc = t.proc();
+    proc.on('prompt', () => {
+      proc.manda({ jsonrpc: '2.0', id: 300, method: 'session/request_permission', params: { sessionId: 's1', toolCall: { toolCallId: 'y1', title: 'Run: npm test', kind: 'execute', rawInput: { command: 'npm test' } },
+        options: [{ optionId: 'a1', kind: 'allow_once' }, { optionId: 'a2', kind: 'allow_always' }, { optionId: 'r1', kind: 'reject_once' }] } });
+      proc.manda({ jsonrpc: '2.0', id: 301, method: 'session/request_permission', params: { sessionId: 's1', toolCall: { toolCallId: 'y2', title: 'Run: ls', kind: 'execute', rawInput: { command: 'ls' } },
+        options: [{ optionId: 'b1', kind: 'allow_once' }, { optionId: 'b2', kind: 'reject_once' }] } });
+    });
+    const respostas = {};
+    proc.on('resposta', (m) => { respostas[m.id] = m; if (respostas[300] && respostas[301]) proc.responde(proc.promptId, { stopReason: 'end_turn' }); });
+    t.acp.enviar('p11', 'roda os testes', []);
+    checa('os dois pedidos chegaram a tela', await ate(() => t.pedidos.length === 2));
+    const [comSempre, semSempre] = t.pedidos;
+    checa('pedido com allow_always avisa a tela (sempre: true)', comSempre.info.sempre === true, JSON.stringify(comSempre.info));
+    checa('pedido sem allow_always nao oferece o botao', semSempre.info.sempre === false, JSON.stringify(semSempre.info));
+    checa('"Sempre permitir" escolhe o allow_always do agente', t.acp.responderPermissao('p11', comSempre.rpcId, true, true) !== false
+      && (await ate(() => !!respostas[300])) && respostas[300].result.outcome.optionId === 'a2', JSON.stringify(respostas[300]));
+    checa('"sempre" sem allow_always cai no allow_once', t.acp.responderPermissao('p11', semSempre.rpcId, true, true) !== false
+      && (await ate(() => !!respostas[301])) && respostas[301].result.outcome.optionId === 'b1', JSON.stringify(respostas[301]));
+    t.acp.parar('p11');
+  }
+
   /* ---- R5/R6: start com pasta diferente e' outro start; o 3o igual reaproveita o 2o ---- */
   {
     const t = montar();

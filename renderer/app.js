@@ -1424,13 +1424,19 @@ function avisarInstalacaoMotor(P) {
       texto: nomeDoMotor(P.engine) + ' não está instalado neste Mac' });
   }
 }
+/* Redesenho 26/09: os 4 com o logo oficial na cor de cada um (a cor do assistente fica SÓ no
+   logo), sem título. Sem clique por perto (robô, atalho), nasce logo abaixo do nome da conversa. */
 function menuMotores(P) {
-  const m = novoMenu(P);
-  m.appendChild(tituloPopup('Escolher assistente'));
+  const m = novoMenu(P, $('.pane-nome:not(.vazio)', P.el) || '.pane-hd');
+  m.classList.add('menu-motor');
+  m.setAttribute('aria-label', 'Escolher assistente');
   for (const engine of MOTORES_VISIVEIS) {
     const item = elItem({ nome: nomeDoMotor(engine), on: P.engine === engine,
       desc: motorIndisponivelNaPasta(engine, P.cwd) }, () => trocarMotor(P, engine));
-    $('.mi-ic', item).innerHTML = svgMotor(engine);
+    item.dataset.motor = engine;
+    const logo = $('.mi-ic', item);
+    logo.classList.add('mi-logo');
+    logo.innerHTML = svgMotor(engine);
     m.appendChild(item);
   }
 }
@@ -2094,7 +2100,10 @@ function botoesDaMinhaMensagem(P, d, texto) {
   const bCopia = botaoCopiar('Copiar o que eu escrevi', () => texto);
   const bVolta = document.createElement('button');
   bVolta.className = 'msg-bt'; bVolta.title = 'Voltar no tempo até aqui'; bVolta.innerHTML = ico('rotate-cw');
-  bVolta.onclick = () => menuVoltarNoTempo(P, d, texto);
+  /* 26/09: sem o stopPropagation o mesmo clique subia até o document, cujo fecharMenus apagava o
+     menu no instante em que ele abria: "Voltar no tempo" nunca aparecia (igual aos outros botões
+     que abrem menu, que já paravam o clique) */
+  bVolta.onclick = (e) => { e.stopPropagation(); menuVoltarNoTempo(P, d, texto); };
   barra.appendChild(bCopia); barra.appendChild(bEdit); barra.appendChild(bVolta);
 }
 
@@ -2156,6 +2165,7 @@ function menuVoltarNoTempo(P, d, texto) {
   const desde = Number(d.dataset.edicoes || 0);
   const feitas = (P.edicoes || []).slice(desde);
   const m = novoMenu(P);
+  m.classList.add('menu-voltar');
   m.appendChild(tituloPopup('Voltar até aqui'));
   m.appendChild(subPopup('"' + texto.slice(0, 60).replace(/\s+/g, ' ') + (texto.length > 60 ? '…' : '') + '"'));
   m.appendChild(elItem({
@@ -4482,20 +4492,22 @@ function icon(name) {
 /* ============ menus (mesma cara do VSCode, em português) ============ */
 const MODOS = {
   claude: [
+    /* `curta`: a linha de 11px do menu (redesenho 26/09, uma linha só); `desc` continua sendo o
+       balão do mouse e o recado "Modo: …" que aparece depois de trocar */
     { id: 'manual',    ic: 'hand', nome: 'Manual',                 desc: 'Pergunta antes de cada ação' },
-    { id: 'auto-edit', ic: 'code-xml', nome: 'Editar automaticamente', desc: 'Mexe nos arquivos sozinho e pergunta o resto' },
-    { id: 'plan',      ic: 'clipboard-list', nome: 'Plano',                  desc: 'Só estuda e mostra o plano, não altera nada' },
-    { id: 'auto',      ic: 'zap', nome: 'Auto',                   desc: 'Segue sozinho no que é seguro e para no que é arriscado' },
-    { id: 'bypass',    ic: 'unlock', nome: 'Sem pedir permissão',    desc: 'Faz tudo sem perguntar, inclusive o que é perigoso' },
+    { id: 'auto-edit', ic: 'code-xml', nome: 'Editar automaticamente', desc: 'Mexe nos arquivos sozinho e pergunta o resto', curta: 'Edita arquivos sem perguntar' },
+    { id: 'plan',      ic: 'clipboard-list', nome: 'Plano',                  desc: 'Só estuda e mostra o plano, não altera nada', curta: 'Só planeja, não executa' },
+    { id: 'auto',      ic: 'zap', nome: 'Auto',                   desc: 'Segue sozinho no que é seguro e para no que é arriscado', curta: 'Pergunta só o que for arriscado' },
+    { id: 'bypass',    ic: 'unlock', nome: 'Sem pedir permissão',    desc: 'Faz tudo sem perguntar, inclusive o que é perigoso', curta: 'Faz tudo sem perguntar' },
   ],
   codex: [
     { id: 'manual',    ic: 'hand', nome: 'Manual',                 desc: 'Pergunta antes de cada ação' },
-    { id: 'auto',      ic: 'zap', nome: 'Auto',                   desc: 'Segue sozinho no que é seguro e para no que é arriscado' },
+    { id: 'auto',      ic: 'zap', nome: 'Auto',                   desc: 'Segue sozinho no que é seguro e para no que é arriscado', curta: 'Pergunta só o que for arriscado' },
     /* approvalsReviewer: auto_review no thread/start — um revisor automatico do proprio
        Codex decide os pedidos arriscados, dentro do sandbox da pasta. So do Codex: no
        Claude nao existe modo assim, e o mapa de la cairia em "sem pedir permissao". */
-    { id: 'revisado',  ic: 'sparkles', nome: 'Revisado por IA',   desc: 'Um revisor automático aprova ou barra os pedidos arriscados, sem te interromper' },
-    { id: 'bypass',    ic: 'unlock', nome: 'Sem pedir permissão',    desc: 'Faz tudo sem perguntar, inclusive o que é perigoso' },
+    { id: 'revisado',  ic: 'sparkles', nome: 'Revisado por IA',   desc: 'Um revisor automático aprova ou barra os pedidos arriscados, sem te interromper', curta: 'Um revisor decide o arriscado' },
+    { id: 'bypass',    ic: 'unlock', nome: 'Sem pedir permissão',    desc: 'Faz tudo sem perguntar, inclusive o que é perigoso', curta: 'Faz tudo sem perguntar' },
   ],
   /* leva 12.4 — no ACP o pedido de permissão chega pelo protocolo (session/request_permission)
      e vira o MESMO cartão Permitir/Negar. Os modos são traduzidos para o vocabulário de cada
@@ -4547,7 +4559,7 @@ function barraEsforco(P) {
         '<div class="ef-tip">Quanto mais alto, mais tempo ele pensa antes de responder. O último nível gasta a sua cota bem mais rápido.</div>' +
       '</div>' +
     '</div>' +
-    '<div class="ef-axis"><span>mais rápido</span><span>mais esperto</span></div>' +
+    '<div class="ef-axis"><span>Mais rápido</span><span>Mais esperto</span></div>' +
     '<div class="ef-shell">' +
       '<div class="ef-track"><div class="ef-fill"></div><canvas class="ef-px"></canvas>' +
       '<div class="ef-ticks">' + lista.map(() => '<span class="ef-tick"></span>').join('') + '</div></div>' +
@@ -4556,6 +4568,9 @@ function barraEsforco(P) {
 
   const shell = $('.ef-shell', box), thumb = $('.ef-thumb', box);
   const cur = $('.ef-cur', box), out = $('.ef-out', box);
+  // redesenho 26/09: o "?" com a explicação saiu da tela (nenhuma frase explicativa); ela fica no
+  // balão do mouse da linha "Esforço"
+  $('.ef-top', box).title = $('.ef-tip', box).textContent;
   const track = $('.ef-track', box), cv = $('.ef-px', box);
 
   let valor = Math.max(0, lista.findIndex(e => e.id === P.effort));
@@ -5043,7 +5058,12 @@ function pintarModo(P) {
 function fecharMenus() {
   for (const P of panes.values()) {
     const m = $('.p-modal', P.el);
-    if (m && m.classList.contains('como-menu')) { m.classList.add('hidden'); m.classList.remove('como-menu'); $('.modal-cx', m).innerHTML = ''; }
+    if (m && m.classList.contains('como-menu')) {
+      // redesenho 26/09: o menu some em 120ms. Quem esmaece é uma cópia solta (menuSaindo):
+      // o menu de verdade fecha NA HORA, como sempre, e nenhuma conferência de "está aberto?" muda
+      if (!m.classList.contains('hidden')) menuSaindo($('.modal-cx', m), P.el);
+      m.classList.add('hidden'); m.classList.remove('como-menu'); $('.modal-cx', m).innerHTML = '';
+    }
     // menu fechado nao pode deixar o atalho de setas do "@" preso ao campo: preso, ele engole
     // o Enter e a mensagem nunca sai
     soltarNavArquivos(P);
@@ -5086,7 +5106,9 @@ document.addEventListener('keydown', (e) => {
   for (const P of alvo) window.api.paneInterrupt({ paneId: P.id, engine: P.engine });
 });
 
-function novoMenu(P) {
+/* `padrao` (redesenho 26/09): o botão ao qual o menu se prende quando não veio de um clique —
+   "/" digitado no campo, o "@", atalho, o robô de prints. Com clique, vale o botão clicado. */
+function novoMenu(P, padrao) {
   fecharMenus();
   const modal = $('.p-modal', P.el);
   modal.classList.remove('hidden');
@@ -5097,13 +5119,116 @@ function novoMenu(P) {
   cx.className = 'modal-cx';
   cx.innerHTML = '';
   cx.onclick = (e) => e.stopPropagation();
+  posicionarMenu(P, modal, cx, padrao);
   return cx;
 }
+
+/* ---- menu como popover preso ao botão (README do redesenho, "Menus e popovers") ----
+   Antes o menu era um cartão no meio do painel, com véu escurecendo a conversa. Agora ele nasce
+   colado no botão que o abriu: acima da caixa de escrever para os botões dela, abaixo para os de
+   cima. Só POSIÇÃO: o menu continua morando no mesmo .p-modal, fechando e abrindo pelos mesmos
+   caminhos. O lugar vai em variáveis de CSS (--menu-*), e não em left/top direto, porque o mesmo
+   .modal-cx serve às janelinhas (conta, terminal): variável esquecida ali não mexe em nada, só
+   o menus.css a lê, e só com a classe como-menu. No celular o menu sobe do rodapé (celular.css). */
+function ancoraDoMenu(P, modal, padrao) {
+  const ev = window.event;
+  const alvo = ev && ev.target && ev.target.nodeType === 1 ? ev.target : null;
+  const visivel = (el) => !!(el && el.isConnected && el.getClientRects().length);
+  if (alvo && /^(click|pointer|mouse)/.test(ev.type)) {
+    // item de um menu que abriu outro ("/" → Modelo): o clique já apagou o menu de onde ele veio,
+    // então o novo fica onde o primeiro estava
+    if (alvo.closest('.mi') && (!alvo.isConnected || modal.contains(alvo))) {
+      if (visivel(P._ancoraMenu)) return P._ancoraMenu;
+    } else if (P.el.contains(alvo)) return alvo.closest('button,[role="button"]') || alvo;
+  }
+  const p = typeof padrao === 'string' ? $(padrao, P.el) : padrao;
+  if (visivel(p)) return p;
+  if (visivel(P._ancoraMenu)) return P._ancoraMenu;
+  return $('.pane-cmp', P.el);
+}
+function posicionarMenu(P, modal, cx, padrao) {
+  const s = cx.style;
+  for (const k of ['--menu-l', '--menu-r', '--menu-t', '--menu-b', '--menu-alt', '--menu-ox', '--menu-oy']) s.removeProperty(k);
+  // a animação de abrir recomeça a cada menu, inclusive quando um menu abre direto de outro
+  s.animation = 'none'; void cx.offsetWidth; s.animation = '';
+  // lugar de reserva (sem âncora medível): canto de baixo à esquerda, onde fica a caixa
+  s.setProperty('--menu-l', '10px'); s.setProperty('--menu-b', '96px');
+  let anc;
+  try { anc = ancoraDoMenu(P, modal, padrao); } catch { anc = null; }
+  if (!anc || !anc.getBoundingClientRect) return;
+  P._ancoraMenu = anc;
+  const mr = modal.getBoundingClientRect(), ar = anc.getBoundingClientRect();
+  if (!mr.width || !mr.height) return;
+  s.removeProperty('--menu-l'); s.removeProperty('--menu-b');
+  const cmp = $('.pane-cmp', P.el);
+  const naCaixa = !!(cmp && cmp.contains(anc));
+  const base = naCaixa ? cmp.getBoundingClientRect() : ar;
+  // botões da esquerda (e faixas largas, como o nome da conversa): o menu cresce para a direita
+  const esquerda = ar.width > mr.width / 2 || (ar.left + ar.width / 2) < (mr.left + mr.width / 2);
+  // medidas do design (tela de 1470): 10 da borda esquerda do painel, 16 da direita, 8 do botão
+  if (esquerda) s.setProperty('--menu-l', Math.max(10, naCaixa ? 10 : Math.round(ar.left - mr.left - 8)) + 'px');
+  else s.setProperty('--menu-r', Math.max(16, naCaixa ? 16 : Math.round(mr.right - ar.right - 8)) + 'px');
+  const sobe = naCaixa || (ar.top + ar.height / 2) > (mr.top + mr.height * 0.55);
+  if (sobe) {
+    s.setProperty('--menu-b', Math.round(mr.bottom - base.top + 8) + 'px');
+    s.setProperty('--menu-alt', Math.max(120, Math.round(base.top - mr.top - 18)) + 'px');
+  } else {
+    s.setProperty('--menu-t', Math.round(base.bottom - mr.top + 8) + 'px');
+    s.setProperty('--menu-alt', Math.max(120, Math.round(mr.bottom - base.bottom - 18)) + 'px');
+  }
+  s.setProperty('--menu-oy', sobe ? '100%' : '0%');
+  s.setProperty('--menu-ox', esquerda ? '0%' : '100%');
+  // o menu cresce "a partir do botão": depois de montado (o conteúdo entra logo em seguida),
+  // a origem da escala vai para o meio do botão
+  requestAnimationFrame(() => {
+    if (!cx.isConnected || !modal.classList.contains('como-menu') || P._ancoraMenu !== anc) return;
+    const r = cx.getBoundingClientRect(), a = anc.getBoundingClientRect();
+    if (!r.width) return;
+    const ox = Math.min(r.width, Math.max(0, a.left + a.width / 2 - r.left));
+    s.setProperty('--menu-ox', Math.round(ox) + 'px');
+  });
+}
+/* Fechar em 120ms sem atrasar o fechamento de verdade: uma cópia inerte do menu esmaece no mesmo
+   lugar e se apaga sozinha. Sem animação no "Reduzir movimento" e no celular (lá o menu é outro). */
+const MQ_CELULAR = '(max-width: 820px), (pointer: coarse) and (max-width: 1100px)';
+function menuSaindo(cx, pai) {
+  try {
+    if (!cx || !pai || !cx.firstChild || !cx.cloneNode || !window.matchMedia) return;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches || matchMedia(MQ_CELULAR).matches) return;
+    const r = cx.getBoundingClientRect(), pr = pai.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const f = cx.cloneNode(true);
+    f.classList.add('menu-fantasma');
+    f.removeAttribute('id');
+    f.setAttribute('aria-hidden', 'true');
+    f.inert = true;
+    f.onclick = null;
+    const pos = getComputedStyle(pai).position === 'fixed' || pai === document.body ? 'fixed' : 'absolute';
+    const dx = pos === 'fixed' ? 0 : pr.left + pai.clientLeft, dy = pos === 'fixed' ? 0 : pr.top + pai.clientTop;
+    f.style.cssText = cx.style.cssText + ';position:' + pos + ';left:' + (r.left - dx) + 'px;top:' + (r.top - dy)
+      + 'px;right:auto;bottom:auto;width:' + r.width + 'px;height:' + r.height + 'px;margin:0';
+    pai.appendChild(f);
+    const tirar = () => f.remove();
+    f.addEventListener('animationend', tirar);
+    setTimeout(tirar, 400);
+  } catch {}
+}
+/* "⌘⇧F" escondido no fim da explicação vira o atalho à direita do item, na ordem do Mac (⌃⌥⇧⌘) */
+function atalhoDoTexto(t) {
+  const m = /(?:^|·\s*)([⌃⌥⇧⌘]+)([A-Z0-9,./]|F\d{1,2})\s*$/.exec(String(t || ''));
+  if (!m) return '';
+  const ordem = '⌃⌥⇧⌘';
+  return [...m[1]].sort((a, b) => ordem.indexOf(a) - ordem.indexOf(b)).join('') + m[2];
+}
+/* Item de menu. A marca ✓ vai numa coluna de 12 À ESQUERDA (sempre presente, vazia quando não é o
+   atual), e o valor/atalho à direita. O ícone continua no DOM, mas o menus.css só mostra logo de
+   assistente e cor de grupo: o design não põe ícone nos menus. */
 function elItem({ ic, nome, desc, tag, on }, aoClicar) {
   const d = document.createElement('div');
   d.className = 'mi' + (on ? ' on' : '');
-  d.innerHTML = '<div class="mi-ic"></div><div class="mi-txt"><div class="mi-n"></div></div>'
-    + (on ? '<div class="mi-ck">' + ico('check') + '</div>' : (tag ? '<div class="mi-tag"></div>' : ''));
+  d.innerHTML = '<div class="mi-ck">' + (on ? ico('check') : '') + '</div>'
+    + '<div class="mi-ic"></div><div class="mi-txt"><div class="mi-n"></div></div>'
+    + (!on && tag ? '<div class="mi-tag"></div>' : '');
   $('.mi-ic', d).innerHTML = ic ? (ICONES[ic] ? ico(ic) : '<span class="ic-txt">' + ic + '</span>') : '';
   $('.mi-n', d).textContent = nome;
   // a explicação continua existindo; quando a lista é de uma linha só, ela vira o balão do mouse
@@ -5122,13 +5247,14 @@ function subPopup(txt) {
   d.textContent = txt;
   return d;
 }
+/* Redesenho 26/09: menu não tem barra de título nem "×" (fecha no Esc e no clique fora). O nome
+   do menu vira o cabeçalho de grupo (11/600) e a frase que explicava o menu vai para o balão do
+   mouse (`dica`): nenhuma frase explicativa na tela. */
 function tituloPopup(txt, dica) {
   const d = document.createElement('div');
-  d.className = 'mo-top';
-  d.innerHTML = '<span class="mo-tit"></span><button class="mo-x">' + ico('x') + '</button>';
-  $('.mo-tit', d).textContent = txt;
-  $('.mo-x', d).onclick = () => fecharMenus();
-  if (dica) { const e = document.createElement('div'); e.className = 'mo-sub'; e.textContent = dica; d.dataset.temSub = '1'; }
+  d.className = 'menu-secao menu-cab';
+  d.textContent = txt;
+  if (dica) d.title = dica;
   return d;
 }
 function elSecao(txt) { const d = document.createElement('div'); d.className = 'menu-secao'; d.textContent = txt; return d; }
@@ -5136,12 +5262,15 @@ function elLinha() { const d = document.createElement('div'); d.className = 'men
 
 /* ---- menu de Modos ---- */
 function menuModos(P) {
-  const m = novoMenu(P);
-  m.appendChild(tituloPopup('Modos'));
-  m.appendChild(subPopup('O que ele pode fazer sem te perguntar.'));
+  const m = novoMenu(P, '.p-modo');
+  m.classList.add('menu-modo');
+  m.appendChild(tituloPopup('Modo de permissão', 'O que ele pode fazer sem te perguntar.'));
 
   for (const mo of MODOS[P.engine]) {
-    m.appendChild(elItem({ ic: mo.ic, nome: mo.nome, desc: mo.desc, on: mo.id === modoDe(P).id }, async () => {
+    // "Sem pedir permissão" fica separado dos outros por uma linha (design): é o que não pergunta nada
+    if (mo.id === 'bypass') m.appendChild(elLinha());
+    // no menu vai a linha curta do design; a explicação inteira continua no balão do mouse
+    const item = elItem({ ic: mo.ic, nome: mo.nome, desc: mo.curta || mo.desc, on: mo.id === modoDe(P).id }, async () => {
       // trocar de modo desliga o motor: com trabalho rodando, pergunta antes (igual ao fechar)
       const estavaRodando = !!P.busy || agTrabalhando(P);
       if (!confirmarCorte(P, 'Trocar de modo')) return;
@@ -5152,13 +5281,16 @@ function menuModos(P) {
       avisoTemp(P, 'Modo: ' + mo.nome + ' — ' + mo.desc.toLowerCase() + '.'
         + (estavaRodando ? ' O que estava em andamento parou aqui.' : ''));
       savePanes();
-    }));
+    });
+    item.title = mo.nome + ' — ' + mo.desc;
+    m.appendChild(item);
   }
 }
 
 /* ---- menu de modelos (no cabeçalho) ---- */
 async function menuModelos(P) {
-  const m = novoMenu(P);
+  const m = novoMenu(P, '.p-model');
+  m.classList.add('menu-modelo');
   // marca esta janelinha: se a resposta atrasada de codexModels() chegar depois que o
   // usuario ja fechou o menu e abriu outra coisa (terminal, foto...), nao repinta por cima (R3-033)
   const modal = $('.p-modal', P.el);
@@ -5167,8 +5299,8 @@ async function menuModelos(P) {
     m.innerHTML = '';
     /* [EDITA leva 12.4, só o texto] no painel ACP este menu não escolhe cérebro: escolhe o
        AGENTE, e o que vale é a linha de comando que sobe o processo. */
-    m.appendChild(tituloPopup(P.engine === 'acp' ? 'Agente' : 'Modelo'));
-    m.appendChild(subPopup(P.engine === 'acp'
+    // redesenho 26/09: a frase que explicava o menu saiu da tela e virou o balão do cabeçalho
+    m.appendChild(tituloPopup(P.engine === 'acp' ? 'Agente' : 'Modelo', P.engine === 'acp'
       ? 'Qual agente ACP este painel vai subir. Precisa estar instalado nesta máquina.'
       : 'Qual cérebro este painel vai usar, e quanto ele deve pensar.'));
     for (const mo of modelosDe(P)) {
@@ -5240,36 +5372,43 @@ async function menuModelos(P) {
 }
 
 /* ---- menu do + ---- */
+/* Redesenho 26/09: sem título nem frase de explicação (o design não tem), uma linha por item com
+   os nomes do design ("…" = abre outra janela) e uma linha separando o que CAPTURA (recortar,
+   fotografar) do que escolhe arquivo. A explicação de cada item continua no balão do mouse. */
 function menuAnexo(P) {
-  const m = novoMenu(P);
-  m.appendChild(tituloPopup('Anexar'));
-  m.appendChild(subPopup('Manda o caminho do arquivo junto com a sua mensagem.'));
+  const m = novoMenu(P, '.p-plus');
+  m.classList.add('menu-anexo', 'menu-1linha');
+  m.setAttribute('aria-label', 'Anexar');
   const itens = [
     /* Escolher arquivo e escolher pasta sao janelas do MAC. No telefone os dois so davam um
        alerta dizendo que nao dava: dois becos sem saida dentro do menu. Fora da lista, do
        mesmo jeito que o "Recortar a tela" ja fazia. */
-    ...(window.SEM_ELECTRON ? [] : [{ ic: 'upload', nome: 'Enviar do computador', desc: 'escolher arquivos', act: 'file' }]),
+    ...(window.SEM_ELECTRON ? [] : [{ ic: 'upload', nome: 'Do computador…', desc: 'escolher arquivos', act: 'file' }]),
     /* No telefone este vira o UNICO caminho de arquivo, e a galeria do iPhone tambem entrega
        video — por isso o nome muda la. No Mac o seletor continua aceitando so imagem. */
-    { ic: 'image', nome: window.SEM_ELECTRON ? 'Enviar foto ou vídeo' : 'Enviar imagem',
+    { ic: 'image', nome: window.SEM_ELECTRON ? 'Foto ou vídeo…' : 'Imagem…',
       desc: window.SEM_ELECTRON ? 'da galeria do celular' : 'png, jpg, webp', act: 'image' },
-    ...(window.SEM_ELECTRON ? [] : [{ ic: 'folder', nome: 'Adicionar pasta', desc: 'manda o caminho da pasta', act: 'folder' }]),
+    ...(window.SEM_ELECTRON ? [] : [{ ic: 'folder', nome: 'Pasta…', desc: 'manda o caminho da pasta', act: 'folder' }]),
     { ic: 'map-pin', nome: 'Pasta deste painel', desc: shortPath(P.cwd), act: 'cwd' },
     /* Recortar a tela esconde a janela do MAC e abre uma tela preta por cima de tudo la: pelo
        telefone isso ficaria preso a quilometros de distancia. Por isso o item nem existe la. */
     ...(window.SEM_ELECTRON ? [] : [{ ic: 'crop', nome: 'Recortar a tela', desc: 'esconde o Cockpit, você arrasta o pedaço e ele vira anexo', act: 'recorte' }]),
     { ic: 'camera', nome: 'Fotografar', desc: 'pela câmera: rascunho no papel, quadro físico, o que estiver na sua frente', act: 'foto' },
   ];
-  for (const i of itens) m.appendChild(elItem(i, async () => {
-    if (i.act === 'cwd') return inserirNoInput(P, P.cwd);
-    if (i.act === 'recorte') return recortarTela(P);
-    if (i.act === 'foto') return fotografar(P);
-    const files = await window.api.pickFiles(i.act);
-    if (files && files.length) {
-      if (i.act === 'folder') inserirNoInput(P, files.join(' '));
-      else await anexar(P, files);
-    }
-  }));
+  let separou = false;
+  for (const i of itens) {
+    if (!separou && (i.act === 'recorte' || i.act === 'foto')) { separou = true; m.appendChild(elLinha()); }
+    m.appendChild(elItem(i, async () => {
+      if (i.act === 'cwd') return inserirNoInput(P, P.cwd);
+      if (i.act === 'recorte') return recortarTela(P);
+      if (i.act === 'foto') return fotografar(P);
+      const files = await window.api.pickFiles(i.act);
+      if (files && files.length) {
+        if (i.act === 'folder') inserirNoInput(P, files.join(' '));
+        else await anexar(P, files);
+      }
+    }));
+  }
 }
 
 /* ---- puxar a aba aberta do navegador para dentro da conversa ---- */
@@ -5392,14 +5531,21 @@ function maisUsadas(skills) {
 
 /* ---- menu do / (ações, modelo e comandos) ---- */
 async function menuSkills(P, filtroInicial, focar) {
-  const m = novoMenu(P);
-  m.classList.add('menu-1linha');   // uma linha por item; a explicação vira o balão do mouse
-  m.appendChild(tituloPopup('Ações e comandos'));
+  const m = novoMenu(P, '.p-slash');
+  m.classList.add('menu-1linha', 'menu-cmd');   // uma linha por item; a explicação vira o balão do mouse
+  // redesenho 26/09: sem barra de título; o campo de filtro (lupa + "Filtrar") abre o menu
+  m.setAttribute('aria-label', 'Ações e comandos');
+  const campo = document.createElement('label');
+  campo.className = 'menu-filtro';
+  campo.innerHTML = ico('search');
   const busca = document.createElement('input');
   busca.className = 'menu-search';
-  busca.placeholder = 'Filtrar ações…';
-  m.appendChild(busca);
+  busca.placeholder = 'Filtrar';
+  busca.setAttribute('aria-label', 'Filtrar ações e comandos');
+  campo.appendChild(busca);
+  m.appendChild(campo);
   const corpo = document.createElement('div');
+  corpo.className = 'menu-corpo';
   m.appendChild(corpo);
 
   /* A ORDEM aqui e a ordem na tela: a secao nasce quando muda de nome. Antes as linhas estavam
@@ -5454,7 +5600,7 @@ async function menuSkills(P, filtroInicial, focar) {
        recusado com o motivo escrito, mas SAIR precisa continuar possível (ele pode ter
        trocado de motor depois de entrar). */
     { sec: 'Painel', ic: 'git-branch', nome: P.worktree ? 'Sair do worktree "' + P.worktree + '"' : 'Abrir em worktree…',
-      tag: P.worktree ? '⎇' : '',
+      tag: P.worktree ? 'ativo' : '',   // era o símbolo de texto ⎇; o valor à direita diz o estado
       desc: P.worktree ? 'volta a trabalhar na pasta principal deste chat'
         : 'branch isolada em .claude/worktrees: experimenta sem sujar a branch de verdade (só Claude)',
       act: () => alternarWorktree(P) },
@@ -5474,7 +5620,8 @@ async function menuSkills(P, filtroInicial, focar) {
     for (const a of acoes) {
       if (q && !a.nome.toLowerCase().includes(q)) continue;
       if (a.sec !== secAtual) { secAtual = a.sec; corpo.appendChild(elSecao(a.sec)); }
-      corpo.appendChild(elItem(a, () => {
+      // à direita: o valor atual (tag) ou, sem ele, o atalho que estava escondido na explicação
+      corpo.appendChild(elItem({ ...a, tag: a.tag || atalhoDoTexto(a.desc) }, () => {
         const inp = $('.p-input', P.el);
         if (inp.value.startsWith('/') && !inp.value.includes(' ')) { inp.value = ''; inp.style.height = 'auto'; }
         a.act();
@@ -5556,8 +5703,7 @@ async function apagarPromptSalvo(P) {
   const lista = (await window.api.promptsLer()) || [];
   if (!lista.length) { avisoTemp(P, 'Nenhum prompt salvo ainda.'); return; }
   const m = novoMenu(P);
-  m.appendChild(tituloPopup('Apagar prompt salvo'));
-  m.appendChild(subPopup('Clique no que quer apagar.'));
+  m.appendChild(tituloPopup('Apagar prompt salvo', 'Clique no que quer apagar.'));
   for (const p of lista) m.appendChild(elItem({ ic: 'eraser', nome: p.nome, desc: String(p.texto || '').replace(/\s+/g, ' ').slice(0, 80) }, async () => {
     const r = await window.api.promptsSalvar(lista.filter((x) => x !== p));
     if (r && r.ok) avisoTemp(P, 'Prompt “' + p.nome + '” apagado.');
@@ -6812,8 +6958,7 @@ async function menuContas(P, motorPedido) {
   try { const d = await window.api.contasDisponivel(eng); podeGuardar = !!(d && d.ok); porqueNao = (d && (d.motivo || d.error)) || ''; } catch {}
 
   const m = novoMenu(P);
-  m.appendChild(tituloPopup('Contas guardadas'));
-  m.appendChild(subPopup('Contas do ' + nomeEng + ' já logadas neste Mac. Clicar troca na hora, sem passar pelo navegador.'));
+  m.appendChild(tituloPopup('Contas guardadas', 'Contas do ' + nomeEng + ' já logadas neste Mac. Clicar troca na hora, sem passar pelo navegador.'));
   for (const g of guardadas) {
     m.appendChild(elItem({
       ic: 'user', nome: g.apelido, on: g.atual,
@@ -6852,8 +6997,7 @@ async function menuEsquecerConta(P, eng) {
   try { const r = await window.api.contasListar(eng); lista = Array.isArray(r) ? r : []; } catch {}
   if (!lista.length) { avisoTemp(P, 'Nenhuma conta guardada.'); return; }
   const m = novoMenu(P);
-  m.appendChild(tituloPopup('Esquecer conta guardada'));
-  m.appendChild(subPopup('Esquecer apaga só a cópia guardada aqui — não desconecta a conta nem faz logout.'));
+  m.appendChild(tituloPopup('Esquecer conta guardada', 'Esquecer apaga só a cópia guardada aqui — não desconecta a conta nem faz logout.'));
   for (const g of lista) {
     m.appendChild(elItem({ ic: 'eraser', nome: g.apelido, desc: g.atual ? 'em uso agora' : 'guardada' }, async () => {
       const r = await window.api.contasEsquecer({ engine: eng, apelido: g.apelido });
@@ -7476,7 +7620,7 @@ function arrobaAindaNoCampo(P, termo) {
 /* Uma caixinha de "Arquivos" so' com um recado dentro (procurando / deu erro). Vale so' para
    a VPS: no disco do Mac a lista chega antes de dar tempo de ler. */
 function recadoDeArquivos(P, texto, ehErro) {
-  const m = novoMenu(P);
+  const m = novoMenu(P, '.p-input');
   m.classList.add('menu-arquivos');
   m.appendChild(tituloPopup('Arquivos'));
   const s = subPopup(texto);
@@ -7523,11 +7667,11 @@ async function menuArquivos(P, termo) {
     // rede fora aparece como MOTIVO no lugar da lista; fechar calado parecia travamento
     if (erro) { recadoDeArquivos(P, erro, true); return; }
     if (!itens.length) { if (menuDeArquivosNaTela(P)) fecharMenus(); return; }
-    const m = novoMenu(P);
+    const m = novoMenu(P, '.p-input');
     m.classList.add('menu-arquivos');
-    m.appendChild(tituloPopup('Arquivos'));
-    m.appendChild(subPopup('Escolha para colar o caminho na mensagem.'));
+    m.appendChild(tituloPopup('Arquivos', 'Escolha para colar o caminho na mensagem.'));
     const corpo = document.createElement('div');
+    corpo.className = 'menu-corpo';
     m.appendChild(corpo);
     let sel = 0;
     const pintar = () => {
@@ -8302,6 +8446,8 @@ function fecharModalGlobal() {
 }
 function fecharPopGlobal() {
   const pop = $('#popGrupo'); if (!pop) return;
+  // redesenho 26/09: esmaece em 120ms numa cópia solta; o menu de verdade fecha na hora
+  if (!pop.classList.contains('hidden')) menuSaindo(pop, document.body);
   pop.classList.add('hidden'); pop.innerHTML = '';
 }
 function abrirPopGlobal(anchorEl) {
@@ -8325,8 +8471,8 @@ function abrirPopGlobal(anchorEl) {
 function popItem({ nome, ic, cor, on, perigo }, aoClicar) {
   const d = document.createElement('div');
   d.className = 'mi' + (on ? ' on' : '') + (perigo ? ' mi-perigo' : '');
-  d.innerHTML = '<div class="mi-ic"></div><div class="mi-txt"><div class="mi-n"></div></div>'
-    + (on ? '<div class="mi-ck"></div>' : '');
+  // mesma forma do elItem (redesenho 26/09): a coluna do ✓ vem primeiro, à esquerda
+  d.innerHTML = '<div class="mi-ck"></div><div class="mi-ic"></div><div class="mi-txt"><div class="mi-n"></div></div>';
   if (cor) { const b = document.createElement('span'); b.className = 'pop-cor'; b.style.background = cor; $('.mi-ic', d).appendChild(b); }
   else if (ic) $('.mi-ic', d).innerHTML = ico(ic);
   if (on) $('.mi-ck', d).innerHTML = ico('check');

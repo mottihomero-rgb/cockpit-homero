@@ -307,8 +307,15 @@
       <div class="hd-lado hd-dir">
       <!-- leva 10.4: branch do git desta pasta; some sozinho fora de repositório -->
       <button class="p-git hidden" title="Branch do git"></button>
-      <!-- medidor de contexto: existia so no molde do celular e a tela do Mac ficava sem ele -->
-      <span class="p-tokens" title="Tamanho da conversa agora, comparado ao que cabe neste modelo"></span>
+      <!-- 26/09 (pedido dele): a bolinha da memória da conversa mora aqui, no lugar do número "84k / 1000k";
+           o número vai na dica. Clicar resume a conversa. -->
+      <button class="p-compactar" title="Resumir a conversa para liberar espaço">
+          <svg class="an" viewBox="0 0 16 16" aria-hidden="true">
+            <circle class="an-fundo" cx="8" cy="8" r="6"></circle>
+            <circle class="an-fio" cx="8" cy="8" r="6"></circle>
+          </svg>
+          <span class="cp-txt"></span>
+        </button>
       <span class="p-dot dot off"></span>
       <button class="p-close" title="Fechar este chat (⌘W)"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"></path></g></svg></button>
       </div>
@@ -360,14 +367,6 @@
         </button>
         <!-- painel estreito (menos de 400): modo de envio, plano, quadro e time moram aqui dentro -->
         <button class="cb p-mais" title="Mais: modo de envio, plano, quadro e time" aria-haspopup="menu"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="currentColor" stroke="none"><circle cx="3.5" cy="8" r="1.1"></circle><circle cx="8" cy="8" r="1.1"></circle><circle cx="12.5" cy="8" r="1.1"></circle></g></svg></button>
-        <!-- o anel que enche conforme a conversa cresce; clicar resume e libera espaço -->
-        <button class="p-compactar" title="Resumir a conversa para liberar espaço">
-          <svg class="an" viewBox="0 0 16 16" aria-hidden="true">
-            <circle class="an-fundo" cx="8" cy="8" r="6"></circle>
-            <circle class="an-fio" cx="8" cy="8" r="6"></circle>
-          </svg>
-          <span class="cp-txt"></span>
-        </button>
         <button class="p-stop hidden" title="Parar"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="4.5" width="7" height="7" rx="1.5" fill="currentColor" stroke="none"></rect></svg></button>
         <button class="p-send" title="Enviar"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12.5v-9M4.5 7L8 3.5 11.5 7"></path></g></svg></button>
       </div>

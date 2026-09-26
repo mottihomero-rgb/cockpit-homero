@@ -28,8 +28,9 @@ for (const [qual, html] of Object.entries(moldes)) {
     assert.ok(perm > 0 && perm < uso && uso < cmp, 'o aviso de limite mora entre a autorização e a caixa, fora dela');
     // Negar antes de Permitir: o azul fica na ponta direita
     assert.ok(t.indexOf('class="pp-no"') < t.indexOf('class="pp-yes"'));
-    // barra da direita: permissão → "…" → anel → parar → enviar
-    const ordem = ['p-modo', 'p-mais', 'p-compactar', 'p-stop', 'p-send'].map(c => t.search(new RegExp('class="[^"]*\\b' + c + '\\b')));
+    // barra da direita: permissão → "…" → parar → enviar (26/09: o anel foi para o topo do chat)
+    assert.ok(t.indexOf('class="p-compactar"') < t.indexOf('class="pane-cmp'), 'o anel mora no topo do chat, não na caixa');
+    const ordem = ['p-modo', 'p-mais', 'p-stop', 'p-send'].map(c => t.search(new RegExp('class="[^"]*\\b' + c + '\\b')));
     assert.ok(ordem.every((n, k) => n > 0 && (k === 0 || n > ordem[k - 1])), 'ordem da barra: ' + ordem.join(','));
     assert.match(t, /placeholder="Mensagem para Claude"/);
   });

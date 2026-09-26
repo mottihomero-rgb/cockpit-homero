@@ -29,8 +29,10 @@ test('os dois moldes do painel: seletor à esquerda, branch/medidor/fechar à di
     assert.doesNotMatch(molde, /hd-esq/, pagina + ': o lado esquerdo do cabeçalho voltou (o seletor encostava no meio)');
     const chave = molde.indexOf('class="p-chave"'), dir = molde.indexOf('hd-dir');
     assert.ok(chave > 0 && dir > chave, pagina + ': o seletor tem de vir antes do lado direito');
-    const git = molde.indexOf('class="p-git'), tok = molde.indexOf('class="p-tokens"'), x = molde.indexOf('class="p-close"');
-    assert.ok(dir < git && git < tok && tok < x, pagina + ': a ordem é branch, medidor, fechar');
+    // 26/09 (pedido dele): no lugar do número "84k / 1000k" fica a bolinha da memória da conversa
+    const git = molde.indexOf('class="p-git'), tok = molde.indexOf('class="p-compactar"'), x = molde.indexOf('class="p-close"');
+    assert.ok(dir < git && git < tok && tok < x, pagina + ': a ordem é branch, bolinha, fechar');
+    assert.ok(!molde.includes('class="p-tokens"'), pagina + ': o número saiu do topo');
     for (const m of ['Claude', 'Codex', 'Gemini', 'Grok']) {
       assert.ok(molde.includes('<span class="ch-nome">' + m + '</span>'),
         pagina + ': o nome do ' + m + ' precisa de span próprio (some abaixo de 560pt)');

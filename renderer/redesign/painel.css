@@ -290,3 +290,12 @@ mark.acha{background:var(--highlight);color:inherit;border-radius:3px;padding:0 
   /* lá a busca fica no fluxo, em cima da conversa: a folga do Mac sobraria */
   :root:has(.so-celular) .pane:has(> .p-busca:not(.hidden)) > .pane-chat{padding-top:10px}
 }
+
+/* 26/09 (pedido dele): a bolinha da memória da conversa no topo do chat, ao lado do ×, no lugar do
+   número "84k / 1000k". Anel de 14 sem moldura; cinza parado, âmbar a 70%, vermelho a 90%. */
+.hd-dir .p-compactar{flex:none;width:22px;height:22px;padding:0;display:grid;place-items:center;border:0;border-radius:6px;
+  background:transparent;color:var(--label-2);cursor:default}
+.hd-dir .p-compactar:hover{background:var(--fill-3)}
+.hd-dir .p-compactar .an{width:14px;height:14px}
+.hd-dir .p-compactar .cp-txt{display:none}
+.hd-dir .p-compactar.baixo{display:grid}

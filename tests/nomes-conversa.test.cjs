@@ -649,7 +649,7 @@ test('a lista esconde as conversas do robô de memória (claude-mem), como os ou
 });
 
 test('a lista esconde também conversa de teste (pasta temporária) e o robô do chat do webinário', () => {
-  const re = new RegExp(main.match(/const PASTA_DE_ROBO = \/(.*)\/;/)[1]);
+  const [, corpo, flags] = main.match(/const PASTA_DE_ROBO = \/(.*)\/([a-z]*);/); const re = new RegExp(corpo, flags);
   for (const p of ['/private/tmp/ck-e2e', '/tmp', '/Users/h/Projetos/Pedro/Chat ao Vivo do Zoom - 12-09-2026']) assert.ok(re.test(p), p);
   for (const p of ['/Users/h/Projetos/Pedro', '/Users/h/tmpx', '/Users/homeromotti']) assert.ok(!re.test(p), p);
   assert.match(main, /PASTA_DE_ROBO\.test\(fi\.cwd \|\| ''\)\)\) continue;/, 'Claude');

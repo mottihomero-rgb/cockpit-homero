@@ -2600,7 +2600,7 @@ const ENTRADAS_DE_GENTE = ['claude-vscode', 'cockpit', 'cli', 'claude-code'];
 const CONVERSA_DE_ROBO = /[\/\\]-Users-[^\/\\]*-claude-mem-observer-sessions[\/\\]/;
 /* e as que rodam em pasta de robô: a pasta temporária (testes de script, "responda apenas: ok") e a do
    robô que lê o chat do webinário ao vivo (46 conversas iguais na lista em 26/09) */
-const PASTA_DE_ROBO = /^(?:\/private)?\/tmp(?:\/|$)|chat-ao-vivo-zoom(?:\/|$)/;
+const PASTA_DE_ROBO = /^(?:\/private)?\/tmp(?:\/|$)|chat[- ]ao[- ]vivo(?:[- ]do)?[- ]zoom/i;
 
 const INDICE_PATH = () => path.join(app.getPath('userData'), 'indice-conversas.json');
 let indice = null;
@@ -4936,7 +4936,7 @@ handle('sys:home', () => HOME);
 
 /* Escolher pasta sem um ponto de partida cai na home, e de la sao 3 cliques ate os projetos.
    O padrao passa a ser a pasta dos projetos do Claude, que e de onde quase toda aba nasce. */
-const PASTA_PROJETOS = path.join(HOME, 'Desktop', 'Projetos');
+const PASTA_PROJETOS = path.join(HOME, 'Projetos');   // 26/09: a pasta saiu da Mesa (era ~/Desktop/Projetos-claude)
 function pastaInicial(start) {
   if (start) return start;
   try { if (fs.statSync(PASTA_PROJETOS).isDirectory()) return PASTA_PROJETOS; } catch {}

@@ -118,6 +118,12 @@ markdownSeguro.image = (href, _title, text) => {
   return caminho ? linkDeArquivo(caminho, text, true) : text;
 };
 marked.setOptions({ breaks: true, gfm: true, renderer: markdownSeguro });
+/* 26/09: as pastas novas têm espaço no nome ("~/Projetos/Pedro/Carrossel da Oficina - 26-09-2026")
+   e o markdown não aceita espaço dentro de "(...)" do link: a entrega da IA virava texto morto.
+   Antes de ler, o caminho de arquivo com espaço vai entre < >, que o markdown aceita. */
+const linksComEspaco = (md) => String(md || '').replace(/\]\(((?:file:\/\/)?\/(?:Users|Volumes|private|tmp|home|opt|srv|var|root)\/[^()\n<>]*?\s[^()\n<>]*?)\)/g,
+  (_m, caminho) => '](<' + caminho + '>)');
+marked.use({ hooks: { preprocess: linksComEspaco } });
 
 const EF_PT = { minimal: 'Mínimo', low: 'Leve', medium: 'Médio', high: 'Alto',
   xhigh: 'Extra alto', max: 'Máximo', ultra: 'Ultra' };
@@ -1847,8 +1853,9 @@ function pintarAnel(P) {
   const volta = 2 * Math.PI * 6;   // r=6 no viewBox de 16 (o desenho do handoff)
   $('.an-fio', bt).style.strokeDashoffset = String(volta - (volta * pct) / 100);
 
-  bt.title = 'A conversa já ocupa ' + pct + '% do que cabe neste modelo.\n'
-    + 'Clique para resumir e liberar espaço sem perder o fio.';
+  // 26/09: o anel mora no topo do chat, no lugar do "84k / 1000k": o número vai na dica
+  const conta = (P.tokens && P.janela) ? Math.round(P.tokens / 1000) + 'k de ' + Math.round(P.janela / 1000) + 'k · ' : '';
+  bt.title = 'Memória da conversa: ' + conta + pct + '%\nClique para resumir e liberar espaço sem perder o fio.';
 }
 
 function setDot(P, state) {

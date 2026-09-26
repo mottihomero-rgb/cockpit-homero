@@ -12,11 +12,11 @@ const { Marked, Renderer } = require('marked');
 function markdownDoApp() {
   const src = fs.readFileSync(path.resolve(__dirname, '../renderer/app.js'), 'utf8');
   const ini = src.indexOf('const markdownSeguro = new marked.Renderer();');
-  const fim = src.indexOf('marked.setOptions(', ini);
+  const fim = src.indexOf('marked.use(', ini);   // 26/09: o trecho vai até o marked.use (links com espaço)
   assert.ok(ini > 0 && fim > ini, 'trecho do markdown seguro nao encontrado no app.js');
   const fimLinha = src.indexOf('\n', fim);
   const m = new Marked();
-  const ctx = { marked: { Renderer, setOptions: (o) => m.setOptions(o) } };
+  const ctx = { marked: { Renderer, setOptions: (o) => m.setOptions(o), use: (o) => m.use(o) } };
   vm.runInNewContext(src.slice(ini, fimLinha), ctx);
   return (txt) => m.parse(txt);
 }
@@ -26,7 +26,8 @@ test('link para arquivo do Mac vira link de arquivo, com o caminho guardado', ()
   // a fala exata do Codex no print de 15/09
   const html = md('Pronto. Separei essa arte do trio para enviar junto:\n\n[Baixar arte para o WhatsApp](/Users/homeromotti/Projetos/Excelência/API Oficial do Curso de Claude - 15-09-2026/arte-whatsapp-curso-claude-trio.png)');
   assert.match(html, /class="arquivo"/);
-  assert.match(html, /data-caminho="\/Users\/homeromotti\/Desktop\/Projetos\/Excelencia\/API Oficial do Curso de Claude - 15-09-2026\/arte-whatsapp-curso-claude-trio.png"/);
+  // 26/09: a pasta nova tem espaço e acento no nome — o link continua virando link de arquivo
+  assert.match(html, /data-caminho="\/Users\/homeromotti\/Projetos\/Excelência\/API Oficial do Curso de Claude - 15-09-2026\/arte-whatsapp-curso-claude-trio.png"/);
   assert.match(html, />Baixar arte para o WhatsApp</);
 });
 

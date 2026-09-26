@@ -151,7 +151,9 @@ function escolherRespostas(respostas) {
 function pistaDaPasta(cwd) {
   const p = String(cwd || '');
   let m = /Projetos\/([^/]+)(?:\/([^/]+))?/.exec(p);
-  if (m) return m[1] + (m[2] ? ' (' + m[2].replace(/^\d{4}-\d{2}-\d{2}_/, '').replace(/[-_]+/g, ' ') + ')' : '');
+  // a demanda vem sem a data: "2026-09-26_cockpit-vincular" (antiga) ou "Cockpit Vincular Conta - 26-09-2026" (nova)
+  if (m) return m[1] + (m[2] ? ' (' + m[2].replace(/^\d{4}-\d{2}-\d{2}_/, '').replace(/\s*-\s*\d{2}-\d{2}-\d{4}$/, '')
+    .replace(/[-_]+/g, ' ').trim().toLowerCase() + ')' : '');
   m = /Adsure - Sistemas\/([^/]+)/.exec(p);
   if (m) return m[1];
   m = /\/(Cockpit|cockpit)(?:\/|$)/.exec(p);

@@ -639,7 +639,7 @@ test('estabilidade: a IA pode responder MANTER, e o main devolve o nome atual', 
 
 // 26/09: as ~600 conversas do robô de memória (claude-mem) eram metade da lista e passavam pelo filtro
 test('a lista esconde as conversas do robô de memória (claude-mem), como os outros robôs', () => {
-  assert.match(main, /if \(!incluirRobos && CONVERSA_DE_ROBO\.test\(it\.f\)\) continue;/);
+  assert.match(main, /if \(!incluirRobos && \(CONVERSA_DE_ROBO\.test\(it\.f\)/);
   const re = new RegExp(main.match(/const CONVERSA_DE_ROBO = \/(.*)\/;/)[1]);
   assert.ok(re.test('/Users/h/.claude/projects/-Users-h--claude-mem-observer-sessions/a.jsonl'));
   assert.ok(!re.test('/Users/h/.claude/projects/-Users-h-Desktop-Projetos-claude-Pedro/a.jsonl'));

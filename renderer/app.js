@@ -324,9 +324,11 @@ function abaDe(P) { return abas.get(P.aid); }
 function pintarAba(A) {
   const n = A.ordem.length;
   const naVps = NA_VPS(A.cwd);
-  A.el.classList.toggle('vps', naVps);   // a bolinha da aba fica verde (style.css)
+  A.el.classList.toggle('vps', naVps);   // aparece o ícone de servidor antes do nome (janela.css)
   $('.aba-proj', A.el).textContent = nomeProjeto(A.cwd);
-  $('.aba-tit', A.el).textContent = (naVps ? 'VPS · ' : '') + (n === 0 ? 'sem chat' : (n === 1 ? '1 chat' : n + ' chats'));
+  /* Cápsula do redesenho: o contador é só o número (tabular, em --label-3). "3 chats" por extenso
+     não cabe numa aba de 28 e repetia o que o title já diz. Aba sem chat não mostra número. */
+  $('.aba-tit', A.el).textContent = n ? String(n) : '';
   A.el.title = shortPath(A.cwd) + '\n' + (n === 1 ? '1 chat aberto' : n + ' chats abertos');
   /* A bolinha da aba mostra se algum chat dela esta trabalhando — inclusive quando só os
      agentes em segundo plano seguem rodando e o turno do chat já acabou.
@@ -358,9 +360,11 @@ function avisarQuemEspera() {
     if (P === focusPane && abaDe(P) === abaAtiva) continue;
     const id = 'espera-' + P.id + '-' + P.esperaDesde;
     vivos.add(id);
+    // tipo 'espera': o sinal é o círculo âmbar com "!" (o mesmo da aba) e o estado vai na cor
+    // de "esperando você" (README, "Estados"); o triângulo fica só para o que deu errado
     mostrarAviso({
-      id, tipo: 'alerta', fixo: true, acao: 'ir', aoClicar: () => irAoChat(P),
-      texto: nomeDoMotor(P.engine) + ' · ' + (P.titulo || nomePasta(P.cwd)) + ' · ' + e.txt,
+      id, tipo: 'espera', fixo: true, acao: 'ir', aoClicar: () => irAoChat(P),
+      texto: [nomeDoMotor(P.engine) + ' · ' + (P.titulo || nomePasta(P.cwd)) + ' · ', { espera: e.txt }],
     });
   }
   // atendido: some da faixa na hora, sem esperar prazo nenhum
@@ -7215,6 +7219,25 @@ function avisoTemp(P, texto, ehErro) {
    - nivel: se a coisa piorar, volta a avisar.
    - reseta: quando a semana (ou a sessão) vira, a dispensa antiga morre junto. */
 const avisosFechados = new Map();
+/* Ícone da tarja (README, "Faixa de aviso" e "Estados"): a bandeja da caixa de entrada para o
+   aviso comum; alerta e erro usam o triângulo, e quem diz qual é qual é a cor (janela.css) mais o
+   texto. Antes era um círculo com "?" e um X, que parecia botão de fechar. Chat esperando você
+   não tem ícone de traço: o círculo com "!" é desenhado pelo janela.css (.fx-espera). */
+function icoDoAviso(tipo) { return tipo === 'espera' ? '' : (tipo === 'alerta' || tipo === 'erro' ? 'warn' : 'tray'); }
+/* O texto da tarja pode vir em pedaços: ['Chegou ', { mono: 'contrato.pdf' }, ' na caixa de
+   entrada']. { mono } sai em SF Mono (nome de arquivo, tela 21); { espera } na cor de "esperando
+   você". Tudo por textContent, nunca innerHTML: o nome do arquivo vem de outra máquina. */
+function escreverAviso(el, texto) {
+  el.textContent = '';
+  for (const p of [].concat(texto)) {
+    if (p && typeof p === 'object') {
+      const s = document.createElement('span');
+      s.className = 'mono' in p ? 'fx-mono' : 'fx-destaque';
+      s.textContent = String('mono' in p ? p.mono : p.espera);
+      el.appendChild(s);
+    } else el.appendChild(document.createTextNode(p == null ? '' : String(p)));
+  }
+}
 function mostrarAviso({ id, texto, tipo, acao, aoClicar, fixo, nivel, reseta, aoFechar }) {
   const caixa = $('#faixaAvisos');
   if (!caixa) return;
@@ -7236,12 +7259,12 @@ function mostrarAviso({ id, texto, tipo, acao, aoClicar, fixo, nivel, reseta, ao
   });
   if (existente) {
     const t = $('.fx-txt', existente);
-    if (t) t.textContent = texto;
+    if (t) escreverAviso(t, texto);
     existente.className = 'fx fx-' + (tipo || 'info');
     if (typeof nivel === 'number') existente.dataset.nivel = String(nivel);
     if (reseta) existente.dataset.reseta = String(reseta);
     const ic = $('.fx-ic', existente);
-    if (ic) ic.innerHTML = ico(tipo === 'alerta' ? 'circle-help' : tipo === 'erro' ? 'x' : 'circle');
+    if (ic) ic.innerHTML = ico(icoDoAviso(tipo));
     // o texto novo vem com ação nova: o botão e o X têm de apontar para ESTA chamada
     const btAntigo = $('.fx-acao', existente);
     if (acao) {
@@ -7267,9 +7290,9 @@ function mostrarAviso({ id, texto, tipo, acao, aoClicar, fixo, nivel, reseta, ao
   d.innerHTML = '<span class="fx-ic"></span><span class="fx-txt"></span>'
     + (acao ? '<button class="fx-acao"></button>' : '')
     + '<button class="fx-x"></button>';
-  $('.fx-ic', d).innerHTML = ico(tipo === 'alerta' ? 'circle-help' : tipo === 'erro' ? 'x' : 'circle');
+  $('.fx-ic', d).innerHTML = ico(icoDoAviso(tipo));
   // textContent, nunca innerHTML: o texto carrega nome de arquivo escrito por outra máquina
-  $('.fx-txt', d).textContent = texto;
+  escreverAviso($('.fx-txt', d), texto);
   if (acao) {
     $('.fx-acao', d).textContent = acao;
     $('.fx-acao', d).onclick = () => { try { aoClicar && aoClicar(); } catch {} d.remove(); };
@@ -7291,7 +7314,6 @@ function mostrarAviso({ id, texto, tipo, acao, aoClicar, fixo, nivel, reseta, ao
 function chegouNaInbox(m) {
   if (!m || !m.arquivo) return;
   const corta = (s) => '“' + String(s || '').replace(/\s+/g, ' ').slice(0, 80) + (String(s || '').length > 80 ? '…' : '') + '”';
-  const resumo = m.tipo === 'texto' ? corta(m.texto) : ((m.nome || 'imagem') + (m.legenda ? ' · ' + corta(m.legenda) : ''));
   // o mesmo nome regravado: a tarja antiga apontava para o MESMO caminho, e o X dela apagaria
   // a mensagem NOVA
   try { $$('#faixaAvisos [data-aviso^="inbox-' + CSS.escape(m.nome) + '-"]').forEach((t) => t.remove()); } catch {}
@@ -7302,8 +7324,12 @@ function chegouNaInbox(m) {
   mostrarAviso({
     // id por arquivo E hora: o mesmo nome noutro dia não herda o "fechado" do anterior
     id: idAviso, tipo: 'info', fixo: true,
-    texto: (m.tipo === 'texto' ? '📱 Chegou do celular: ' : '📱 Imagem do celular: ') + resumo,
-    acao: 'usar',
+    // sem emoji: o ícone da bandeja na frente da tarja já diz de onde veio. Arquivo: o nome em
+    // SF Mono, como na tela 21 ("Chegou contrato.pdf na caixa de entrada"); recado de texto
+    // continua com o trecho entre aspas
+    texto: m.tipo === 'texto' ? 'Chegou do celular: ' + corta(m.texto)
+      : ['Chegou ', { mono: m.nome || 'imagem' }, ' na caixa de entrada' + (m.legenda ? ' · ' + corta(m.legenda) : '')],
+    acao: 'Usar no chat',
     aoClicar: () => usarDaInbox(m),
     // o X descarta de verdade (apaga da caixa); só esconder faria o arquivo voltar a cada
     // abertura do app, para sempre
@@ -9988,7 +10014,8 @@ function avisarRotinaNova(falhas) {
   if (rotinasFalhasVistas) {
     for (const t of falhas) {
       if (rotinasFalhasVistas.has(t.nome)) continue;
-      mostrarAviso({ id: 'rotina-' + t.nome, tipo: 'alerta', fixo: true, acao: 'ver',
+      // robô parado é erro (triângulo vermelho), como o "Parou: …" da coluna de Rotinas
+      mostrarAviso({ id: 'rotina-' + t.nome, tipo: 'erro', fixo: true, acao: 'ver',
         aoClicar: abrirRotinas, texto: 'Rotina parada · ' + nomeCurtoDaRotina(t) });
     }
   }

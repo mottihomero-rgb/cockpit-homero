@@ -2244,7 +2244,8 @@ handle('sessao:nomeCurto', async (_e, o) => {
   const respostas = (Array.isArray(d.respostas) ? d.respostas : []).slice(-2).map(t => tiraBlocos(String(t || '')));
   const atual = typeof d.atual === 'string' ? d.atual : '';
   // total: quantas mensagens ele mandou na conversa inteira (o app ja manda so a 1a + as recentes)
-  const pedido = nomesConversa.montarPedido({ mensagens, respostas, atual, total: Number(d.total) || 0 });
+  const pedido = nomesConversa.montarPedido({ mensagens, respostas, atual, total: Number(d.total) || 0,
+    pasta: typeof d.pasta === 'string' ? d.pasta : '' });
   if (!pedido || !fs.existsSync(CLAUDE_BIN)) return '';
   const r = await rodar(CLAUDE_BIN, nomesConversa.argsDoNome(pedido), 60000);
   if (r.err) return '';
@@ -2595,6 +2596,8 @@ function headRead(file, bytes) {
 }
 
 const ENTRADAS_DE_GENTE = ['claude-vscode', 'cockpit', 'cli', 'claude-code'];
+// pastas de conversa que são só de robô (o observador do claude-mem grava uma conversa por anotação)
+const CONVERSA_DE_ROBO = /[\/\\]-Users-[^\/\\]*-claude-mem-observer-sessions[\/\\]/;
 
 const INDICE_PATH = () => path.join(app.getPath('userData'), 'indice-conversas.json');
 let indice = null;
@@ -2668,6 +2671,9 @@ function claudeSessions(limit, incluirRobos) {
     const fi = fichaConversa(it);
     lidos++;
     if (!incluirRobos && fi.entrada && !ENTRADAS_DE_GENTE.includes(fi.entrada)) continue;
+    /* 26/09: as ~600 conversas do robô de memória (claude-mem, desligado em 24/09: "Condense the tool
+       payload…") não têm entrypoint gravado e passavam pelo filtro de cima — eram metade da lista. */
+    if (!incluirRobos && CONVERSA_DE_ROBO.test(it.f)) continue;
     let title = nomesMeus[it.id] || fi.title;
     if (!title) continue;
     out.push({ engine: 'claude', id: it.id, title, cwd: fi.cwd || HOME, when: it.mtime, file: it.f, entrada: fi.entrada });
@@ -5431,8 +5437,14 @@ const cli = require('./cli-motors').criarCli({ HOME, emit: (paneId, kind, data) 
 // contexto colado, e o tituloAcp rele o arquivo so nesse caso para mostrar o pedido de verdade
 /* a sessao do Grok roda pelo ACP (mesmo JSONL do Cockpit): quem diz que e dele e o comando */
 const ehSessaoGrok = (s) => /(?:^|[\\/])grok(?:\s|$)/.test(String((s && s.comando) || ''));
-handle('sessions:cli', (_e, engine) => engine === 'gemini' ? cli.sessoes().map(s => ({ ...s, title: tituloAcp(s) }))
-  : engine === 'grok' ? acp.sessoes().filter(ehSessaoGrok).map(s => ({ ...s, engine: 'grok', title: tituloAcp(s) })) : []);
+/* 26/09 ("tem que servir para as 4 IAs"): o nome que o Cockpit deu (ou ele deu pelo lápis) vale
+   também na lista do Gemini e do Grok — antes eles mostravam só o título do próprio motor. */
+handle('sessions:cli', (_e, engine) => {
+  const nomes = lerNomes();
+  const titulo = (s) => (s && typeof nomes[s.id] === 'string' && nomes[s.id]) || tituloAcp(s);
+  return engine === 'gemini' ? cli.sessoes().map(s => ({ ...s, title: titulo(s) }))
+    : engine === 'grok' ? acp.sessoes().filter(ehSessaoGrok).map(s => ({ ...s, engine: 'grok', title: titulo(s) })) : [];
+});
 
 
 /* Pedido de permissão do ACP que não vale mais: responde ao agente (senão ele fica esperando

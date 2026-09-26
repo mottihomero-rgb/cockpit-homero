@@ -5801,6 +5801,8 @@ function materialDoNome(P) {
     total: dele.length,
     respostas: bots.length > 2 ? [bots[0], bots[bots.length - 1]] : bots,
     atual: P.nomeCurto ? P.titulo : '',
+    // 3a versao do nome (26/09): a pasta do chat é pista do cliente (o nome é "<o que> <cliente>")
+    pasta: P.cwd || '',
   };
 }
 /* Quem e dono do nome: a conversa marcada em P.nomeDono, que e o PROPRIO P.hist. Toda troca de

@@ -71,57 +71,42 @@ function turno(r, P, texto, resposta) {
 }
 
 /* ================= a instrução ================= */
-test('a instrução não obriga mais "<tipo> <projeto>" e pede a demanda real', () => {
+/* 3a versao (26/09, pedido dele): "<o que está sendo feito> <cliente ou projeto>". A conversa em que
+   ele pediu se chamava "Teste de Conexão Sistema"; ele daria "Ajustes Cockpit". */
+test('a instrução pede "<o que está sendo feito> <cliente ou projeto>", curto e prático', () => {
   const p = nomes.PEDIDO_NOME;
-  assert.doesNotMatch(p, /<tipo de trabalho> <projeto>/, 'o formato antigo que gerou "Alterações Adsure" voltou');
-  assert.doesNotMatch(p, /NUNCA use o detalhe/i, 'proibir o detalhe do pedido e o que deixava o nome generico');
-  assert.match(p, /DEMANDA REAL/);
-  assert.match(p, /2 a 5 palavras/);
-  assert.match(p, /preposição/);
-  assert.match(p, /Proibido título genérico/);
-  assert.match(p, /trabalho PRINCIPAL/);
-  assert.match(p, /trabalho novo que tomou o lugar do anterior/, 'conversa que muda de rumo: o nome acompanha');
+  assert.match(p, /Formato: <o que está sendo feito> <cliente ou projeto>/);
+  assert.match(p, /2 a 4 palavras, no máximo 32 letras/);
+  assert.match(p, /Ajustes Cockpit/, 'o exemplo dele');
+  assert.match(p, /Pedro \(Pedro Quadrado\), Rapha \(Rapha Brandão\)/, 'os nomes curtos dos clientes');
+  assert.match(p, /trabalho PRINCIPAL da conversa inteira, não da primeira mensagem/);
+  assert.match(p, /"só testando"/);
+  assert.match(p, /Duas conversas diferentes do mesmo cliente têm que ganhar nomes diferentes/);
+  assert.match(p, /MANTER/);
   assert.equal(/PEDIDO_NOME/.test(main), false, 'a instrucao velha continua no main.js');
   assert.match(main, /require\('\.\/nomes-conversa'\)/);
 });
 
 // 2a versao (26/09): a 1a acabou com o generico mas descrevia o CONTEUDO ("Video de IA com Robo
 // Humanoide", "Video IA com Voces Cantando"). A medida e o exemplo dele: "Criacao de Video com IA".
-test('a instrução pede o trabalho + o objeto, na altura do exemplo dele, e não o detalhe do momento', () => {
-  const p = nomes.PEDIDO_NOME;
-  assert.match(p, /começa pelo trabalho, em substantivo \(Criação de, Edição de/, 'demanda de fazer algo: o trabalho na frente');
-  assert.match(p, /problema ou pergunta como algo está, o título é o objeto e o problema/, 'pergunta e diagnostico: o objeto');
-  assert.match(p, /pergunta como foi feito, ela quer fazer igual: o trabalho é criar aquilo/,
-    '"como eles fizeram?" e o pedido de criar (o caso da Criacao Dupla)');
-  assert.match(p, /continuar valendo quando a conversa avançar/);
-  assert.match(p, /Nada de detalhe de um momento só: quem aparece ou participa da peça, cor, efeito/,
-    'o detalhe do momento deixava o nome valido so para aquela mensagem');
-  assert.match(p, /Abrir, mostrar, mandar, conferir e liberar nunca são o trabalho, nem em substantivo/,
-    '"abre a pasta" virava "Abrir Pasta"/"Abertura da Vinheta"');
-  assert.match(p, /O trabalho sempre vem com o objeto/, 'o generico "<Trabalho> <Cliente>" continua proibido');
-  assert.match(p, /encurte o objeto .* e nunca tire o trabalho/,
-    'o trabalho na frente come letras: sem isto 4% dos nomes passavam de 48 e eram recusados');
-});
 
-test('os exemplos da instrução são de assunto inventado e, se a IA copiar, a validação recusa', () => {
-  assert.ok(nomes.EXEMPLOS.length >= 4);
+test('os exemplos da instrução passam na validação (agora são do mundo dele, não viram recusa)', () => {
   for (const e of nomes.EXEMPLOS) {
     assert.ok(nomes.PEDIDO_NOME.includes(e));
-    assert.equal(nomes.validarNome(e), '', 'copiou o exemplo: ' + e);
+    assert.equal(nomes.validarNome(e), e);
   }
-  assert.doesNotMatch(nomes.PEDIDO_NOME, /Adsure|Cockpit|Pedro|Excelência|Criação de Vídeo com IA/,
-    'exemplo com o assunto dele vicia: sai o mesmo nome para tudo');
-  // o caso que ele reclamou e de video de IA do Instagram: a palavra nao pode vir da instrucao, so da
-  // conversa. Com ela aqui, todo nome puxaria para "Video" e "IA" (e a avaliacao nao provaria nada).
-  assert.doesNotMatch(nomes.PEDIDO_NOME, /v[íi]deo|\bIA\b|intelig[êe]ncia artificial|instagram|reels|trend|rob[ôo]/i,
-    'assunto do caso dele na instrucao: vicia os nomes');
 });
 
-test('a pasta não vai mais para a IA: com ela, tudo virava "Adsure"', () => {
-  const pedido = nomes.montarPedido({ mensagens: ['faz o roteiro do reels'], pasta: 'Adsure' });
-  assert.doesNotMatch(pedido, /Pasta|Adsure/);
-  assert.doesNotMatch(func('materialDoNome'), /nomePasta|cwd/);
-  assert.doesNotMatch(func('nomearCurto'), /nomePasta/);
+test('a pasta do chat vai como pista do cliente, só quando diz algo', () => {
+  assert.equal(nomes.pistaDaPasta('/Users/homeromotti/Desktop/Projetos-claude/Pedro'), 'Pedro');
+  assert.equal(nomes.pistaDaPasta('/Users/homeromotti/Desktop/Projetos-claude/Adsure/2026-09-26_cockpit-vincular-conta/codigo'),
+    'Adsure (cockpit vincular conta)');
+  assert.equal(nomes.pistaDaPasta('/Users/homeromotti/Documents/Adsure - Sistemas/Cockpit'), 'Cockpit');
+  assert.equal(nomes.pistaDaPasta('/Users/homeromotti'), '', 'a pasta pessoal não diz nada (na 1a versão tudo virava Adsure)');
+  assert.match(nomes.montarPedido({ mensagens: ['faz a página'], pasta: '/Users/h/Desktop/Projetos-claude/Pedro' }), /Pasta do chat: Pedro\n/);
+  assert.doesNotMatch(nomes.montarPedido({ mensagens: ['faz a página'], pasta: '/Users/h' }), /Pasta do chat/);
+  assert.match(func('materialDoNome'), /pasta: P\.cwd/);
+  assert.match(main, /pasta: typeof d\.pasta === 'string' \? d\.pasta : ''/);
 });
 
 test('linha de comando: haiku pelo login, sem sessão gravada, sem ferramenta, MCP, CLAUDE.md nem raciocínio', () => {
@@ -191,18 +176,16 @@ test('validação: aceita título de demanda e arruma aspas, ponto e a 1ª letra
     'preposicao e artigo nao contam nas 6 palavras');
 });
 
-test('validação: recusa conversa, várias linhas, nome longo e o genérico do formato antigo', () => {
+test('validação: recusa conversa, várias linhas, nome longo e o vago; aceita <trabalho> <cliente>', () => {
   for (const ruim of [
     '', '   ', 'Linha um\nLinha dois', 'Claro! Aqui está o título', 'Desculpe, não consigo', 'Qual o assunto?',
     'Alfa Beta Gama Delta Épsilon Zeta Eta', 'Estrutura de Pós-Graduação em Direito Previdenciário Rural',
-    'Alterações Adsure', 'Conserto Cockpit', 'Criação Dupla', 'Conversa', 'ok',
+    'Teste de Conexão Sistema', 'Teste', 'Sistema', 'Conversa', 'Conversa Geral', 'ok',
   ]) assert.equal(nomes.validarNome(ruim), '', 'devia recusar: ' + JSON.stringify(ruim));
-  for (const n of ['Alfa Beta Gama Delta Épsilon Zeta', 'Relatório de Vendas de Agosto']) assert.notEqual(nomes.validarNome(n), '');
-  for (const n of ['A', 'x'.repeat(57)]) assert.equal(nomes.validarNome(n), '');
-  // o trabalho na frente (instrucao de 26/09) soma umas 12 letras: com o teto antigo de 48, 4% dos nomes
-  // eram recusados e a conversa ficava com a frase provisoria
-  assert.equal(nomes.validarNome('Estruturação da Pós-Graduação em Direito Previdenciário'),
-    'Estruturação da Pós-Graduação em Direito Previdenciário');
+  // 3a versao: "<trabalho> <cliente>" é o formato que ele pediu
+  for (const n of ['Ajustes Cockpit', 'Alterações Adsure', 'Relatório de Vendas de Agosto', 'Teste A/B Página Pedro'])
+    assert.notEqual(nomes.validarNome(n), '', n);
+  for (const n of ['A', 'x'.repeat(45), 'Alfa Beta Gama Delta Épsilon Zeta']) assert.equal(nomes.validarNome(n), '');
 });
 
 /* ================= o ritmo ================= */
@@ -539,7 +522,7 @@ test('celular: o atualizar() de quando ele volta ao app não tira o dono do nome
 // achados 3 e 8: título legítimo recusado para sempre
 test('validação: aceita título que começa com Parecer, Nome, Título, Entendimento, Sugestão ou Posso', () => {
   for (const bom of [
-    'Parecer de Aposentadoria Especial de Vigilante', 'Parecer do Processo do Cliente', 'Nome da Mentoria do Mota',
+    'Parecer Aposentadoria Vigilante', 'Parecer do Processo do Cliente', 'Nome da Mentoria do Mota',
     'Título da Aula Semanal', 'Nome do Produto Novo', 'Entendimento do Contrato', 'Sugestão de Pauta para Reels',
     'Posso Aposentar com 60', 'I.A. no Escritório do Pedro', 'Claro Telecom Contrato', 'Oi Fibra Cancelamento',
   ]) assert.equal(nomes.validarNome(bom), bom, 'titulo de verdade recusado: ' + bom);
@@ -549,7 +532,7 @@ test('validação: aceita título que começa com Parecer, Nome, Título, Entend
     'Um bom título seria Vídeo', 'O nome é Vídeo de IA', 'Sugiro Vídeo de IA', 'I think Video', 'Sim', 'MANTER',
   ]) assert.equal(nomes.validarNome(ruim), '', 'devia recusar: ' + ruim);
   assert.equal(nomes.validarNome('Nome da conversa: Roteiro do Reels'), 'Roteiro do Reels');
-  assert.equal(nomes.validarNome('Alterações Excelência Prev'), '', 'generico de 3 palavras do formato antigo');
+  assert.equal(nomes.validarNome('Ajustes Excelência Prev'), 'Ajustes Excelência Prev', '3a versao: trabalho + cliente passa');
   assert.equal(nomes.validarNome('Campanha Black Friday'), 'Campanha Black Friday', 'tipo que diz o assunto passa');
 });
 
@@ -652,4 +635,12 @@ test('estabilidade: a IA pode responder MANTER, e o main devolve o nome atual', 
   rec.proc.stdout.emit('data', Buffer.from('MANTER\n'));
   rec.proc.emit('close', 0);
   assert.equal(await pronto, 'Mapa dos Robôs');
+});
+
+// 26/09: as ~600 conversas do robô de memória (claude-mem) eram metade da lista e passavam pelo filtro
+test('a lista esconde as conversas do robô de memória (claude-mem), como os outros robôs', () => {
+  assert.match(main, /if \(!incluirRobos && CONVERSA_DE_ROBO\.test\(it\.f\)\) continue;/);
+  const re = new RegExp(main.match(/const CONVERSA_DE_ROBO = \/(.*)\/;/)[1]);
+  assert.ok(re.test('/Users/h/.claude/projects/-Users-h--claude-mem-observer-sessions/a.jsonl'));
+  assert.ok(!re.test('/Users/h/.claude/projects/-Users-h-Desktop-Projetos-claude-Pedro/a.jsonl'));
 });

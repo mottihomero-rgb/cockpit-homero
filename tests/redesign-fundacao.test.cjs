@@ -118,7 +118,7 @@ test('o botão do modo de envio mostra o ícone da fila E o nome (Entra / Fila);
     setAttribute: (k, v) => { attrs[k] = v; } };
   const ctx = { P: { envio: 'entra' }, btEnvio, ico: (n) => '<svg data-n="' + n + '"></svg>' };
   vm.runInNewContext('{ const pintarEnvio = () => {' + corpo[1] + '\n}; pintarEnvio(); }', ctx);
-  assert.equal(ctx.btEnvio.innerHTML, '<svg data-n="queue"></svg><span>Entra</span>');
+  assert.equal(ctx.btEnvio.innerHTML, '<svg data-n="zap"></svg><span>Entra</span>');
   assert.equal(cls.has('ligado'), false); assert.equal(attrs['aria-pressed'], 'false');
   ctx.P.envio = 'fila';
   vm.runInNewContext('{ const pintarEnvio = () => {' + corpo[1] + '\n}; pintarEnvio(); }', ctx);

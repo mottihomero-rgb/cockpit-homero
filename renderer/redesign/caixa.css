@@ -270,9 +270,13 @@
   .cmp-bar .p-quadro.tem-rascunho{color:var(--label-1)}
   /* "/" era texto em mono com moldura; agora é o ícone, igual aos vizinhos */
   .p-slash{border:0;font:inherit}
-  /* modo de envio: só o ícone (Fila/Entra fica no title; o desenho troca junto) */
-  .cmp-bar .p-modoenvio{width:26px;padding:0;gap:0;justify-content:center}
-  .p-modoenvio span{display:none}
+  /* modo de envio (26/09): ícone + a palavra, numa pílula discreta em fill-3 — raio "Entra" ou
+     fila "Fila". O modo tem de estar escrito: só o fundo mudando ninguém percebia. */
+  .cmp-bar .p-modoenvio{width:auto;height:26px;padding:0 8px 0 6px;gap:4px;justify-content:center;
+    border-radius:13px;background:var(--fill-3);color:var(--label-2)}
+  .cmp-bar .p-modoenvio:hover{background:var(--fill-2);color:var(--label-1)}
+  .p-modoenvio span{display:inline;font:500 12px/15px var(--font-sans)}
+  .pane .cmp-bar .p-modoenvio.ligado{background:var(--fill-3);color:var(--label-2)}
   .pane.ocupado .p-modoenvio{color:var(--label-2)}
   /* plano do Codex ligado: fundo de selecionado, não azul (um azul só por área: o Enviar) */
   .p-plano.ligado{background:var(--fill-1);color:var(--label-1)}
@@ -345,7 +349,6 @@
   /* ---------- larguras do painel ---------- */
   /* ≥ 560: o uso do plano e o nome da permissão aparecem; o plano ganha a margem de 28 */
   @container (min-width: 560px){
-    .p-limite{display:inline}
     .modo-nome{display:inline}
     .modo-btn.p-modo{justify-content:flex-start}
     .pane-plano{margin:0 28px 8px}

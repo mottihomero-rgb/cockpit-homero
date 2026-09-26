@@ -1027,11 +1027,10 @@ function newPane(opts = {}) {
   const btEnvio = $('.p-modoenvio', el);
   const pintarEnvio = () => {
     const entra = P.envio === 'entra';
-    /* 'queue' é o desenho de "modo de envio" do redesenho, nos dois modos: quem diz o modo é o
-       fundo (.ligado = "entrar na fila" ligado, como o plano), não um segundo desenho (o raio do
-       Entra não existe no desenho). O rótulo (Entra/Fila) continua: com um chat só na aba é ele
-       que diz o modo; com vários (#panes.multi) e no celular o CSS o esconde. */
-    btEnvio.innerHTML = ico('queue') + '<span>' + (entra ? 'Entra' : 'Fila') + '</span>';
+    /* 26/09 (pedido dele: "tem que funcionar como antes, só que com o visual de hoje"): o modo
+       volta a ficar ESCRITO na caixa — raio + "Entra" ou fila + "Fila". Só com o fundo mudando
+       ele não via em qual modo estava, e o clique parecia não fazer nada. */
+    btEnvio.innerHTML = ico(entra ? 'zap' : 'queue') + '<span>' + (entra ? 'Entra' : 'Fila') + '</span>';
     btEnvio.classList.toggle('ligado', !entra);
     btEnvio.setAttribute('aria-pressed', String(!entra));
     btEnvio.title = entra
@@ -4672,7 +4671,10 @@ function criarControlesCodex(P) {
    pintarModo, que é quem repinta depois de trocar o modo. */
 function pintarPlano(P) {
   const b = $('.p-plano', P.el); if (!b || P.engine === 'codex') return;
-  const tem = (MODOS[P.engine] || []).some(m => m.id === 'plan');
+  /* 26/09: fora do Codex o botão SAIU (pedido dele). Ele fazia o mesmo que o "Plano" do cadeado,
+     e um clique perdido reiniciava o chat e deixava todo chat novo nascendo em Plano. Volta a
+     ser como era antes: o plano de um clique só existe no Codex (o collaborationMode). */
+  const tem = false;
   b.classList.toggle('hidden', !tem);
   if (!tem) return;
   const plano = modoDe(P).id === 'plan';
@@ -5919,7 +5921,11 @@ async function escolherModo(P, mo) {
   // trocar de modo desliga o motor: com trabalho rodando, pergunta antes (igual ao fechar)
   const estavaRodando = !!P.busy || agTrabalhando(P);
   if (!confirmarCorte(P, 'Trocar de modo')) return;
-  P.mode = mo.id; cfg.defMode = mo.id; window.api.setConfig(cfg); pintarModo(P);
+  /* 26/09: o Plano vale para ESTE chat, não vira o padrão dos chats novos (foi assim que todo
+     chat novo passou a nascer em Plano). E o modo de antes fica guardado: aprovar o plano volta
+     para ele (ver responderPlano). */
+  if (mo.id === 'plan' && P.mode !== 'plan') P.modoAntesDoPlano = P.mode;
+  P.mode = mo.id; if (mo.id !== 'plan') { cfg.defMode = mo.id; window.api.setConfig(cfg); } pintarModo(P);
   await desligarMotor(P);
   /* era note(), que so aparece quando e erro: o recado nunca chegou na tela. E a frase
      "parou aqui" so entra quando alguma coisa realmente parou. */

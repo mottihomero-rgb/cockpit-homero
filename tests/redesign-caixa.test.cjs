@@ -63,7 +63,9 @@ test('"…" do painel estreito só clica os botões de verdade', () => {
 });
 
 test('caixa.css: larguras do painel e o que é só do Mac', () => {
-  assert.match(css, /@container \(min-width: 560px\)\{[\s\S]*?\.p-limite\{display:inline\}[\s\S]*?\.modo-nome\{display:inline\}/);
+  assert.match(css, /@container \(min-width: 560px\)\{[\s\S]*?\.modo-nome\{display:inline\}/);
+  // 26/09: "sessão · semana" saiu da caixa (o uso mora nos anéis do topo): nunca volta a aparecer
+  assert.doesNotMatch(css, /\.p-limite\{display:inline\}/);
   assert.match(css, /@container \(max-width: 399\.98px\)\{[\s\S]*?\.p-modoenvio,\.cmp-bar \.p-plano,\.cmp-bar \.p-quadro,\.cmp-bar \.p-agentes\{display:none\}[\s\S]*?\.p-mais\{display:grid\}/);
   // o contrário exato da media query do celular: senão os 44px de toque do iPhone perdiam
   assert.match(css, /@media \(min-width: 821px\) and \(not \(pointer: coarse\)\), \(min-width: 1101px\) \{/);

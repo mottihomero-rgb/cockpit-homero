@@ -281,32 +281,27 @@ test('anel de foco da caixa some com qualquer camada aberta por cima', () => {
 });
 
 /* ============================ 5. botões da barra ============================ */
-test('botão do plano em todo motor que tem o modo Plano; ligado pelo fundo', () => {
+/* 26/09 (pedido dele): o checklist do plano fora do Codex saiu — fazia o mesmo que o "Plano" do
+   cadeado, e um clique perdido reiniciava o chat e deixava o padrão de chat novo em Plano. */
+test('botão do plano só no Codex; nos outros motores ele some', () => {
   const MODOS = { claude: [{ id: 'manual' }, { id: 'plan' }], gemini: [{ id: 'manual' }, { id: 'plan' }], grok: [{ id: 'manual' }, { id: 'bypass' }] };
   const ctx = { $, MODOS, ico: (n) => '<' + n + '>', modoDe: (P) => ({ id: P.mode }) };
   vm.createContext(ctx);
   vm.runInContext(pegar('pintarPlano') + '\nthis.f = pintarPlano;', ctx);
-  const pane = (engine, mode) => { const P = { engine, mode, el: el() }; P.el.nodes['.p-plano'] = el('cb p-plano hidden'); return P; };
-  for (const engine of ['claude', 'gemini']) {
-    const P = pane(engine, 'manual'); ctx.f(P);
-    const b = P.el.nodes['.p-plano'];
-    assert.equal(b.classList.contains('hidden'), false, engine); assert.equal(b.classList.contains('ligado'), false);
-    assert.equal(b.innerHTML, '<clipboard-list>');
-    P.mode = 'plan'; ctx.f(P);
-    assert.equal(b.classList.contains('ligado'), true); assert.equal(b.attrs['aria-pressed'], 'true');
+  const pane = (engine, mode) => { const P = { engine, mode, el: el() }; P.el.nodes['.p-plano'] = el('cb p-plano'); return P; };
+  for (const engine of ['claude', 'gemini', 'grok']) {
+    const P = pane(engine, 'plan'); ctx.f(P);
+    assert.equal(P.el.nodes['.p-plano'].classList.contains('hidden'), true, engine + ': sem o checklist');
   }
-  const G = pane('grok', 'manual'); ctx.f(G);
-  assert.equal(G.el.nodes['.p-plano'].classList.contains('hidden'), true, 'o Grok não tem modo Plano: sem botão');
-  // o clique passa pelo mesmo caminho do menu de permissão (pergunta antes de cortar o trabalho)
-  assert.match(pegar('criarControlesCodex'), /escolherModo\(P, plano\)/);
-  assert.match(pegar('pintarModo'), /pintarPlano\(P\)/);
   assert.match(pegar('pintarControlesCodex'), /if \(!codex\) \{ pintarPlano\(P\); return; \}/);
 });
 
-test('modo de envio: desenho de fila nos dois modos, sem o raio', () => {
+/* 26/09: "tem que funcionar como antes, só que com o visual de hoje" — o modo volta a ser
+   escrito: raio + Entra, fila + Fila, numa pílula discreta */
+test('modo de envio: raio no Entra, fila na Fila, sempre com a palavra', () => {
   const corpo = /const pintarEnvio = \(\) => \{([\s\S]*?)\n  \};/.exec(app)[1];
-  assert.ok(!/'zap'/.test(corpo), 'o raio não existe no desenho do modo de envio');
-  assert.match(css, /\.pane \.cmp-bar \.p-modoenvio\.ligado\{background:var\(--fill-1\);color:var\(--label-1\)\}/);
+  assert.match(corpo, /ico\(entra \? 'zap' : 'queue'\)/);
+  assert.match(css, /\.p-modoenvio span\{display:inline;/);
 });
 
 /* ============================ 6. reduzir movimento ============================ */

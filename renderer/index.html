@@ -79,12 +79,16 @@
       <div class="side-head"><span>Conversas</span><button class="mini" data-reload="todas" title="Atualizar agora"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3"></path></g></svg></button></div>
       <!-- uso do plano: um bloco curto por IA que tem numero (pintarUsoLateral) -->
       <div class="cv-uso" id="cvUso"></div>
-      <button class="side-filtro" data-filtro="todas"><span class="sf-txt">Mac inteiro</span><span class="sf-seta"></span></button>
-      <div class="side-pastas hidden" data-pastas="todas"></div>
-      <input class="side-busca" data-busca="todas" placeholder="Buscar em tudo…">
+      <!-- pasta + busca na MESMA linha (redesenho 25/09): pop-up de pasta e campo, os dois com 24
+           de altura. A lista de pastas abre como popover logo abaixo, presa a esta linha. -->
+      <div class="side-ferramentas">
+        <button class="side-filtro" data-filtro="todas" title="Filtrar por pasta"><span class="sf-ic"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.6l1.4 1.5h5A1.5 1.5 0 0 1 14 6v5.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5z"></path></g></svg></span><span class="sf-txt">Mac inteiro</span><span class="sf-seta"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 6L8 3.5 10.5 6M5.5 10L8 12.5 10.5 10"></path></g></svg></span></button>
+        <label class="side-busca-cx"><span class="sb-ic"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.4 10.4l3.1 3.1"></path></g></svg></span><input class="side-busca" data-busca="todas" placeholder="Buscar" title="Busca em todas as IAs e no Mac inteiro"></label>
+        <div class="side-pastas hidden" data-pastas="todas"></div>
+      </div>
       <!-- faixa de grupos de conversa (leva 8): desenhada por pintarAbasGrupo -->
       <div class="grp-abas" data-grupos="todas"></div>
-      <button class="new-chat" data-new="foco"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3v10M3 8h10"></path></g></svg> Novo chat nesta aba</button>
+      <button class="new-chat" data-new="foco" title="Novo chat nesta aba (⌘T)"><span class="nc-atalho">⌘T</span><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M10.5 2.75l2.75 2.75L6 12.75l-3.25.5.5-3.25z"></path></g></svg> Novo chat nesta aba</button>
       <!-- a IA cuja lista não veio: logo + "indisponível", o motivo no title (pintarErrosDaLista) -->
       <div class="cv-erros" id="cvErros"></div>
       <div class="hist" id="histTodas"></div>
@@ -96,66 +100,77 @@
     </div>
     <!-- leva 11: a lista é desenhada por pintarRotinas() -->
     <div class="side-view hidden" data-view="rotinas">
-      <div class="side-head"><span>Rotinas do Mac</span><button class="mini" id="btnRotinasAtualizar" title="Atualizar agora"></button></div>
+      <div class="side-head"><span>Rotinas</span><button class="mini" id="btnRotinasAtualizar" title="Atualizar agora"></button></div>
       <div class="rot" id="rotinas"></div>
     </div>
     <div class="side-view hidden" data-view="settings">
       <div class="side-head"><span>Ajustes</span></div>
-      <!-- Cada bloco é só título + controle. A explicação mora no (i) do título: o app.js
-           mostra o texto de data-dica ao passar o mouse (no celular, ao tocar). -->
+      <!-- Grupos em cartão (redesenho 25/09): cada linha é título + (i) + controle, 36 de
+           altura. A explicação mora no (i): o app.js mostra o data-dica ao passar o mouse (no
+           celular, ao tocar). O texto de cada interruptor fica só para o leitor de tela. -->
       <div class="settings">
-        <section class="aj">
-          <div class="aj-tit">Celular<button class="info" type="button" aria-label="Como funciona" data-dica="No iPhone, ligue o Tailscale e abra o endereço abaixo no Safari. Depois toque em Compartilhar › Adicionar à Tela de Início. As conversas são as mesmas do Mac, então deixe o Mac ligado."></button></div>
-          <label class="chave"><input type="checkbox" id="chkWeb"><span>Liberar acesso</span></label>
-          <div id="webInfo" class="web-info hidden"></div>
-        </section>
-
-        <section class="aj">
-          <div class="aj-tit">Aparência<button class="info" type="button" aria-label="Como funciona" data-dica="Automática segue o claro e o escuro do Mac. Com Aumentar contraste ou Reduzir transparência ligados no Mac, o Cockpit reforça o contraste sozinho."></button></div>
-          <div class="temas">
-            <button class="tema-bt" data-aparencia="auto"><span class="tema-am aut"></span>Automática</button>
-            <button class="tema-bt" data-aparencia="clara"><span class="tema-am cla"></span>Clara</button>
-            <button class="tema-bt" data-aparencia="escura"><span class="tema-am esc"></span>Escura</button>
+        <div class="aj-grupo">
+          <div class="aj-gtit">Geral</div>
+          <div class="aj-cartao">
+            <section class="aj aj-aparencia">
+              <div class="aj-tit">Aparência<button class="info" type="button" aria-label="Como funciona" data-dica="Automática segue o claro e o escuro do Mac. Com Aumentar contraste ou Reduzir transparência ligados no Mac, o Cockpit reforça o contraste sozinho."></button></div>
+              <div class="temas" role="group" aria-label="Aparência">
+                <button class="tema-bt" data-aparencia="auto">Automática</button>
+                <button class="tema-bt" data-aparencia="clara">Clara</button>
+                <button class="tema-bt" data-aparencia="escura">Escura</button>
+              </div>
+            </section>
+            <section class="aj">
+              <div class="aj-tit">Foto<button class="info" type="button" aria-label="Como funciona" data-dica="Aparece nas suas mensagens."></button></div>
+              <div class="foto-linha">
+                <div class="foto-prev" id="fotoPrev"></div>
+                <div class="foto-btns">
+                  <button class="btn-wide" id="btnFoto">Alterar…</button>
+                  <button class="btn-wide" id="btnFotoTirar">Remover</button>
+                </div>
+              </div>
+            </section>
+            <section class="aj">
+              <div class="aj-tit">Pasta inicial<button class="info" type="button" aria-label="Como funciona" data-dica="É a pasta onde os chats novos começam a trabalhar."></button></div>
+              <!-- o caminho mora DENTRO do botão: é um pop-up (mostra a pasta, clica e troca) -->
+              <button class="aj-pop" id="btnDefCwd" title="Trocar pasta"><span class="path-box" id="defCwd">—</span><span class="aj-seta"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 6L8 3.5 10.5 6M5.5 10L8 12.5 10.5 10"></path></g></svg></span></button>
+            </section>
           </div>
-        </section>
-
-        <section class="aj">
-          <div class="aj-tit">Sua foto</div>
-          <div class="foto-linha">
-            <div class="foto-prev" id="fotoPrev"></div>
-            <div class="foto-btns">
-              <button class="btn-wide" id="btnFoto">Escolher foto</button>
-              <button class="btn-wide" id="btnFotoTirar">Remover</button>
-            </div>
+        </div>
+        <div class="aj-grupo">
+          <div class="aj-gtit">Entrada</div>
+          <div class="aj-cartao">
+            <section class="aj">
+              <div class="aj-tit">Celular<button class="info" type="button" aria-label="Como funciona" data-dica="No iPhone, ligue o Tailscale e abra o endereço abaixo no Safari. Depois toque em Compartilhar › Adicionar à Tela de Início. As conversas são as mesmas do Mac, então deixe o Mac ligado."></button></div>
+              <label class="chave"><input type="checkbox" id="chkWeb"><span>Liberar acesso</span></label>
+              <div id="webInfo" class="web-info hidden"></div>
+            </section>
+            <section class="aj">
+              <div class="aj-tit">Voz<button class="info" type="button" aria-label="Como funciona" data-dica="Ligado, aperte ⌃⌥Espaço em qualquer programa: o Cockpit vem para a frente e o microfone liga. Enquanto fala, diga “manda” para enviar, “cancela” para parar, “apaga isso” ou “próximo painel”."></button></div>
+              <label class="chave"><input type="checkbox" id="chkAtalhosGlobais"><span>Atalho de voz</span></label>
+              <p class="hint hidden" id="atalhosAviso"></p>
+            </section>
+            <!-- leva 6: o caminho MUDA entre rodar por npm start (pasta "cockpit") e o app
+                 instalado (pasta "Cockpit"). Nenhum script pode cravar: é daqui que se copia. -->
+            <section class="aj" id="inboxBloco">
+              <div class="aj-tit">Caixa de entrada<button class="info" type="button" aria-label="Como funciona" data-dica="Texto (.txt ou .md) ou imagem que cair nesta pasta vira um aviso no topo da tela, com o botão “usar”. É por aqui que o celular e os robôs mandam coisas para cá."></button></div>
+              <button class="aj-pop" id="btnInboxAbrir" title="Abrir a pasta no Finder"><span class="path-box" id="inboxPasta">—</span><span class="aj-seta"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 6L8 3.5 10.5 6M5.5 10L8 12.5 10.5 10"></path></g></svg></span></button>
+            </section>
           </div>
-        </section>
-
-        <section class="aj">
-          <div class="aj-tit">Pasta inicial<button class="info" type="button" aria-label="Como funciona" data-dica="É a pasta onde os chats novos começam a trabalhar."></button></div>
-          <div class="path-box" id="defCwd">—</div>
-          <button class="btn-wide" id="btnDefCwd">Trocar pasta</button>
-        </section>
-
-        <section class="aj">
-          <div class="aj-tit">Voz<button class="info" type="button" aria-label="Como funciona" data-dica="Ligado, aperte ⌃⌥Espaço em qualquer programa: o Cockpit vem para a frente e o microfone liga. Enquanto fala, diga “manda” para enviar, “cancela” para parar, “apaga isso” ou “próximo painel”."></button></div>
-          <label class="chave"><input type="checkbox" id="chkAtalhosGlobais"><span>Atalho de voz</span></label>
-          <p class="hint hidden" id="atalhosAviso"></p>
-        </section>
-
-        <!-- leva 6: o caminho MUDA entre rodar por npm start (pasta "cockpit") e o app
-             instalado (pasta "Cockpit"). Nenhum script pode cravar: é daqui que se copia. -->
-        <section class="aj" id="inboxBloco">
-          <div class="aj-tit">Caixa de entrada<button class="info" type="button" aria-label="Como funciona" data-dica="Texto (.txt ou .md) ou imagem que cair nesta pasta vira um aviso no topo da tela, com o botão “usar”. É por aqui que o celular e os robôs mandam coisas para cá."></button></div>
-          <div class="path-box" id="inboxPasta">—</div>
-          <button class="btn-wide" id="btnInboxAbrir">Abrir pasta</button>
-        </section>
-
-        <section class="aj">
-          <div class="aj-tit">Conversas<button class="info" type="button" aria-label="Como funciona" data-dica="Ligado, a lista mostra também as conversas do robô do WhatsApp e dos robôs agendados. Desligado, mostra só as suas."></button></div>
-          <label class="chave"><input type="checkbox" id="chkRobos"><span>Mostrar robôs</span></label>
-        </section>
-
-        <div class="aj-rodape"><span id="verLine">Cockpit</span><button class="info" type="button" aria-label="Sobre" data-dica="Acesso total ligado: os chats enxergam o Mac inteiro. A pasta escolhida é só o ponto de partida. O Codex usa a sua conta do ChatGPT. O Claude usa o Claude Code já instalado, com suas skills e memória."></button></div>
+        </div>
+        <div class="aj-grupo">
+          <div class="aj-gtit">Avançado</div>
+          <div class="aj-cartao">
+            <section class="aj">
+              <div class="aj-tit">Mostrar robôs<button class="info" type="button" aria-label="Como funciona" data-dica="Ligado, a lista mostra também as conversas do robô do WhatsApp e dos robôs agendados. Desligado, mostra só as suas."></button></div>
+              <label class="chave"><input type="checkbox" id="chkRobos"><span>Mostrar robôs</span></label>
+            </section>
+            <section class="aj">
+              <div class="aj-tit">Versão<button class="info" type="button" aria-label="Sobre" data-dica="Acesso total ligado: os chats enxergam o Mac inteiro. A pasta escolhida é só o ponto de partida. O Codex usa a sua conta do ChatGPT. O Claude usa o Claude Code já instalado, com suas skills e memória."></button></div>
+              <span class="aj-txt" id="verLine">Cockpit</span>
+            </section>
+          </div>
+        </div>
       </div>
     </div>
   </aside>

@@ -7729,6 +7729,19 @@ function grupoDoTempo(ms) {
   return meses[dt.getMonth()] + (dt.getFullYear() !== agora.getFullYear() ? ' de ' + dt.getFullYear() : '');
 }
 
+/* Tempo da linha da lista de conversas (redesenho 25/09): "agora", "12 min", "3 h", "ontem",
+   "4 d" — curto, à direita do título. O corte de dia é o mesmo do grupoDoTempo, para o "ontem"
+   da linha bater com o grupo "Ontem" em cima dela. O quando() continua nas frases ("há 3h"). */
+function quandoCurto(ms) {
+  if (!ms) return '';
+  const min = Math.floor(Math.max(0, Date.now() - ms) / 60000);
+  if (min < 1) return 'agora';
+  const meiaNoite = (x) => { const d = new Date(x); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+  const hoje = meiaNoite(Date.now());
+  if (ms >= hoje) return min < 60 ? min + ' min' : Math.floor(min / 60) + ' h';
+  const dias = Math.round((hoje - meiaNoite(ms)) / 86400000);
+  return dias <= 1 ? 'ontem' : dias + ' d';
+}
 // "há 5 min" / "agora há pouco", para dizer de quando e um numero guardado
 function haQuanto(ms) { const q = quando(ms); return q === 'agora' ? 'agora há pouco' : 'há ' + q; }
 function quando(ms) {
@@ -8669,7 +8682,7 @@ function linhaConversa(s, termo, trecho) {
     + '<button class="hi-fav" title="Deixar no topo"></button>'
     + '<button class="hi-edit" title="Renomear"></button>';
   marcarTermo($('.hi-t', d), s.title, trecho ? '' : termo);
-  $('.hi-w', d).textContent = quando(s.when);
+  $('.hi-w', d).textContent = quandoCurto(s.when);
   /* 25/09: os logos das IAs que trabalharam nesta conversa, na ordem em que entraram e sem
      repetir. Conversa de uma IA so mostra um logo. A cor de cada IA fica SO no logo. */
   const logos = logosDaConversa(s);
@@ -8701,7 +8714,7 @@ function linhaConversa(s, termo, trecho) {
   const bm = document.createElement('button');
   bm.className = 'hi-mais';
   bm.title = 'Mais ações';
-  bm.innerHTML = ico('sliders-horizontal');
+  bm.innerHTML = ico('ellipsis');
   bm.addEventListener('click', (e) => { e.stopPropagation(); menuDaConversa(bm, s, d); });
   d.appendChild(bm);
   d.title = s.title + '\n' + s.cwd;
@@ -9465,7 +9478,7 @@ function pintarCaminho(el, p) {
   if (!el) return;
   el.textContent = '';
   const b = document.createElement('bdi');
-  b.textContent = p || '—';
+  b.textContent = p ? shortPath(p) : '—';   // "~/Projetos": o caminho inteiro fica na dica
   el.appendChild(b);
   el.title = p || '';
 }
@@ -9607,14 +9620,35 @@ function irAoChat(P) {
   piscar(P);
   const inp = $('.p-input', P.el); if (inp) inp.focus();
 }
-function linhaDaTorre({ titulo, motor, estado, aoClicar, acoes }) {
+/* Linha da torre no desenho novo (25/09): logo da IA (a cor dela SÓ no logo) + título + linha de
+   estado com o sinal na frente — anel girando = trabalhando, círculo âmbar com "!" = esperando
+   você. Parado não tem sinal. O nome da IA saiu do título (o logo já diz) e foi para a dica.
+   Sessão de FORA (com `caminho`): o caminho em mono + há quanto tempo, e os botões embaixo. */
+function linhaDaTorre({ titulo, motor, estado, aoClicar, acoes, engine, foco, caminho, ha }) {
   const d = document.createElement('div');
-  d.className = 'torre-item ' + (estado.cls || '');
-  d.innerHTML = '<span class="ti-pt"></span><span class="ti-txt"><span class="ti-tit"></span><span class="ti-est"></span></span>';
+  d.className = 'torre-item ' + (estado.cls || '') + (foco ? ' foco' : '');
+  d.innerHTML = '<span class="ti-logo"></span><span class="ti-txt"><span class="ti-cab"><span class="ti-tit"></span></span>'
+    + '<span class="ti-est"><span class="ti-sinal"></span><span class="ti-est-txt"></span></span></span>';
+  if (engine) { const lg = $('.ti-logo', d); lg.dataset.motor = engine; lg.innerHTML = svgMotor(engine); }
   // textContent, nunca innerHTML: título de conversa e caminho de pasta vêm de fora
-  $('.ti-tit', d).textContent = titulo + '  ·  ' + motor;
-  $('.ti-est', d).textContent = estado.txt;
-  if (aoClicar) { d.title = 'Ir até o chat'; d.addEventListener('click', aoClicar); } else d.classList.add('fora');
+  const tit = $('.ti-tit', d);
+  if (caminho) {
+    tit.textContent = caminho;
+    tit.classList.add('ti-caminho');
+    if (ha) { const q = document.createElement('span'); q.className = 'ti-ha'; q.textContent = ha; $('.ti-cab', d).appendChild(q); }
+    $('.ti-est', d).remove();
+  } else {
+    tit.textContent = titulo;
+    const txt = String(estado.txt || '');
+    // "trabalhando há 22s" vira "Trabalhando há 22s": a linha começa com maiúscula, como no desenho
+    $('.ti-est-txt', d).textContent = txt.charAt(0).toUpperCase() + txt.slice(1);
+    const sinal = $('.ti-sinal', d);
+    sinal.className = 'ti-sinal' + (estado.cls === 'ocupado' ? ' rd-anel' : estado.cls === 'espera' ? ' rd-espera' : '');
+    // a torre repinta de 4 em 4 s: o giro nasce na fase do relógio, senão o anel pularia a cada repintura
+    if (estado.cls === 'ocupado') sinal.style.animationDelay = -(Date.now() % 1000) + 'ms';
+  }
+  if (aoClicar) { d.title = 'Ir até o chat' + (motor ? ' · ' + motor : ''); d.addEventListener('click', aoClicar); }
+  else { d.classList.add('fora'); d.title = [titulo, motor].filter(Boolean).join(' · '); }
   /* Os botões vão numa LINHA PRÓPRIA, embaixo. Ao lado do texto eles comiam a largura inteira
      da coluna (medido: 206px de coluna, dois botões de ~170px) e o título ficava com zero
      pixel — a linha aparecia só com os botões, sem dizer de qual sessão era. */
@@ -9624,7 +9658,8 @@ function linhaDaTorre({ titulo, motor, estado, aoClicar, acoes }) {
     for (const ac of acoes) {
       const b = document.createElement('button');
       b.className = 'ti-acao';
-      b.textContent = ac.rotulo;
+      b.innerHTML = (ac.ic ? ico(ac.ic) : '') + '<span></span>';
+      b.lastChild.textContent = ac.rotulo;
       b.title = ac.dica || '';
       b.addEventListener('click', (e) => { e.stopPropagation(); ac.aoClicar(b); });
       fila.appendChild(b);
@@ -9659,6 +9694,7 @@ async function pintarTorre(forcarAgentes) {
       total++; if (e.cls === 'ocupado') ocupados++; if (e.cls === 'espera') esperando++;
       blocos.push(linhaDaTorre({
         titulo: P.titulo || 'sem título', motor: nomeMotor(P.engine), estado: e, aoClicar: () => irAoChat(P),
+        engine: P.engine, foco: P === focusPane,
       }));
     }
   }
@@ -9708,13 +9744,14 @@ async function pintarTorre(forcarAgentes) {
       titulo: a.name || (String(a.cwd || '').split('/').filter(Boolean).pop()) || a.sessionId.slice(0, 8),
       motor: COMO[a.kind] || 'Claude',
       estado: { txt: shortPath(a.cwd) + (ha ? ' · há ' + ha : ''), cls: 'fora' },
+      engine: 'claude', caminho: shortPath(a.cwd), ha: a.startedAt ? quandoCurto(a.startedAt) : '',
       acoes: [
         /* "command claude" de propósito: no shell dele `claude` é APELIDO de ssh para a VPS
            (~/.zshrc), então o comando copiado sem isso abriria a VPS em vez de continuar a
            conversa daqui. O `command` pula o apelido e chama o programa de verdade. */
-        { rotulo: 'copiar comando', dica: 'copia o "cd" + "claude --resume" para continuar essa conversa num terminal',
+        { rotulo: 'Copiar comando', ic: 'copy', dica: 'copia o "cd" + "claude --resume" para continuar essa conversa num terminal',
           aoClicar: (bt) => copiarTexto('cd "' + a.cwd + '" && command claude --resume ' + a.sessionId, bt) },
-        ...(window.SEM_ELECTRON ? [] : [{ rotulo: 'abrir pasta', dica: 'abre ' + shortPath(a.cwd) + ' no Finder', aoClicar: () => window.api.openPath(a.cwd) }]),
+        ...(window.SEM_ELECTRON ? [] : [{ rotulo: 'Abrir pasta', ic: 'folder', dica: 'abre ' + shortPath(a.cwd) + ' no Finder', aoClicar: () => window.api.openPath(a.cwd) }]),
       ],
     }));
   }
@@ -9768,7 +9805,12 @@ function linhaDaRotina(t) {
   const cls = (rodando ? 'ocupado' + (t.residente ? '' : ' trabalhando') : t.falhou ? 'espera' : t.estado === 'desativada' ? 'fora' : 'parado');
   const d = document.createElement('div');
   d.className = 'rot-item ' + cls;
-  d.innerHTML = '<span class="ri-pt"></span><span class="ri-txt"><span class="ri-tit"></span><span class="ri-est"></span><span class="ri-quando"></span></span>';
+  /* desenho novo (25/09): sem bolinha colorida. Falha = triângulo vermelho na frente do nome;
+     agendada rodando agora = o anel do "trabalhando" na frente do estado. O resto é texto. */
+  d.innerHTML = '<span class="ri-txt"><span class="ri-nome"><span class="ri-alerta"></span><span class="ri-tit"></span></span>'
+    + '<span class="ri-est"><span class="ri-sinal"></span><span class="ri-est-txt"></span></span><span class="ri-quando"></span></span>';
+  if (t.falhou && !rodando) $('.ri-alerta', d).innerHTML = ico('warn');
+  if (rodando && !t.residente) $('.ri-sinal', d).className = 'ri-sinal rd-anel';
   /* nome, motivo e horário vêm do launchd: entram por textContent, nunca por innerHTML — nome
      de serviço aceita < e & e viraria marcação na tela. */
   /* O prefixo é o mesmo em TODAS as dele (com.homero., com.adsure.) e come metade da coluna:
@@ -9776,18 +9818,21 @@ function linhaDaRotina(t) {
      para saber de qual robô era a linha. Sai da tela, fica na dica e no aviso do disparo. */
   $('.ri-tit', d).textContent = t.dele ? t.nome.replace(/^com\.(homeromotti|homero|adsure)\./, '') : t.nome;
   const ultima = quandoDaRotina(t.ultima);
-  $('.ri-est', d).textContent = rodando
+  $('.ri-est-txt', d).textContent = rodando
     ? (t.residente ? 'ligada' : 'rodando') + (ultima ? ' desde ' + ultima : ' agora')
     : t.falhou
       ? 'parou de funcionar' + (ultima ? ' em ' + ultima : '') + ': ' + (t.motivo || 'motivo desconhecido')
       : (ultima ? 'rodou ' + ultima : 'sem registro de execução') + (t.estado === 'desativada' ? ' · desativada' : '');
   const proxima = quandoDaRotina(t.proxima);
   $('.ri-quando', d).textContent = proxima ? 'próxima: ' + proxima : (t.cadencia || 'sem hora marcada');
+  // a linha começa com maiúscula, como no desenho ("Rodou hoje 08:00", "Próxima: amanhã 08:00")
+  for (const el of [$('.ri-est-txt', d), $('.ri-quando', d)]) el.textContent = el.textContent.charAt(0).toUpperCase() + el.textContent.slice(1);
   // nome comprido corta com reticências na coluna estreita: o inteiro fica na dica
   d.title = t.nome + (t.caminho ? '  ·  ' + t.caminho : '');
   const bt = document.createElement('button');
   bt.className = 'ri-acao';
-  bt.textContent = 'disparar';
+  bt.innerHTML = ico('play');   // ▶ de 26, como no desenho; o nome fica na dica e no leitor de tela
+  bt.setAttribute('aria-label', 'Disparar agora');
   if (window.SEM_ELECTRON || t.podeDisparar === false) {
     /* Lista-negra do main (o próprio Cockpit, a ponte do WhatsApp, o executor, a rede da VPS):
        o botão fica à vista e explicado, em vez de sumir sem dizer por quê. */
@@ -9796,7 +9841,7 @@ function linhaDaRotina(t) {
   } else {
     bt.title = 'Roda esta rotina agora, sem esperar a hora marcada';
     // repaint no meio de um disparo não pode devolver o botão habilitado
-    if (rotinasDisparando.has(t.nome)) { bt.disabled = true; bt.textContent = 'disparando…'; }
+    if (rotinasDisparando.has(t.nome)) { bt.disabled = true; bt.innerHTML = '<span class="rd-anel"></span>'; }
     bt.addEventListener('click', (e) => { e.stopPropagation(); dispararRotina(t, bt); });
   }
   d.appendChild(bt);
@@ -9810,7 +9855,7 @@ async function dispararRotina(t, bt) {
   if (rotinasDisparando.has(t.nome)) return;
   if (!confirm('Rodar "' + t.nome + '" agora?\n\nIsso dispara a automação de verdade, na hora, como se fosse o horário marcado.')) return;
   rotinasDisparando.add(t.nome);
-  if (bt) { bt.disabled = true; bt.textContent = 'disparando…'; }
+  if (bt) { bt.disabled = true; bt.innerHTML = '<span class="rd-anel"></span>'; bt.setAttribute('aria-label', 'Disparando…'); }
   let erro = '';
   try {
     const r = await window.api.rotinasDisparar({ nome: t.nome });
@@ -10259,7 +10304,9 @@ function sincronizarIconesLaterais() {
 (() => {
   let drag = false;
   $('#dragbar').addEventListener('mousedown', () => { drag = true; document.body.style.cursor = 'col-resize'; });
-  window.addEventListener('mousemove', (e) => { if (drag) { $('#sidebar').style.width = Math.min(480, Math.max(160, e.clientX - 48)) + 'px'; } });
+  // a largura sai da borda esquerda REAL da coluna: o 48 fixo era a largura da barra de ícones,
+  // que o redesenho muda (e o mínimo subiu para 220: abaixo disso pasta + busca não cabem lado a lado)
+  window.addEventListener('mousemove', (e) => { if (drag) { const sb = $('#sidebar'); sb.style.width = Math.min(480, Math.max(220, e.clientX - sb.getBoundingClientRect().left)) + 'px'; } });
   window.addEventListener('mouseup', () => { drag = false; document.body.style.cursor = ''; });
 })();
 
@@ -10696,7 +10743,7 @@ document.addEventListener('keydown', (e) => {
   }
   aplicarTema(cfg.tema);
   document.body.classList.toggle('foco', !!cfg.foco);   // o modo foco continua como ele deixou
-  $('#verLine').textContent = 'Cockpit 1.1.0';
+  $('#verLine').textContent = '1.1.0';   // a linha dos Ajustes já se chama "Versão"
   repintarAvatares();
   const noTelefone = !!window.SEM_ELECTRON;
   // leva 12.5: o radar de motores instalados, sem segurar o boot e sem derrubar nada se falhar

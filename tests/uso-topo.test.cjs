@@ -91,3 +91,27 @@ test('Grok com a semana aberta e nada gasto (sem creditUsagePercent) vira 0%, co
   assert.equal(r.sessao, null);
   assert.equal(ctx.j({ onDemandCap: { val: 0 } }, 0).semana, null, 'sem período nenhum continua sem número');
 });
+
+test('Grok com login vencido (401) renova pelo próprio CLI e lê o uso de novo, em vez de sumir do topo', async () => {
+  const main = fs.readFileSync(path.join(raiz, 'main.js'), 'utf8');
+  const pegarM = (nome) => { const i = main.indexOf('function ' + nome + '('); const a = main.lastIndexOf('\n', i) + 1; let k = main.indexOf('{', i), d = 0;
+    for (; k < main.length; k++) { if (main[k] === '{') d++; else if (main[k] === '}' && --d === 0) break; } return main.slice(a, k + 1); };
+  let token = 'velho', renovou = 0;
+  const ctx = { Date, Promise, JSON, USO_VALE_MS: 60000, usoGrok: { geracao: 0 }, ultimoBomGrok: () => null, nomePlanoGrok: (t) => t || '',
+    grokVenceu: () => false,
+    renovarLoginDoGrok: async () => { renovou++; token = 'novo'; return true; },
+    contasCli: { tokenGrok: () => token },
+    fetch: async (url, { headers }) => {
+      const ok = headers.Authorization === 'Bearer novo';
+      return { ok, status: ok ? 200 : 401, headers: { get: () => null }, json: async () => ({ config: { currentPeriod: { end: '2099-01-01' } } }) };
+    } };
+  vm.createContext(ctx);
+  vm.runInContext(pegarM('buscarUsoDoGrok') + ';this.b = buscarUsoDoGrok;', ctx);
+  const r = await ctx.b();
+  assert.equal(renovou, 1);
+  assert.ok(r && r.cfg && r.cfg.currentPeriod, 'voltou com o uso depois de renovar');
+  // renovou e ainda deu 401: não entra em laço
+  token = 'velho'; ctx.renovarLoginDoGrok = async () => { renovou++; return true; };
+  assert.equal(await ctx.b(), null);
+  assert.equal(renovou, 2);
+});

@@ -4058,14 +4058,41 @@ async function usoDoGrok() {
   if (!usoGrok.voando) usoGrok.voando = buscarUsoDoGrok().finally(() => { usoGrok.voando = null; });
   return usoGrok.voando;
 }
-async function buscarUsoDoGrok() {
+/* 26/09: o token do ~/.grok/auth.json vence em poucas horas e quem renova e o proprio CLI,
+   quando roda. Sem conversa de Grok aberta ninguem renovava: o billing dava 401 e o anel do
+   topo sumia. `grok models` so lista os modelos (nao gasta nada) e renova o token no caminho. */
+let renovandoGrok = null, renovouGrokEm = 0;
+function renovarLoginDoGrok() {
+  if (renovandoGrok) return renovandoGrok;
+  if (Date.now() - renovouGrokEm < 5 * 60000 || !temBin('grok')) return Promise.resolve(false);
+  renovouGrokEm = Date.now();
+  renovandoGrok = new Promise((ok) => {
+    let filho;
+    try { filho = spawn(acharBin('grok'), ['models'], { env: buildEnv(), stdio: 'ignore' }); } catch { ok(false); return; }
+    const corte = setTimeout(() => { try { filho.kill('SIGKILL'); } catch {} ok(false); }, 30000);
+    filho.on('error', () => { clearTimeout(corte); ok(false); });
+    filho.on('exit', () => { clearTimeout(corte); ok(true); });
+  }).finally(() => { renovandoGrok = null; });
+  return renovandoGrok;
+}
+function grokVenceu() {
+  try {
+    const todas = JSON.parse(fs.readFileSync(path.join(HOME, '.grok', 'auth.json'), 'utf8'));
+    const conta = (todas.auth_mode ? [todas] : Object.values(todas)).find(c => c && c.key);
+    const vence = conta && Date.parse(conta.expires_at || '');
+    return !!vence && vence < Date.now() + 60000;
+  } catch { return false; }
+}
+async function buscarUsoDoGrok(jaRenovou) {
   // R3-018: mesma guarda de geracao do Claude, ver comentario em buscarUsoDoClaude
   const minhaGeracao = usoGrok.geracao;
+  if (!jaRenovou && grokVenceu()) { await renovarLoginDoGrok(); jaRenovou = true; }
   const t = contasCli.tokenGrok ? contasCli.tokenGrok() : '';
   if (!t) return null;
   const headers = { Authorization: 'Bearer ' + t, Accept: 'application/json', 'x-xai-token-auth': 'xai-grok-cli' };
   try {
     const r = await fetch('https://cli-chat-proxy.grok.com/v1/billing?format=credits', { headers });
+    if ((r.status === 401 || r.status === 403) && !jaRenovou && await renovarLoginDoGrok()) return buscarUsoDoGrok(true);
     if (r.status === 429) {
       const pediu = Number(r.headers.get('retry-after')) * 1000;
       usoGrok.pausa = Math.min(15 * 60000, Math.max(60000, pediu > 0 ? pediu : (usoGrok.pausa * 2 || 120000)));

@@ -8539,7 +8539,8 @@ async function trocarParaConta(P, eng, apelido) {
    Fica escondido. So aparece sozinho quando passa de um dos dois pontos abaixo,
    e o x fecha. Fechado, so volta se subir mais USO_DENOVO pontos ou se o ciclo zerar. */
 const USO_AVISO_SESSAO = 90;
-const USO_AVISO_SEMANA = 50;
+// 26/09: 50 → 90. O uso mora nos anéis do topo; a faixa em cima da caixa virou só alarme de verdade
+const USO_AVISO_SEMANA = 90;
 const USO_DENOVO = 5;
 const USO_INTERVALO = 300000;      // relê no maximo de 5 em 5 minutos
 const USO = { claude: null, codex: null, acp: null, gemini: null, grok: null };

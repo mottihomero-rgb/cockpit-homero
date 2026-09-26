@@ -174,7 +174,8 @@ test('o numero do plano aparece no rodape muito antes do alarme', () => {
 
 test('a tarja de alarme dos 90% continua como era', () => {
   assert.ok(/const USO_AVISO_SESSAO = 90;/.test(app));
-  assert.ok(/const USO_AVISO_SEMANA = 50;/.test(app));
+  // 26/09: a semana também só avisa a partir de 90 (o uso de sempre mora nos anéis do topo)
+  assert.ok(/const USO_AVISO_SEMANA = 90;/.test(app));
   // o numero pequeno e pintado ANTES de qualquer desistencia da tarja
   const f = pegar('pintarUso');
   assert.ok(f.indexOf('pintarLimiteMini(P)') < f.indexOf("if (!faixa) return;"),

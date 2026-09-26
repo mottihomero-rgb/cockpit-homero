@@ -534,3 +534,22 @@ html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inse
   body:has(#btnGaveta) .hist-item.com-onde .hi-trecho{grid-column:1/-1;grid-row:3;margin-right:0}
   body:has(#btnGaveta) .hist-item.com-onde :is(.hi-fav,.hi-edit,.hi-grupo,.hi-mais){top:8px}
 }
+
+/* Ajustes › Contas (26/09): logo + IA + conta e UM botão de vincular */
+.aj.aj-conta{flex-wrap:wrap;row-gap:6px;padding-top:7px;padding-bottom:7px}
+.aj-conta .ajc-logo{flex:none}
+.aj-conta .ajc-txt{flex:1 1 60px;min-width:60px;display:flex;flex-direction:column}
+.aj-conta .ajc-n{font:var(--f-body);color:var(--label-1)}
+.aj-conta .ajc-e{font:400 11px/14px var(--font-sans);color:var(--label-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aj-conta .ajc-bt{flex:none;height:22px;margin-left:auto;padding:0 10px;border:0;border-radius:6px;background:var(--fill-2);
+  color:var(--label-1);font:400 12px/15px var(--font-sans);white-space:nowrap;cursor:pointer;
+  transition:background-color var(--dur-fast) ease-out}
+.aj-conta .ajc-bt:hover{background:var(--fill-1)}
+.aj-conta .ajc-bt.destaque{background:var(--accent);color:var(--on-accent);font-weight:600}
+.aj-conta .ajc-bt.destaque:hover{background:color-mix(in srgb,var(--accent) 88%,white)}
+.aj-conta .ajc-bt:focus-visible{outline:none;box-shadow:var(--anel-foco)}
+.aj-conta.vinculada{cursor:pointer;transition:background-color var(--dur-fast) ease-out}
+.aj-conta.vinculada:hover{background:var(--fill-3)}
+.aj-cartao .aj-conta:first-child{border-radius:10px 10px 0 0}
+.aj-cartao .aj-conta:last-child{border-radius:0 0 10px 10px}
+.aj-cartao .aj-conta:only-child{border-radius:10px}

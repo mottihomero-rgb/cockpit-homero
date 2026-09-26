@@ -132,7 +132,7 @@ function contextoConta(extras = {}) {
   return { ctx, cx, acoes, bloco: (m) => cx.children.find(b => b.dataset.motor === m) };
 }
 
-test('IA sem login neste Mac: logo + "Entrar", e o Entrar roda o login do motor CERTO', () => {
+test('IA sem login neste Mac: logo + "Vincular conta do Claude", e o botão roda o login do motor CERTO', () => {
   const { ctx, cx, acoes, bloco } = contextoConta();
   const P = { engine: 'claude' };
   ctx.panes.set('p1', P);
@@ -141,7 +141,7 @@ test('IA sem login neste Mac: logo + "Entrar", e o Entrar roda o login do motor 
   const b = bloco('claude');
   assert.ok(b, 'sem login a coluna não pode ficar sem nenhum caminho para entrar');
   assert.ok(b.classList.contains('sem-conta'));
-  assert.match(b.innerHTML, /<button class="cv-uso-entrar">Entrar<\/button>/);
+  assert.match(b.innerHTML, /<button class="cv-uso-entrar">Vincular conta do Claude<\/button>/);
   assert.match(b.title, /Sem conta do Claude neste Mac/, 'a explicação fica no title, não na tela');
   b.parts['.cv-uso-entrar'].onclick({ stopPropagation() {} });
   assert.deepEqual(acoes, ['login:claude:claude']);

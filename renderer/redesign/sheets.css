@@ -600,3 +600,19 @@ html[data-theme$="-hc"] .cx-terminal .term-link{border-top-color:rgba(255,255,25
   #novaAba,#telaAtalhos,.p-modal:not(.como-menu),.modal.global,.modal.p-visor,#qdPainel,
   .na-cx,.at-cx,.p-modal:not(.como-menu) > .modal-cx,.modal.global > .modal-cx,.visor-cx,.qd-cx{animation:none}
 }
+
+/* ---------- Vincular conta (26/09): a janela clara no lugar da tela preta do login ----------
+   logo + "Vincular conta do X", uma linha de estado e o botão do navegador. O terminal só
+   aparece em "Detalhes" (fundo preto, como o terminal de sempre). */
+.cx-vincular .vc-estado{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 12px;
+  border-radius:10px;box-shadow:inset 0 0 0 1px var(--separator);font:400 13px/16px var(--font-sans);color:var(--label-1)}
+.cx-vincular .vc-txt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cx-vincular .vc-ic{flex:none;width:16px;height:16px;display:grid;place-items:center}
+.cx-vincular .vc-ic .ic{width:14px;height:14px}
+.cx-vincular .vc-estado:is([data-estado="espera"],[data-estado="conferindo"]) .vc-ic{border-radius:50%;
+  box-sizing:border-box;border:2px solid var(--fill-1);border-top-color:var(--accent);animation:ck-spin .9s linear infinite}
+.cx-vincular .vc-estado[data-estado="ok"] .vc-ic{color:var(--status-ok)}
+.cx-vincular .vc-estado[data-estado="falhou"] .vc-ic{color:var(--status-error)}
+.cx-vincular .term-wrap{height:220px;margin:10px 0 0;padding:8px 10px;border:0;border-radius:8px;background:#0B0B0C}
+.cx-vincular .term-tela{height:100%}
+.cx-vincular .mo-rodape .hidden{display:none}

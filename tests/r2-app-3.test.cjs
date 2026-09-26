@@ -94,6 +94,7 @@ function contextoContaAcao() {
   ctx.window.api.auth = async ({ acao }) => acao === 'status'
     ? { texto: 'dentro: contab@exemplo.com' }
     : { terminal: 'codex login', titulo: 'Conta', confereDepois: true };
+  ctx.pintarContasAjustes = () => {};
   ctx.lerStatusConta = (txt) => ({ dentro: /dentro/.test(txt), quem: 'contab@exemplo.com' });
   // contaAcao NAO da await em janelaTerminal (ela so' devolve quando o terminal fecha, de
   // verdade): guarda a promise do callback pra o teste esperar por fora, senao mede antes da hora
@@ -120,7 +121,7 @@ test('login normal do Codex reinicia o app-server, senao ele segue respondendo p
   await ctx._cbDone;
 
   assert.equal(reiniciou, 1, 'sem reiniciar o app-server, a troca de conta pelo login normal nao pega');
-  assert.ok(avisos.some(t => /Conta trocada/.test(t)), 'tem de avisar que a conta trocou');
+  assert.ok(avisos.some(t => /Conta vinculada/.test(t)), 'tem de avisar que a conta foi vinculada');
 });
 
 test('login normal pergunta antes de cortar chat ocupado, e preserva o resumeId pra religar', async () => {

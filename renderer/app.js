@@ -6863,7 +6863,7 @@ window.api.onTermEvent(({ id, kind, data, code }) => {
   if (kind === 'exit') {
     t.vivo = false;
     t.term.write('\r\n\x1b[90m— terminou' + (code ? ' (código ' + code + ')' : ', tudo certo') + ' —\x1b[0m\r\n');
-    if (t.acabou) t.acabou();
+    if (t.acabou) t.acabou(code);
   }
 });
 
@@ -6900,7 +6900,26 @@ function janelaTerminal(P, linha, titulo, aoFechar, opcoes) {
   const orienta = op.orientacao || (op.abrirSozinho
     ? 'A entrada abre no navegador. Mantenha esta janela aberta até terminar lá. Se o navegador não abrir, clique em Abrir link aqui embaixo.'
     : 'Rodando aqui dentro do Cockpit. Se pedir para escolher ou colar algo, clique na tela preta e digite.');
-  cx.innerHTML =
+  /* 26/09: vincular conta. Ele achou pouco intuitivo entrar numa conta: abria esta tela preta
+     com o comando do CLI rodando. Com op.vincular a janela é a de sempre (clara, 420): logo +
+     "Vincular conta do X", uma linha de estado e o botão do navegador. O terminal continua
+     rodando por baixo, escondido em "Detalhes" (é ele que recebe um código colado, se o CLI
+     pedir). Quando o login termina, a janela diz qual conta ficou. */
+  const vinc = op.vincular || '';
+  if (vinc) {
+    cx.className = 'modal-cx cx-vincular';
+    cx.innerHTML =
+      '<div class="mo-top"><span class="mo-logo" data-motor="' + vinc + '"></span><span class="mo-tit"></span>'
+      + '<button class="mo-x" title="Fechar (⌘W)">' + ico('x') + '</button></div>'
+      + '<div class="vc-estado"><span class="vc-ic"></span><span class="vc-txt"></span></div>'
+      + '<div class="term-wrap hidden"><div class="term-tela"></div></div>'
+      + '<div class="term-link hidden"><span class="mono"></span><button>Abrir link</button></div>'
+      + '<div class="mo-rodape"><button class="mo-btn" id="vcDetalhes">Detalhes</button><span class="mo-gap"></span>'
+      + '<button class="mo-btn" id="vcDeNovo">Tentar de novo</button>'
+      + '<button class="mo-btn destaque" id="vcNavegador">Abrir o navegador</button>'
+      + '<button class="mo-btn destaque" id="vcOk">Concluir</button></div>';
+    $('.mo-logo', cx).innerHTML = svgMotor(vinc);
+  } else cx.innerHTML =
     '<div class="mo-top"><span class="term-ic">' + ico('terminal') + '</span><span class="mo-tit"></span>'
     + '<span class="term-cmd"></span><span class="mo-gap"></span>'
     + '<button class="term-cancela" id="tmCancela" title="Cancelar o que está rodando (⌃C)" aria-label="Cancelar">' + ico('square') + '</button>'
@@ -6971,7 +6990,10 @@ function janelaTerminal(P, linha, titulo, aoFechar, opcoes) {
     term, buf: '', vivo: true,
     /* O ■ de parar so vale enquanto o comando roda. Acabou (ou nem comecou), ele sai da barra e
        fica so o × — no desenho (E5) o terminal que terminou tem so o fechar. */
-    acabou() { const b = $('#tmCancela', cx); if (b) b.classList.add('hidden'); },
+    acabou(code) {
+      const b = $('#tmCancela', cx); if (b) b.classList.add('hidden');
+      if (vinc && op.aoTerminar) op.aoTerminar(code, estadoVinc);
+    },
     viu(d) {
       this.buf = (this.buf + d).slice(-8000);
       const achou = semEscapes(this.buf).match(REG_LINK);
@@ -6983,6 +7005,7 @@ function janelaTerminal(P, linha, titulo, aoFechar, opcoes) {
       const u = deFora.length ? deFora[deFora.length - 1] : limpos[limpos.length - 1];
       if (txtLink.textContent === u) return;
       txtLink.textContent = u; elLink.classList.add('ver');
+      if (vinc && this.estadoVinc && $('.vc-estado', cx).dataset.estado === 'espera') this.estadoVinc('espera');
       // Aqui o Cockpit TAMBEM abria o navegador. So que o `claude auth login` ja diz
       // "Opening browser to sign in..." e o `codex login` faz o mesmo: davam duas abas
       // iguais toda vez. Quem abre e o CLI; aqui fica so o botao, para quando ele falhar.
@@ -7012,10 +7035,42 @@ function janelaTerminal(P, linha, titulo, aoFechar, opcoes) {
   P.fecharTerminal = fechar;
   modal.onclick = (e) => { if (e.target === modal) fechar(); };
   $('.mo-x', cx).onclick = fechar;
-  $('#tmCancela', cx).onclick = () => { window.api.termInput({ id, data: '\x03' }); term.focus(); };
+  const btCancela = $('#tmCancela', cx);
+  if (btCancela) btCancela.onclick = () => { window.api.termInput({ id, data: '\x03' }); term.focus(); };
+
+  /* estado da janela de vincular: 'espera' (login aberto no navegador), 'conferindo',
+     'ok' (com a conta que ficou) ou 'falhou'. Cada estado mostra só os botões dele. */
+  function estadoVinc(qual, conta) {
+    if (!vinc || !cx.isConnected) return;
+    const txt = { espera: op.codigo ? 'Aguardando o código no navegador' : 'Aguardando o login no navegador',
+      conferindo: 'Conferindo…', ok: 'Conta vinculada', falhou: 'O login não terminou' }[qual] || '';
+    $('.vc-estado', cx).dataset.estado = qual;
+    $('.vc-ic', cx).innerHTML = qual === 'ok' ? ico('check') : qual === 'falhou' ? ico('x') : '';
+    $('.vc-txt', cx).textContent = txt + (qual === 'ok' && conta ? ' · ' + conta : '');
+    $('#vcNavegador', cx).classList.toggle('hidden', qual !== 'espera' || !txtLink.textContent);
+    $('#vcOk', cx).classList.toggle('hidden', qual !== 'ok');
+    $('#vcDeNovo', cx).classList.toggle('hidden', qual !== 'falhou');
+  }
+  if (vinc) {
+    const wrap = $('.term-wrap', cx);
+    const detalhes = (abrir) => {
+      wrap.classList.toggle('hidden', !abrir);
+      cx.classList.toggle('vc-aberto', abrir);
+      $('#vcDetalhes', cx).textContent = abrir ? 'Esconder detalhes' : 'Detalhes';
+      if (abrir) setTimeout(() => { ajustarTerminal(); term.focus(); }, 30);
+    };
+    $('#vcDetalhes', cx).onclick = () => detalhes(wrap.classList.contains('hidden'));
+    $('#vcNavegador', cx).onclick = () => { if (txtLink.textContent) window.api.openUrl(txtLink.textContent); };
+    $('#vcOk', cx).onclick = fechar;
+    $('#vcDeNovo', cx).onclick = () => { fechar.silencioso = true; fechar(); op.deNovo && op.deNovo(); };
+    // entrar com código: o CLI mostra o código na tela e pede para digitar no navegador
+    if (op.codigo) detalhes(true);
+    estadoVinc('espera');
+    reg.estadoVinc = estadoVinc;
+  }
 
   window.api.termRun({ id, linha, cols: tam.cols, rows: tam.rows }).then((r) => {
-    if (r && r.error) { term.write('\r\n\x1b[31m[não consegui rodar: ' + r.error + ']\x1b[0m\r\n'); reg.acabou(); }
+    if (r && r.error) { term.write('\r\n\x1b[31m[não consegui rodar: ' + r.error + ']\x1b[0m\r\n'); reg.acabou(1); }
   });
   setTimeout(() => term.focus(), 60);
 }
@@ -7685,16 +7740,61 @@ const contaCache = { claude: null, codex: null, acp: null, gemini: null, grok: n
    da IA do cartao. Com um chat do Codex em foco, clicar em "Entrar" no cartao do Claude rodava
    "codex login". O login e' sempre o do motor daquele cartao, e sem chat desse motor a tela
    diz isso em vez de errar calada. (Voltou em 25/09: a lista unica tinha perdido o Entrar.) */
-function entrarNaConta(engine) {
+/* 26/09: "Vincular conta do X" (Ajustes, lateral, janela da Conta) passa por aqui. O motor do
+   login é sempre o pedido; o chat só empresta a janelinha, então sem chat daquela IA serve o
+   que estiver em foco. outra = já tem conta e quer entrar em outra (sai e entra de novo). */
+function entrarNaConta(engine, outra) {
   let P = (focusPane && focusPane.engine === engine)
     ? focusPane
     : [...panes.values()].find((q) => q.engine === engine);
-  if (!P && ['gemini', 'grok'].includes(engine)) {
-    P = focusPane || novoChatNaAba(engine);
+  if (!P) P = focusPane || panes.values().next().value;
+  // nenhum chat aberto: abre um da própria IA para a janelinha ter onde nascer
+  if (!P) P = novoChatNaAba(engine);
+  if (P) { setFocus(P); contaAcao(P, outra ? 'trocar' : 'login', engine); return; }
+}
+
+/* ---- Ajustes › Contas (26/09) ----
+   Uma linha por IA instalada: logo + nome + a conta (ou "Não vinculada") e UM botão:
+   "Vincular conta do Claude" sem conta; "Vincular outra" com conta. Clicar na linha de uma
+   IA vinculada abre a janela da Conta dela (sair, contas guardadas, código). */
+async function pintarContasAjustes(forcar) {
+  const cx = $('#ajContas');
+  if (!cx) return;
+  const motores = MOTORES_VISIVEIS.filter(m => !(MOTORES_OK && MOTORES_OK[m] === false));
+  for (const m of motores) {
+    let linha = $('.aj-conta[data-motor="' + m + '"]', cx);
+    if (!linha) {
+      linha = document.createElement('section');
+      linha.className = 'aj aj-conta';
+      linha.dataset.motor = m;
+      cx.appendChild(linha);
+    }
+    const c = contaCache[m];
+    const pintar = (conta) => {
+      const motor = nomeDoMotor(m), entrou = !!(conta && conta.entrou);
+      linha.classList.toggle('vinculada', entrou);
+      linha.innerHTML = '<span class="ajc-logo mo-logo" data-motor="' + m + '">' + svgMotor(m) + '</span>'
+        + '<span class="ajc-txt"><span class="ajc-n"></span><span class="ajc-e"></span></span>'
+        + '<button class="ajc-bt' + (entrou ? '' : ' destaque') + '"></button>';
+      $('.ajc-n', linha).textContent = motor;
+      $('.ajc-e', linha).textContent = !conta ? '…' : entrou ? (conta.email || conta.nome || conta.plano || 'Vinculada') : 'Não vinculada';
+      const bt = $('.ajc-bt', linha);
+      bt.textContent = entrou ? 'Vincular outra' : 'Vincular conta do ' + motor;
+      bt.title = entrou ? 'Entrar em outra conta do ' + motor : '';
+      bt.onclick = (e) => { e.stopPropagation(); entrarNaConta(m, entrou); };
+      linha.title = entrou ? [conta.email, conta.plano].filter(Boolean).join(' · ') : '';
+      linha.onclick = entrou ? () => abrirContaDaLateral(m) : null;
+    };
+    pintar(c);
+    if (!c || forcar) {
+      (async () => {
+        await pintarContaLateral(m, true);
+        if (linha.isConnected) pintar(contaCache[m]);
+      })();
+    }
   }
-  if (P) { setFocus(P); contaAcao(P, 'login', engine); return; }
-  const recado = 'Abra um chat do ' + nomeDoMotor(engine) + ' para entrar na conta dele.';
-  if (focusPane) note(focusPane, recado, true);
+  // IA que sumiu deste Mac sai da lista
+  for (const l of [...cx.children]) if (!motores.includes(l.dataset.motor)) l.remove();
 }
 
 /* ---- conta e uso do plano no topo da lista de conversas (25/09) ----
@@ -7759,7 +7859,7 @@ function pintarBlocoDeUso(cx, engine, c) {
   const logo = '<span class="cv-uso-logo">' + svgMotor(engine) + '</span>';
   if (!c.entrou) {
     bloco.classList.add('sem-conta');
-    bloco.innerHTML = '<div class="cv-uso-cab">' + logo + '<button class="cv-uso-entrar">Entrar</button></div>';
+    bloco.innerHTML = '<div class="cv-uso-cab">' + logo + '<button class="cv-uso-entrar">Vincular conta do ' + motor + '</button></div>';
     bloco.title = 'Sem conta do ' + motor + ' neste Mac';
     $('.cv-uso-entrar', bloco).onclick = (e) => { e.stopPropagation(); entrarNaConta(engine); };
     return;
@@ -7819,9 +7919,9 @@ async function janelaConta(P, motorPedido) {
   if (!c || !c.entrou) {
     cx.innerHTML = topo
       + '<div class="ct-lista"><div class="ct-linha"><span class="ct-radio"></span>'
-      + '<span class="ct-txt"><span class="ct-n">Sem conta neste Mac</span></span></div></div>'
-      + '<div class="mo-rodape"><button class="mo-btn" id="ctCodigo">Entrar com código…</button>'
-      + '<span class="mo-gap"></span><button class="mo-btn destaque" id="ctEntrar">Entrar…</button></div>';
+      + '<span class="ct-txt"><span class="ct-n">Não vinculada</span></span></div></div>'
+      + '<div class="mo-rodape"><button class="mo-btn" id="ctCodigo">Vincular com código…</button>'
+      + '<span class="mo-gap"></span><button class="mo-btn destaque" id="ctEntrar">Vincular conta do ' + motor + '</button></div>';
     pintarTopo();
     $('#ctEntrar', cx).onclick = () => { fecharModal(P); contaAcao(P, 'login', eng); };
     $('#ctCodigo', cx).onclick = () => { fecharModal(P); contaAcao(P, 'trocarCodigo', eng); };
@@ -7853,7 +7953,7 @@ async function janelaConta(P, motorPedido) {
     + '</div>'
     + '<div class="ct-mais"></div>'
     + '<div class="mo-rodape">'
-    + '<button class="mo-btn" id="ctTrocar">Entrar com outra conta…</button>'
+    + '<button class="mo-btn" id="ctTrocar">Vincular outra conta</button>'
     + '<span class="mo-gap"></span>'
     + '<button class="mo-btn perigo" id="ctSair">Sair</button>'
     + '<button class="mo-btn destaque" id="ctOk">Concluir</button></div>';
@@ -7874,7 +7974,7 @@ async function janelaConta(P, motorPedido) {
     b.onclick = fn;
     mais.appendChild(b);
   };
-  acao('key-round', 'Entrar com código…', () => { fecharModal(P); contaAcao(P, 'trocarCodigo', eng); });
+  acao('key-round', 'Vincular com código…', () => { fecharModal(P); contaAcao(P, 'trocarCodigo', eng); });
   // o cartao acima le a conta DESTE Mac; com o chat na VPS quem responde e o servidor
   if (NA_VPS(P.cwd)) acao('server', 'Ver a conta da VPS…', () => { fecharModal(P); contaAcao(P, 'status', eng); });
   $('#ctTrocar', cx).onclick = () => { fecharModal(P); contaAcao(P, 'trocar', eng); };
@@ -8255,7 +8355,30 @@ async function contaAcao(P, acao, motorPedido) {
   if (!r.terminal) return;
   document.body.classList.remove('gaveta');
 
-  janelaTerminal(P, r.terminal, r.titulo || 'Conta', async () => {
+  // entrar ou trocar = a janela clara de "Vincular conta" (o terminal fica em Detalhes)
+  const vincular = ['login', 'trocar', 'trocarCodigo'].includes(acao) ? eng : '';
+  const titulo = !vincular ? (r.titulo || 'Conta')
+    : (acao === 'trocar' ? 'Vincular outra conta do ' : 'Vincular conta do ') + nomeDoMotor(eng) + (r.naVps ? ' na VPS' : '');
+  // o login acabou sozinho: a própria janela confere e diz qual conta ficou
+  const aoTerminar = async (code, estado) => {
+    if (code) return estado('falhou');
+    estado('conferindo');
+    let quem = '', dentro = false;
+    try {
+      if (['gemini', 'grok'].includes(eng)) {
+        const c = await window.api.contaLer(eng);
+        dentro = !!(c && c.entrou); quem = (c && (c.email || c.nome)) || '';
+      } else {
+        const st = await window.api.auth({ engine: eng, acao: 'status', cwd: P.cwd });
+        const r2 = lerStatusConta(((st && st.texto) || '').trim());
+        dentro = r2.dentro; quem = r2.quem;
+      }
+    } catch {}
+    estado(dentro ? 'ok' : 'falhou', quem);
+    if (dentro) pintarContasAjustes(true);
+  };
+
+  janelaTerminal(P, r.terminal, titulo, async () => {
     if (['gemini', 'grok'].includes(eng)) {
       contaCache[eng] = null;
       await pintarContaLateral(eng, true);
@@ -8266,10 +8389,11 @@ async function contaAcao(P, acao, motorPedido) {
           if (q.engine !== eng || q.busy) continue;
           await desligarMotor(q);
         }
-        avisoTemp(P, 'Entrada salva no ' + nomeDoMotor(eng) + (c.email ? ': ' + c.email : '.'));
+        avisoTemp(P, 'Conta do ' + nomeDoMotor(eng) + ' vinculada' + (c.email ? ': ' + c.email : '.'));
       } else {
-        avisoTemp(P, c?.motivo || 'A entrada ainda não foi confirmada. Termine no navegador e clique em Conferir.');
+        avisoTemp(P, c?.motivo || 'A conta ainda não foi vinculada. Termine no navegador e tente de novo.');
       }
+      pintarContasAjustes(true);
       return;
     }
     // todo chat do mesmo motor recomeca, senao continua falando pela conta velha — mas se algum
@@ -8298,14 +8422,17 @@ async function contaAcao(P, acao, motorPedido) {
       // Codex compartilha UM app-server que so le a conta ao subir: sem reiniciar, a tela diz
       // "conta trocada" mas ele segue respondendo pela conta antiga (mesmo motivo de trocarParaConta)
       if (eng === 'codex') { try { await window.api.codexReiniciar(); } catch {} }
-      avisoTemp(P, 'Conta trocada' + (r2.quem ? ': ' + r2.quem : '.'));
+      avisoTemp(P, 'Conta vinculada' + (r2.quem ? ': ' + r2.quem : '.'));
       USO_FECHADO[eng] = null; lerUso(eng, true);
       // trocou de conta: aqui SIM vale reler o cartao inteiro, pro e-mail e o plano mudarem
       contaCache[eng] = null; pintarContaLateral(eng, true);
     } else {
-      avisoTemp(P, 'A entrada não terminou. Tente de novo e não feche a janela até o navegador confirmar. Se o navegador não abrir, use "entrar com código".', true);
+      avisoTemp(P, 'A conta não foi vinculada. Tente de novo e não feche a janela até o navegador confirmar. Se o navegador não abrir, use "Vincular com código".', true);
     }
-  }, { abrirSozinho: !!r.esperaLink && !r.naVps, orientacao: r.orientacao });
+    pintarContasAjustes(true);
+  }, { abrirSozinho: !!r.esperaLink && !r.naVps, orientacao: r.orientacao,
+       vincular, codigo: acao === 'trocarCodigo' || !!r.naVps, aoTerminar: vincular ? aoTerminar : null,
+       deNovo: () => contaAcao(P, acao, eng) });
 }
 
 /* ehErro: quatro chamadas ja mandavam o terceiro valor ("isto e erro") e ele era jogado fora —
@@ -11530,6 +11657,7 @@ function abrirVistaLateral(v) {
   if (v === 'torre') pintarTorre(true);
   // leva 11: mesma ideia da torre — estado de um minuto atrás não serve para dizer se um robô parou
   if (v === 'rotinas') pintarRotinas(true);
+  if (v === 'settings') pintarContasAjustes();
 }
 
 /* ⌘P: abre a coluna das conversas e ja poe o cursor na busca. A coluna que aparece e a do

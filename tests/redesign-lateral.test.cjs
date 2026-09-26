@@ -79,7 +79,7 @@ test('pasta e busca na mesma linha; a lista de pastas continua achável pelo app
 test('Ajustes em cartões sem perder nenhum controle que o app.js liga', () => {
   const grupos = (html) => [...html.matchAll(/<div class="aj-gtit">([^<]+)<\/div>/g)].map((m) => m[1]);
   const mac = ler('renderer/index.html'), web = ler('renderer/index-web.html');
-  assert.deepEqual(grupos(mac), ['Geral', 'Entrada', 'Avançado']);
+  assert.deepEqual(grupos(mac), ['Contas', 'Geral', 'Entrada', 'Avançado'], 'Contas no topo: vincular conta num botão só (26/09)');
   assert.deepEqual(grupos(web), ['Geral', 'Avançado'], 'no celular não há Celular nem Voz');
   const ids = (html) => ['fotoPrev', 'btnFoto', 'btnFotoTirar', 'btnDefCwd', 'defCwd', 'inboxBloco', 'inboxPasta',
     'btnInboxAbrir', 'chkRobos', 'verLine'].filter((id) => !html.includes('id="' + id + '"'));

@@ -269,6 +269,7 @@ function contextoContaAcao() {
   ctx.window.api.auth = async ({ acao }) => (acao === 'status'
     ? { texto: 'dentro: contab@exemplo.com' }
     : { terminal: 'codex login', titulo: 'Conta', confereDepois: true });
+  ctx.pintarContasAjustes = () => {};
   ctx.lerStatusConta = () => ({ dentro: true, quem: 'contab@exemplo.com' });
   // contaAcao nao da await em janelaTerminal (so devolve quando o terminal fecha de verdade):
   // guarda a promise do callback pra o teste esperar por fora

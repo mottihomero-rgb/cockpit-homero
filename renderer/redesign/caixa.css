@@ -233,8 +233,11 @@
   .pane.focus .pane-cmp{border-color:transparent;box-shadow:var(--shadow-float),var(--anel-foco)}
   /* ... só sem nada aberto por cima (Janela.dc.html: composerShadow = focus && !ov). Com menu,
      visor, configuração, conta, terminal, atalhos, nova aba, quadro ou painel de agentes aberto o
-     foco está na camada da frente, e a caixa fica só com a sombra. */
-  body:has(.pane .p-modal:not(.hidden), .pane .p-visor:not(.hidden), #telaAtalhos:not(.hidden),
+     foco está na camada da frente, e a caixa fica só com a sombra. Menu, visor e janelinha moram
+     no painel dono: só contam os da aba da frente (.espaco:not(.oculta)). O visor esquecido
+     aberto numa aba de fundo não aparece (a aba está em display:none), mas apagava o anel do chat
+     em foco da aba da frente, que é quem mostra qual chat está em foco (o irAoChat não pisca). */
+  body:has(.espaco:not(.oculta) .pane .p-modal:not(.hidden), .espaco:not(.oculta) .pane .p-visor:not(.hidden), #telaAtalhos:not(.hidden),
     #novaAba:not(.hidden), #modalGrupo:not(.hidden), #popGrupo:not(.hidden), #qdPainel:not(.hidden),
     #agPainel:not(.hidden)) .pane.focus .pane-cmp{box-shadow:var(--shadow-float)}
   .p-anexos{padding:0 4px 2px;gap:6px}

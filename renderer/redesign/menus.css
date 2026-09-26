@@ -1,0 +1,10 @@
+/* ============================================================================
+   REDESENHO · MENUS E POPOVERS (handoff do Claude Design, 25/09/2026 — README, "Telas e componentes")
+   Menus e popovers (vidro, raio 12, padding 6, --shadow-float): item de 24 com raio 6, ✓ numa
+   coluna de 12, valor/atalho à direita em --label-3, item destacado em --accent com texto branco,
+   cabeçalho de grupo 11/600, separador com margem 4 8, itens com descrição. Ações e comandos (/),
+   Modelo + slider Esforço, Permissão, Anexar e Assistente.
+   Seletores de hoje: .menu*, .mi*, .pop-global, .p-menu-top, .layout-menu, .ef-*, .mo-chips*.
+   Carrega DEPOIS do style.css e do quadro.css (e do celular.css no iPhone): ganha deles sem
+   !important. Usar os tokens (../cockpit-tokens.css) e as peças rd- do base.css.
+   ============================================================================ */

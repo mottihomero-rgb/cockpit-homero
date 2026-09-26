@@ -22,7 +22,7 @@ body.sem-mac::after{content:"reconectando ao Mac…";position:fixed;left:0;right
 #instalarApp h2{font-size:19px;margin:0 0 10px;color:var(--fg-strong)}
 #instalarApp p{margin:12px 0;color:var(--fg-dim)}
 #instalarApp ol{padding-left:22px}#instalarApp li{margin:10px 0}
-#fecharInstalar{width:100%;min-height:44px;border:0;border-radius:10px;background:var(--claude);color:#fff;font:inherit}
+#fecharInstalar{width:100%;min-height:44px;border:0;border-radius:10px;background:var(--accent);color:#fff;font:inherit}
 
 @media (max-width: 820px), (pointer: coarse) and (max-width: 1100px) {
   /* a pagina fica PRESA na tela. No iPhone so position:fixed segura o body quando o teclado

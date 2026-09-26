@@ -1,0 +1,14 @@
+/* ============================================================================
+   REDESENHO · CAIXA DE ESCREVER E PILHA INFERIOR (handoff do Claude Design, 25/09/2026 — README, "Telas e componentes")
+   Tudo que flutua no pé do painel, de cima para baixo: Plano ("Plano 1/3" + barra de 3px, itens
+   feito/em andamento/pendente), pedido de autorização (vidro, contorno --status-wait-line,
+   Sempre permitir · Negar esc · Permitir ↩), aviso de limite (30 de altura) e a caixa de
+   escrever (vidro, raio 12, a 8pt das bordas; fichas de anexo; texto 14/21; barra de 28 com
+   + / microfone modo plano pasta … uso quadro modelo time permissão anel de contexto parar enviar).
+   Abaixo de 400pt: modo de envio, plano, quadro e time vão para o "…".
+   Seletores de hoje: .pane-plano, .pl-*, .pane-perm, .pp-*, .p-uso, .uso-*, .pane-cmp, .cmp-*, .cb,
+   .p-input, .p-anexos, .anx*, .p-send, .p-stop, .p-mic, .p-model, .modo-btn, .p-modoenvio,
+   .p-compactar, .an*, .p-agentes, .p-quadro, .p-limite, .p-cont, .p-sugs.
+   Carrega DEPOIS do style.css e do quadro.css (e do celular.css no iPhone): ganha deles sem
+   !important. Usar os tokens (../cockpit-tokens.css) e as peças rd- do base.css.
+   ============================================================================ */

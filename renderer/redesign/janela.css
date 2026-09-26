@@ -1,0 +1,10 @@
+/* ============================================================================
+   REDESENHO · JANELA (handoff do Claude Design, 25/09/2026 — README, "Telas e componentes")
+   Barra do topo (52pt, --bg-window): semáforos, abas no centro (cápsula de 28, sinal + nome +
+   contador), botão "+" de nova aba e "+ Chat" à direita. Faixa de aviso (36pt, logo abaixo da
+   barra do topo). Barra de ícones (52pt de largura): logos dos assistentes, separador, torre,
+   rotinas e ajustes, com o selo vermelho das rotinas.
+   Seletores de hoje: #abasTopo, #abasLista, .aba*, .aba-mais, #faixaAvisos, .fx*, #activitybar, .act*.
+   Carrega DEPOIS do style.css e do quadro.css (e do celular.css no iPhone): ganha deles sem
+   !important. Usar os tokens (../cockpit-tokens.css) e as peças rd- do base.css.
+   ============================================================================ */

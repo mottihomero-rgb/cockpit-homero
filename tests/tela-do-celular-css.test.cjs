@@ -114,7 +114,7 @@ test('o aviso de limite quebra em duas linhas em vez de cortar a frase e o prazo
   assert.match(dentro, /\.p-uso \.uso-alerta,\.p-uso \.uso-zera\{flex:none\}/, 'parar de encolher os dois ao mesmo tempo');
 });
 
-test('as cores saem de variavel: os 3 temas (escuro, claro, jornal) tem que continuar valendo', () => {
+test('as cores saem de variavel: as quatro aparencias (clara, escura e as de contraste) tem que continuar valendo', () => {
   // #000 dentro de mask-image nao e cor, e o canal que diz "aqui aparece"; sombra preta e neutra
   const semMascara = dentro.replace(/mask-image:[^;}]+/g, '').replace(/box-shadow:0 0 \d+px #0{6}\w{2}/g, '');
   const cores = semMascara.match(/#[0-9a-fA-F]{3,8}\b/g) || [];

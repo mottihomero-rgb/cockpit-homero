@@ -1,64 +1,65 @@
 
-/* Os tres temas. Toda cor de texto daqui foi conferida contra o fundo do proprio
-   tema: o minimo e 4,5 de diferenca de brilho, senao letra pequena some na tela.
-   --link e a cor de link dentro das mensagens (antes era um azul claro fixo, que
-   so funcionava no escuro e sumia no claro e no jornal). */
+/* ====================== PONTE PARA OS TOKENS DO REDESENHO (25/09) ======================
+   Os tres temas antigos (escuro, claro e jornal, cada um com ~40 cores proprias) sairam.
+   Quem manda na cor agora e o cockpit-tokens.css do handoff (carregado ANTES deste arquivo),
+   com os quatro temas no <html data-theme>: dark, light, dark-hc e light-hc.
+   Os nomes antigos continuam existindo, mas so como APELIDO de um token novo: assim o app
+   inteiro (este arquivo, quadro.css, celular.css, o quadro.js que le as cores para o canvas)
+   passa a usar a paleta nova nos quatro temas sem reescrever cada regra. Os redesign/*.css de
+   cada area vao trocando os apelidos pelos tokens direto, conforme redesenham.
+   Cada apelido foi escolhido pelo USO real da variavel antiga, nao pelo nome:
+   - fundos: --bg e o fundo da conversa; --bg2 as superficies de moldura (coluna, caixa, barras);
+     --bg3/--bg4 eram "botao/cartao" e "selecionado" e viram os preenchimentos fill-2/fill-1
+     compostos sobre o fundo (opacos de proposito: a faixa de avisos e o X da aba ficam POR
+     CIMA de conteudo, e um fill transparente deixaria o texto de baixo aparecer).
+   - texto: --fg e --fg-strong viram o rotulo principal (no redesenho a enfase e o peso, nao
+     outra cor); --fg-dim o secundario; --fg-fraco o de metadado.
+   - --accent NAO e mais a cor do motor: e o azul do sistema dos tokens (acao principal, foco,
+     progresso). A cor de cada assistente mora em --motor e vale so para o LOGO (regra 2 do
+     README: nenhum cabecalho, borda ou botao tingido com a cor do motor). */
 :root{
-  /* ESCURO (padrao) */
-  --bg:#1e1e1e; --bg2:#252526; --bg3:#2d2d30; --bg4:#3a3a3d; --act:#333;
-  --bg-flutua:#26262a; --bg-foco:#1f1f20; --fundo-fundo:#1a1a1c;
-  --line:#3c3c3c; --line2:#474747;
-  --fg:#cccccc; --fg-dim:#8b8b8b; --fg-fraco:#7c7c7c; --fg-strong:#e8e8e8; --link:#5aa8e8;
-  --hover:#ffffff0d; --hover2:#ffffff14; --hover3:#ffffff1a;
-  --puxador:#e9e9ec; --sobre-accent:#141414; --erro-fundo:#5a2b2b;
-  --cod:#e6c07b; --borda-forte:#00000055;
-  --sombra1:#00000060; --sombra2:#00000090; --veu:#00000066;
-  --codex:#6ea8fe; --claude:#d97757; --acp:#57c2a0;
-  --green:#5aa469; --yellow:#d7ba7d; --red:#e05252;
-  /* leva 11: fundo do bloco da rotina quebrada (o destaque da tela de Rotinas) */
-  --rot-falha:#3a2222; --rot-falha-borda:#6d3434;
-  --aba-barra:#131315; --aba-fundo:#303035; --aba-alto:#3b3b41; --aba-borda:#4a4a51; --aba-brilho:#ffffff14;
-  --aba-alto-on:#45454e; --aba-borda-on:#6a6a74; --aba-brilho-on:#ffffff2e; --aba-marca:#c8c8d2;
-  --aba-neon:#6ea8fe;
+  /* fundos */
+  --bg:var(--bg-content); --bg-foco:var(--bg-content); --bg2:var(--bg-window);
+  --act:var(--bg-window); --bg-flutua:var(--bg-elevated); --fundo-fundo:var(--code-bg);
+  /* divisorias */
+  --line:var(--separator); --line2:var(--separator-strong); --borda-forte:var(--separator-strong);
+  /* texto */
+  --fg:var(--label-1); --fg-strong:var(--label-1); --fg-dim:var(--label-2); --fg-fraco:var(--label-3);
+  --link:var(--accent-text); --cod:var(--label-1);
+  /* hover e selecao: os preenchimentos translucidos do sistema */
+  --hover:var(--fill-3); --hover2:var(--fill-2); --hover3:var(--fill-1);
+  /* botao do slider (esforco) e texto sobre a cor de acao */
+  --puxador:#fff; --sobre-accent:var(--on-accent);
+  --veu:var(--scrim);
+  /* estados: so cor nao basta (o redesenho sempre junta forma + texto), mas os tons sao estes */
+  --green:var(--status-ok); --yellow:var(--status-wait); --red:var(--status-error);
+  /* rotina quebrada: cartao neutro com contorno fino (o "Erro" do README); o vermelho fica no texto */
+  --rot-falha:var(--fill-4); --rot-falha-borda:var(--separator);
+  /* assistentes: SO no logo. --acp (protocolo antigo, sem marca) fica neutro */
+  --claude:var(--logo-claude); --codex:var(--logo-codex); --gemini:var(--logo-gemini);
+  --grok:var(--logo-grok); --acp:var(--label-2);
+  /* a aba em foco era contornada com a cor do motor; agora com o azul do sistema */
+  --aba-neon:var(--accent);
+  /* tipografia: so SF Pro e SF Mono */
+  --mono:var(--font-mono); --sans:var(--font-sans);
 }
-html[data-tema="claro"]{
-  --bg:#ffffff; --bg2:#f5f5f6; --bg3:#ececed; --bg4:#dcdcde; --act:#e7e7e9;
-  --bg-flutua:#ffffff; --bg-foco:#fafafa; --fundo-fundo:#f0f0f1;
-  --line:#dcdcde; --line2:#c8c8cb;
-  --fg:#3b3b40; --fg-dim:#5f5f68; --fg-fraco:#6a6a73; --fg-strong:#1c1c20; --link:#1a62d6;
-  --hover:#00000008; --hover2:#00000010; --hover3:#00000016;
-  --puxador:#ffffff; --sobre-accent:#ffffff; --erro-fundo:#f6d6d6;
-  --cod:#a4552a; --borda-forte:#00000022;
-  --sombra1:#0000001a; --sombra2:#00000026; --veu:#00000033;
-  --codex:#1f6feb; --claude:#c2521f; --acp:#12866a;
-  --green:#2f7d3a; --yellow:#9a6b00; --red:#c62828;
-  --rot-falha:#fdeaea; --rot-falha-borda:#f0bcbc;
-  --aba-barra:#d7d7dc; --aba-fundo:#ececed; --aba-alto:#f7f7f8; --aba-borda:#bfbfc6; --aba-brilho:#ffffff;
-  --aba-alto-on:#ffffff; --aba-borda-on:#a6a6b0; --aba-brilho-on:#ffffff; --aba-marca:#3d3d45;
-  --aba-neon:#1f6feb;
+/* O que muda com o claro/escuro alem dos tokens: o fill composto sobre o fundo (os tokens dao
+   o fill em transparencia, e as porcentagens do claro sao outras), a cor das sombras e o
+   vermelho de fundo do hover de fechar. */
+html[data-theme^="dark"]{
+  --bg3:color-mix(in srgb,#fff 7.5%,var(--bg-content)); --bg4:color-mix(in srgb,#fff 11%,var(--bg-content));
+  --sombra1:rgba(0,0,0,.30); --sombra2:rgba(0,0,0,.45);
+  /* hover de fechar/apagar: leva texto branco por cima, entao tem de ser escuro o bastante */
+  --erro-fundo:color-mix(in srgb,var(--status-error) 40%,var(--bg-content));
 }
-html[data-tema="jornal"]{
-  /* Solarized Light, o mesmo do seu VSCode */
-  --bg:#fdf6e3; --bg2:#f5eed8; --bg3:#eee8d5; --bg4:#e3dcc4; --act:#eee8d5;
-  --bg-flutua:#fdf6e3; --bg-foco:#faf3df; --fundo-fundo:#f2ebd6;
-  --line:#e3dcc6; --line2:#d3ccb4;
-  --fg:#586e75; --fg-dim:#63757b; --fg-fraco:#5e6f75; --fg-strong:#073642; --link:#19688f;
-  --hover:#586e7510; --hover2:#586e751f; --hover3:#586e752b;
-  --puxador:#fffbf0; --sobre-accent:#fdf6e3; --erro-fundo:#f4d9d3;
-  --cod:#b58900; --borda-forte:#00000020;
-  --sombra1:#586e7520; --sombra2:#586e7530; --veu:#586e7540;
-  --codex:#268bd2; --claude:#cb4b16; --acp:#2aa198;
-  --green:#859900; --yellow:#b58900; --red:#dc322f;
-  --rot-falha:#f7e3da; --rot-falha-borda:#e0b8a6;
-  --aba-barra:#ded6bd; --aba-fundo:#f0e9d5; --aba-alto:#f8f2e2; --aba-borda:#c9c1a6; --aba-brilho:#fffdf6;
-  --aba-alto-on:#fffdf4; --aba-borda-on:#b3ab90; --aba-brilho-on:#ffffff; --aba-marca:#3f5560;
-  --aba-neon:#268bd2;
+html[data-theme="dark-hc"]{
+  --bg3:color-mix(in srgb,#fff 12%,var(--bg-content)); --bg4:color-mix(in srgb,#fff 18%,var(--bg-content));
 }
-
-:root{
-  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
-  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
-  --accent:var(--codex);
+html[data-theme^="light"]{
+  --bg3:color-mix(in srgb,#000 5.5%,var(--bg-content)); --bg4:color-mix(in srgb,#000 7.5%,var(--bg-content));
+  --sombra1:rgba(0,0,0,.06); --sombra2:rgba(0,0,0,.12);
+  /* no claro um vermelho clarinho com texto branco por cima sumia: aqui ele e o vermelho cheio */
+  --erro-fundo:var(--status-error);
 }
 
 *{box-sizing:border-box;margin:0;padding:0}
@@ -181,9 +182,12 @@ select{font:inherit;color:inherit;background:none;border:none;outline:none;curso
 .pane:first-child{border-left:none}
 /* .pane-split ficava duplicada aqui; a regra que vale esta la embaixo, perto de "divisor entre os chats" */
 .pane.focus{background:var(--bg-foco)}
-.pane.eng-codex{--accent:var(--codex)}
-.pane.eng-claude{--accent:var(--claude)}
-.pane.eng-acp{--accent:var(--acp)}
+/* a cor de cada assistente vale SO para o logo dele (README, regra 2). Antes isto trocava o
+   --accent do painel inteiro, e o cabecalho, a borda da caixa e o botao de enviar saiam
+   laranja no Claude e azul no Codex. Agora o --accent fica o azul do sistema e o logo le --motor. */
+.pane.eng-codex{--motor:var(--codex)}
+.pane.eng-claude{--motor:var(--claude)}
+.pane.eng-acp{--motor:var(--acp)}
 
 .pane-hd{height:auto;min-height:34px;flex:none;display:flex;align-items:center;gap:7px;padding:5px 8px;
   background:var(--bg3);border-bottom:1px solid var(--line);font-size:11.5px}
@@ -304,7 +308,7 @@ mark.acha{background:color-mix(in srgb,var(--yellow) 45%,transparent);color:inhe
 mark.acha.agora{background:var(--yellow);color:#1a1a1a}
 
 /* a selecao precisa SALTAR aos olhos: em cinza fraco ele da ⌘A, nao ve nada acender e conclui
-   que o atalho nao funcionou. Vale nos tres temas (escuro, claro e jornal). */
+   que o atalho nao funcionou. Vale nas quatro aparencias (claro, escuro e os de contraste). */
 ::selection{background:color-mix(in srgb,var(--accent) 42%,transparent);color:var(--fg-strong)}
 .msg{padding:0 18px 14px;user-select:text;position:relative}
 /* Copiar com um clique. Na mensagem o botao vive na barrinha do pe (.msg-acoes), sem moldura
@@ -321,7 +325,7 @@ mark.acha.agora{background:var(--yellow);color:#1a1a1a}
 .msg-body pre.com-copia .bt-copiar.copiou{opacity:1;border-color:var(--green)}
 .msg-role{display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:600;text-transform:uppercase;
   letter-spacing:.6px;color:var(--fg-dim);margin-bottom:6px}
-.msg-role .av{width:15px;height:15px;border-radius:4px;display:grid;place-items:center;font-size:9px;color:#fff}
+.msg-role .av{width:15px;height:15px;border-radius:4px;display:grid;place-items:center;font-size:9px;color:var(--fg)}
 .msg.user .av{background:var(--bg4)}
 /* overflow-wrap:anywhere e obrigatorio: link de checkout com UTM nao tem espaco nenhum,
    entao pre-wrap sozinho nao acha onde quebrar e a linha vaza para fora da bolha.
@@ -342,7 +346,7 @@ mark.acha.agora{background:var(--yellow);color:#1a1a1a}
 .msg.naoenviada .msg-role::after{content:'não enviada'}
 .msg.esperando .msg-role::after,.msg.naoenviada .msg-role::after{
   font-size:9px;letter-spacing:.6px;padding:1px 5px;border-radius:5px;
-  color:var(--yellow);border:1px solid color-mix(in srgb,var(--yellow) 45%,transparent)}
+  color:var(--status-wait-text);border:1px solid color-mix(in srgb,var(--yellow) 45%,transparent)}
 .msg.naoenviada .msg-role::after{
   color:var(--red);border-color:color-mix(in srgb,var(--red) 45%,transparent)}
 .msg-body h1,.msg-body h2,.msg-body h3{color:var(--fg-strong);margin:14px 0 6px;line-height:1.3}
@@ -441,7 +445,7 @@ mark.acha.agora{background:var(--yellow);color:#1a1a1a}
 .modo-ic{font-size:11px;opacity:.85}
 .p-send,.p-stop{width:26px;height:24px;border-radius:6px;display:grid;place-items:center;font-size:12px;flex:none}
 .p-send{background:var(--accent);color:var(--sobre-accent)}
-.p-send:disabled{background:#3f3f3f;color:#7a7a7a;cursor:default}
+.p-send:disabled{background:var(--fill-1);color:var(--label-3);cursor:default}
 .p-stop{background:var(--bg3);border:1px solid var(--line2);color:var(--red);font-size:9px}
 
 /* ---------- menus flutuantes (mesma cara do VSCode) ---------- */
@@ -502,12 +506,10 @@ mark.acha.agora{background:var(--yellow);color:#1a1a1a}
 .hist-item{display:flex;align-items:center;gap:7px;padding:5px 9px;border-radius:6px;cursor:pointer}
 .hist-item:hover{background:var(--hover)}
 .hist-item.on{background:var(--hover3)}
-/* conversa que esta aberta em algum chat: mesma borda da caixa de texto em foco.
-   laranja = Claude, azul = Codex. Usa outline pra nao empurrar o texto do item. */
-.hist-item.aberta{outline:1.5px solid var(--claude);outline-offset:-1px}
-.hist-item.aberta.ab-codex{outline-color:var(--codex)}
-.hist-item.aberta.ab-acp{outline-color:var(--acp)}
-.hist-item.aberta.ab-claude{outline-color:var(--claude)}
+/* conversa que esta aberta em algum chat. Usa outline pra nao empurrar o texto do item.
+   Era laranja no Claude e azul no Codex; com o redesenho a cor do motor fica so no logo, e a
+   marca de "aberta" e o azul do sistema para todos. */
+.hist-item.aberta{outline:1.5px solid var(--accent);outline-offset:-1px}
 .hi-t{flex:1;min-width:0;font-size:12.5px;color:var(--fg-strong);overflow:hidden;
   text-overflow:ellipsis;white-space:nowrap}
 .hi-w{flex:none;font-size:9.5px;color:var(--fg-fraco)}
@@ -515,7 +517,7 @@ mark.acha.agora{background:var(--yellow);color:#1a1a1a}
 
 /* ---------- ajustes: foto do usuario ---------- */
 .foto-linha{display:flex;gap:10px;align-items:center}
-.foto-prev{width:46px;height:46px;border-radius:50%;flex:none;background:var(--bg4);color:#fff;
+.foto-prev{width:46px;height:46px;border-radius:50%;flex:none;background:var(--bg4);color:var(--fg);
   display:grid;place-items:center;font-size:16px;font-weight:600;overflow:hidden;border:1px solid var(--line2)}
 .foto-prev img{width:100%;height:100%;object-fit:cover;display:block}
 .foto-btns{flex:1;display:flex;flex-direction:column;gap:4px}
@@ -528,7 +530,7 @@ mark.acha.agora{background:var(--yellow);color:#1a1a1a}
 /* ---------- trabalhando ---------- */
 .trab{display:flex;align-items:center;gap:9px;padding:6px 18px 14px;color:var(--fg-fraco);
   font-size:13px;line-height:20px}
-.trab-ast{width:16px;height:16px;flex:none;color:var(--accent);display:block;
+.trab-ast{width:16px;height:16px;flex:none;color:var(--motor,var(--accent));display:block;
   animation:astpulsa 2s ease-in-out infinite}
 .trab-ast .logo-motor{width:16px;height:16px}
 @keyframes astpulsa{0%,100%{opacity:1}50%{opacity:.72}}
@@ -584,7 +586,7 @@ mark.acha.agora{background:var(--yellow);color:#1a1a1a}
   background:var(--bg4);transition:opacity .2s cubic-bezier(.2,0,0,1)}
 .ef-fill{opacity:calc(1 - var(--ef-prog))}
 .ef-track::before{content:"";position:absolute;inset:0;border-radius:inherit;opacity:0;
-  /* as tres primeiras paradas eram cinza quase preto fixo: no tema claro e no jornal
+  /* as tres primeiras paradas eram cinza quase preto fixo: no tema claro
      viravam um borrao escuro no meio da tela. Agora sao o proprio fundo da barra
      (--fundo-fundo) com um toque da cor, entao cada tema fica na sua faixa. */
   background:linear-gradient(90deg,
@@ -665,8 +667,8 @@ mark.acha.agora{background:var(--yellow);color:#1a1a1a}
 /* logos oficiais dos motores */
 .logo-motor{width:100%;height:100%;fill:currentColor;stroke:none;display:block}
 .msg-role .av{padding:3px}
-.msg.bot .av{background:transparent;color:var(--accent);width:17px;height:17px;padding:0}
-.pe-logo{width:30px;height:30px;background:none;border-radius:0;color:var(--accent)}
+.msg.bot .av{background:transparent;color:var(--motor,var(--accent));width:17px;height:17px;padding:0}
+.pe-logo{width:30px;height:30px;background:none;border-radius:0;color:var(--motor,var(--accent))}
 .act .logo-motor{width:20px;height:20px;fill:currentColor;stroke:none}
 
 /* ícones de traço, sem emoji */
@@ -710,7 +712,7 @@ mark.acha.agora{background:var(--yellow);color:#1a1a1a}
 /* janela da conta */
 .ct-cab{display:flex;align-items:center;gap:11px;padding:10px 2px 2px}
 .ct-av{width:34px;height:34px;flex:none;border-radius:9px;display:grid;place-items:center;
-  background:var(--fundo-fundo);border:1px solid var(--line2);color:var(--accent);padding:7px}
+  background:var(--fundo-fundo);border:1px solid var(--line2);color:var(--motor,var(--accent));padding:7px}
 .ct-txt{flex:1;min-width:0}
 .ct-n{font-size:13px;color:var(--fg-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ct-e{font-size:11px;color:var(--fg-fraco);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
@@ -737,11 +739,13 @@ mark.acha.agora{background:var(--yellow);color:#1a1a1a}
 .p-modal .mo-sub{margin-bottom:6px}
 
 /* nome da conversa no topo do painel */
+/* O fundo era um banho da cor do motor e a bolinha era a cor do motor: com o redesenho a cor do
+   assistente fica so no logo, entao o cabecalho e o proprio fundo da conversa e a bolinha fica
+   invisivel (sem estado, sem sinal — README). Ela continua ocupando o lugar, que o ::after espelha. */
 .pane-nome{flex:none;padding:9px 40px 8px;border-bottom:1px solid var(--line);position:relative;
-  background:color-mix(in srgb, var(--accent) 7%, var(--bg));display:flex;align-items:center;
+  background:var(--bg);display:flex;align-items:center;
   justify-content:center;gap:9px}
-.pane-nome::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent);
-  flex:none;box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent)}
+.pane-nome::before{content:"";width:7px;height:7px;border-radius:50%;background:transparent;flex:none}
 .pn-txt{flex:0 1 auto;min-width:0;font-size:14px;color:var(--fg-strong);font-weight:650;letter-spacing:-.1px;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pane-nome.vazio{display:none}
@@ -932,23 +936,19 @@ textarea.cxq-input{min-height:62px;resize:vertical}
 .msg-body .entrega-img img{height:100%;max-width:100%;object-fit:contain;border-radius:8px;border:1px solid var(--line);background:var(--bg3);display:block}
 .hist-cab{position:sticky;top:0;background:linear-gradient(var(--bg2) 70%,transparent);z-index:2}
 
-/* peças que mudam com o tema */
-html[data-tema="claro"] body,html[data-tema="jornal"] body{-webkit-font-smoothing:auto}
-html[data-tema="claro"] .msg-body pre,html[data-tema="jornal"] .msg-body pre{background:var(--bg3)}
-html[data-tema="claro"] .msg-body code,html[data-tema="jornal"] .msg-body code{background:var(--hover2)}
-html[data-tema="claro"] ::-webkit-scrollbar-thumb,html[data-tema="jornal"] ::-webkit-scrollbar-thumb{background:#00000026;background-clip:content-box}
-html[data-tema="claro"] ::-webkit-scrollbar-thumb:hover,html[data-tema="jornal"] ::-webkit-scrollbar-thumb:hover{background:#00000040;background-clip:content-box}
-html[data-tema="claro"] .act,html[data-tema="jornal"] .act{opacity:.65}
+/* peças que mudam com o tema (os tokens cuidam das cores; aqui so o que nao e cor) */
+/* no fundo claro o antialiased afina demais a letra: o macOS usa o subpixel padrao */
+html[data-theme^="light"] body{-webkit-font-smoothing:auto}
+html[data-theme^="light"] .msg-body pre{background:var(--bg3)}
+html[data-theme^="light"] .msg-body code{background:var(--hover2)}
+/* a barra de icones vive a 55% de opacidade; no claro 55% ficava apagado demais */
+html[data-theme^="light"] .act{opacity:.65}
 /* esta regra de tema e mais especifica que .act.active e estava apagando o destaque do
    icone selecionado no tema claro: os tres ficavam iguais. A ordem importa: hover antes de
    active, senao passar o mouse por cima apaga o selecionado. */
-html[data-tema="claro"] .act:hover,html[data-tema="jornal"] .act:hover{opacity:.85}
-html[data-tema="claro"] .act.active,html[data-tema="jornal"] .act.active{opacity:1}
-html[data-tema="claro"] .ef-thumb,html[data-tema="jornal"] .ef-thumb{background:var(--puxador);border-color:var(--line2)}
-html[data-tema="claro"] .co-pt.off,html[data-tema="jornal"] .co-pt.off{background:var(--fg-fraco)}
-html[data-tema="jornal"] .pane.eng-claude{--accent:#cb4b16}
-html[data-tema="jornal"] .pane.eng-codex{--accent:#268bd2}
-html[data-tema="jornal"] .pane.eng-acp{--accent:#2aa198}
+html[data-theme^="light"] .act:hover{opacity:.85}
+html[data-theme^="light"] .act.active{opacity:1}
+html[data-theme^="light"] .ef-thumb{background:var(--puxador);border-color:var(--line2)}
 
 /* escolha de tema nos ajustes */
 .temas{display:flex;gap:6px}
@@ -957,9 +957,11 @@ html[data-tema="jornal"] .pane.eng-acp{--accent:#2aa198}
 .tema-bt:hover{background:var(--bg4);color:var(--fg)}
 .tema-bt.on{border-color:var(--accent);color:var(--fg-strong)}
 .tema-am{width:100%;height:22px;border-radius:5px;border:1px solid var(--line);display:block}
-.tema-am.esc{background:linear-gradient(135deg,#1e1e1e 50%,#2d2d30 50%)}
-.tema-am.cla{background:linear-gradient(135deg,#ffffff 50%,#ececed 50%)}
-.tema-am.jor{background:linear-gradient(135deg,#fdf6e3 50%,#eee8d5 50%)}
+/* amostras: o fundo da conversa e o da barra de cada aparencia (cores dos tokens, fixas de
+   proposito: a amostra mostra a OUTRA aparencia, nao a que esta na tela). Automatica = meio a meio. */
+.tema-am.esc{background:linear-gradient(135deg,#161617 50%,#1F1F21 50%)}
+.tema-am.cla{background:linear-gradient(135deg,#FFFFFF 50%,#F1F1F3 50%)}
+.tema-am.aut{background:linear-gradient(135deg,#FFFFFF 50%,#161617 50%)}
 
 /* tela de abertura */
 #boasvindas{flex:1;min-width:0;background:var(--bg);display:grid;place-items:center;padding:24px}
@@ -1126,7 +1128,8 @@ html[data-tema="jornal"] .pane.eng-acp{--accent:#2aa198}
 .p-uso .uso-pt{opacity:.4}
 .p-uso .uso-zera{opacity:.75}
 .p-uso .uso-velho{opacity:.75} /* dado de Xh atras: aviso discreto, igual ao "zera" */
-.p-uso .uso-alerta{color:var(--yellow);font-weight:600}
+/* texto em ambar usa o tom de TEXTO dos tokens: o ambar de glifo (--yellow) some no fundo claro */
+.p-uso .uso-alerta{color:var(--status-wait-text);font-weight:600}
 .p-uso .uso-ic{flex:none;color:var(--yellow);font-size:11px}
 .p-uso .uso-gap{flex:1;min-width:8px}
 .uso-x{flex:none;width:17px;height:17px;border-radius:5px;font-size:10px;line-height:1;
@@ -1144,7 +1147,7 @@ html[data-tema="jornal"] .pane.eng-acp{--accent:#2aa198}
    index-web.html ainda tem a barra de titulo e redefine no celular.css. */
 :root{--topo-altura:50px;--veu-topo:50px;--recuo-semaforo:80px}
 #abasTopo{height:50px;flex:none;display:flex;align-items:center;gap:8px;
-  padding:0 10px 0 var(--recuo-semaforo);background:var(--bg-flutua);border-bottom:1px solid var(--line);
+  padding:0 10px 0 var(--recuo-semaforo);background:var(--bg2);border-bottom:1px solid var(--line);
   -webkit-app-region:drag}
 #abasLista{flex:0 1 auto;min-width:0;display:flex;align-items:center;gap:8px;
   overflow-x:auto;overflow-y:hidden}
@@ -1251,11 +1254,12 @@ body.arrastando-aba,body.arrastando-aba *{cursor:grabbing !important}
   background:var(--bg3);border:1.5px solid var(--line);border-radius:10px;transition:.13s}
 .na-motor:hover{background:var(--bg4)}
 .na-motor.on{border-color:var(--accent);background:var(--bg4)}
-.na-motor[data-motor="claude"]{--accent:var(--claude)}
-.na-motor[data-motor="codex"]{--accent:var(--codex)}
-.na-motor[data-motor="gemini"]{--accent:var(--gemini)}
-.na-motor[data-motor="grok"]{--accent:var(--grok)}
-.na-motor.on .na-ico{color:var(--accent)}
+/* o cartao escolhido ganha o anel azul do sistema; a cor do assistente fica so no logo dele */
+.na-motor[data-motor="claude"]{--motor:var(--claude)}
+.na-motor[data-motor="codex"]{--motor:var(--codex)}
+.na-motor[data-motor="gemini"]{--motor:var(--gemini)}
+.na-motor[data-motor="grok"]{--motor:var(--grok)}
+.na-motor.on .na-ico{color:var(--motor)}
 .na-ico{width:28px;height:28px;display:grid;place-items:center;color:var(--fg-dim)}
 .na-ico svg{width:100%;height:100%;fill:currentColor}
 .na-motor .na-n{font-size:12.5px;font-weight:600;color:var(--fg-strong)}
@@ -1337,13 +1341,9 @@ body.arrastando-aba,body.arrastando-aba *{cursor:grabbing !important}
 .cx-vps .na-atalhos{margin:8px 16px 0}
 
 /* ---------- conta e limite fixos na barra lateral ---------- */
-/* a lateral fica FORA do .pane, entao var(--accent) caia no azul do Codex e as barras de
-   limite da conta Claude apareciam azuis. Cada lado da lateral passa a ter a sua cor. */
-.side-view[data-view="hclaude"]{--accent:var(--claude)}
-.side-view[data-view="hcodex"]{--accent:var(--codex)}
-.side-view[data-view="hacp"]{--accent:var(--acp)}
-.side-view[data-view="hgemini"]{--accent:var(--gemini)}
-.side-view[data-view="hgrok"]{--accent:var(--grok)}
+/* Antes cada lado da lateral trocava o --accent pela cor do motor (barras de limite laranja no
+   Claude). No redesenho a cor do motor fica so no logo (.sc-av, logo abaixo); o resto usa o
+   azul do sistema, igual em todos. */
 .side-conta{flex:none;padding:6px 10px 7px;border-bottom:1px solid var(--line)}
 .sc-vazio{font-size:11.5px;color:var(--fg-dim);line-height:1.5}
 .sc-link{color:var(--accent);text-decoration:underline;font-size:11.5px}
@@ -1399,14 +1399,14 @@ body.arrastando-aba,body.arrastando-aba *{cursor:grabbing !important}
 .sp-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sp-q{flex:none;font-size:10px;color:var(--fg-fraco)}
 
-.sc-aviso{margin-top:4px;color:var(--yellow)}
+.sc-aviso{margin-top:4px;color:var(--status-wait-text)}
 
 /* ============ painel do time de agentes (fluxo de cima para baixo) ============
    O corredor vertical entre um bloco e outro (.ag-liga) é onde a linha é desenhada: encolher
    isso devolve o visual de lista e mata a leitura de fluxo. A cor viva do momento é --ag, que
    o JS troca conforme o motor do chat (Claude ou Codex). */
 #agPainel{position:fixed;inset:var(--veu-topo,38px) 0 0 0;z-index:500;display:grid;place-items:center;
-  background:var(--veu);backdrop-filter:blur(8px);padding:22px;--ag:var(--claude)}
+  background:var(--veu);backdrop-filter:blur(8px);padding:22px;--ag:var(--accent)}
 #agPainel.hidden{display:none !important}
 .ag-cx{width:min(1000px,96vw);height:min(86vh,880px);display:flex;flex-direction:column;
   background:var(--bg-flutua);border:1px solid var(--line2);border-radius:16px;
@@ -1516,7 +1516,7 @@ body.arrastando-aba,body.arrastando-aba *{cursor:grabbing !important}
 .p-agentes .pa-n{display:none;font-size:10px;font-weight:700;letter-spacing:.2px}
 .p-agentes.tem-n{width:auto;min-width:26px;padding:0 6px}
 .p-agentes.tem-n .pa-n{display:inline}
-.p-agentes.vivo{color:var(--claude);border-color:color-mix(in srgb,var(--claude) 45%,var(--line))}
+.p-agentes.vivo{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
 .p-agentes.vivo .ic{animation:ag-pisca 1.6s ease-in-out infinite}
 @keyframes ag-pisca{0%,100%{opacity:1}50%{opacity:.45}}
 
@@ -1806,15 +1806,10 @@ body.arrastando-aba,body.arrastando-aba *{cursor:grabbing !important}
 
 /* Motores adicionais, mantendo os mesmos tamanhos e componentes do Cockpit. */
 .motor-extra{color:var(--accent);font-size:12px;font-weight:600;white-space:nowrap;padding:0 7px}
-:root { --gemini:#67b88a; --grok:#bcbac8; }
-html[data-tema="claro"] { --gemini:#287a4c; --grok:#565069; }
-html[data-tema="jornal"] { --gemini:#39764b; --grok:#586e75; }
 .act.ic-gemini{color:var(--gemini)}
-.pane.eng-gemini,.side-view[data-view="hgemini"]{--accent:var(--gemini)}
-.hist-item.aberta.ab-gemini{outline-color:var(--gemini)}
+.pane.eng-gemini{--motor:var(--gemini)}
 .act.ic-grok{color:var(--grok)}
-.pane.eng-grok,.side-view[data-view="hgrok"]{--accent:var(--grok)}
-.hist-item.aberta.ab-grok{outline-color:var(--grok)}
+.pane.eng-grok{--motor:var(--grok)}
 
 /* Organização das conversas, 11/09. Título e quadro mantêm o desenho anterior. */
 .espaco > .coluna{display:flex;flex-direction:column;flex:1 1 0;min-width:var(--chat-min,330px);min-height:0;overflow-y:auto;overflow-x:hidden}

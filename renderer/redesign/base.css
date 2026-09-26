@@ -1,0 +1,138 @@
+/* ============================================================================
+   REDESENHO · BASE — o chão comum de todas as áreas (handoff do Claude Design, 25/09/2026)
+   Cobre: tipografia (só SF Pro e SF Mono), barra de rolagem discreta, anel de foco de
+   teclado, os botões da folha de componentes (prefixo rd-), o giro do "trabalhando",
+   o vidro da camada de controles e o "Reduzir movimento".
+   Os tokens (cores, raios, espaço, movimento) moram no ../cockpit-tokens.css; os nomes
+   antigos do style.css são só apelidos deles (ver a PONTE no topo do style.css).
+   Tudo aqui com prefixo rd- é NOVO e não colide com classe existente: as áreas
+   (janela.css, painel.css...) usam estas peças em vez de reinventar cada uma.
+   ============================================================================ */
+
+/* ---------- tipografia ----------
+   Escala do README em atalhos de `font` (peso tamanho/entrelinha família), para as áreas
+   usarem `font:var(--f-leitura)` em vez de repetir número. Nada de Light/Thin e nada de
+   CAIXA ALTA com letra espaçada: só estes pesos. */
+:root{
+  --f-title2:600 17px/22px var(--font-sans);     /* títulos dentro da resposta */
+  --f-title3:600 15px/20px var(--font-sans);     /* título de sheet e da coluna lateral */
+  --f-headline:600 13px/16px var(--font-sans);   /* nome da conversa, aba selecionada, botão principal */
+  --f-leitura:400 14px/21px var(--font-sans);    /* texto das mensagens (minhas e do assistente) */
+  --f-body:400 13px/16px var(--font-sans);       /* interface, menus, listas */
+  --f-callout:500 12px/15px var(--font-sans);    /* barra da caixa, botões small, nome do assistente */
+  --f-sub:400 11px/14px var(--font-sans);        /* horários, contadores, grupos da lista */
+  --f-foot:700 10px/13px var(--font-sans);       /* selo numérico (mínimo) */
+  --f-mono:400 12px/18px var(--font-mono);       /* código, comandos, caminhos */
+  /* anel de foco de teclado (o mesmo nos quatro tipos de botão) */
+  --anel-foco:0 0 0 3px color-mix(in srgb,var(--accent) 45%,transparent);
+  /* tamanhos de ícone do README: o <svg> não traz tamanho, quem decide é o CSS */
+  --ic-texto:12px;    /* ao lado de texto de 11–12 */
+  --ic-botao:14px;    /* botões pequenos */
+  --ic-caixa:16px;    /* caixa de escrever */
+  --ic-barra:18px;    /* barra de ícones */
+}
+/* corpo 13/16 (Body). O style.css ainda dizia 13/1.55: vem antes, então este ganha. */
+body{font:var(--f-body)}
+/* código cru sem regra própria: SF Mono 12/18. As regras com classe (.msg-body code etc.) ganham
+   desta por especificidade, de propósito: aqui é só o padrão. */
+code,kbd,samp,pre{font:var(--f-mono)}
+/* número que muda (contador, %, tempo, tokens) não pode fazer o texto em volta dançar */
+.rd-num{font-variant-numeric:tabular-nums}
+.rd-title2{font:var(--f-title2)} .rd-title3{font:var(--f-title3)} .rd-headline{font:var(--f-headline)}
+.rd-leitura{font:var(--f-leitura)} .rd-body{font:var(--f-body)} .rd-callout{font:var(--f-callout)}
+.rd-sub{font:var(--f-sub)} .rd-foot{font:var(--f-foot)} .rd-mono{font:var(--f-mono)}
+/* divisória de 1pt no tom do sistema (o <hr> padrão do navegador saía grosso e branco no escuro) */
+hr{border:0;border-top:1px solid var(--separator);margin:12px 0}
+
+/* ---------- ícones ----------
+   O .ic continua do tamanho da letra (1em) por padrão; estas classes dão os tamanhos fixos. */
+.rd-ic-texto{width:var(--ic-texto);height:var(--ic-texto)}
+.rd-ic-botao{width:var(--ic-botao);height:var(--ic-botao)}
+.rd-ic-caixa{width:var(--ic-caixa);height:var(--ic-caixa)}
+.rd-ic-barra{width:var(--ic-barra);height:var(--ic-barra)}
+
+/* ---------- barra de rolagem discreta ----------
+   Antes era um cinza cravado (#4a4a4a), feito para o escuro, com remendo por tema. Agora é o
+   próprio texto do tema bem transparente: some no fundo e aparece no hover, nos quatro temas.
+   A borda transparente de 3px é o respiro em volta do polegar. */
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track,::-webkit-scrollbar-corner{background:transparent}
+::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--label-1) 20%,transparent);
+  border-radius:999px;border:3px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:color-mix(in srgb,var(--label-1) 36%,transparent);
+  border:3px solid transparent;background-clip:content-box}
+
+/* ---------- anel de foco de teclado ----------
+   Só no teclado (:focus-visible), nunca no clique. Vale para o que é clicável; campo de texto
+   fica de fora de propósito (quem mostra o foco da caixa de escrever é a caixa inteira, não o
+   textarea de dentro). :where() zera a especificidade: qualquer regra de área ganha desta. */
+:where(button,a[href],summary,[role="button"],[role="tab"],[role="menuitem"],[tabindex]:not([tabindex="-1"])):focus-visible{
+  outline:none;box-shadow:var(--anel-foco)}
+
+/* ---------- botões da folha de componentes ----------
+   Normal · Principal · Destrutivo · Sem moldura · Ícone, cada um com hover (120ms ease-out),
+   pressionado, foco e desativado. Um só botão azul (principal) por área, e o destrutivo nunca
+   é o principal. Botão que abre outra janela leva "…" no texto. */
+.rd-bt{display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:none;
+  height:26px;padding:0 14px;border:0;border-radius:7px;
+  font:500 13px/16px var(--font-sans);white-space:nowrap;cursor:pointer;
+  background:var(--fill-2);color:var(--label-1);
+  transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
+.rd-bt:hover{background:var(--fill-1)}
+.rd-bt:active{background:var(--separator-strong)}
+.rd-bt:focus-visible{outline:none;box-shadow:var(--anel-foco)}
+.rd-bt:disabled,.rd-bt[aria-disabled="true"]{background:var(--fill-3);color:var(--label-3);cursor:default}
+.rd-bt .ic{width:var(--ic-botao);height:var(--ic-botao)}
+
+/* principal: o azul do sistema. Hover clareia 12% com branco, pressionado escurece 20% */
+.rd-bt.rd-principal{background:var(--accent);color:var(--on-accent);font-weight:600}
+.rd-bt.rd-principal:hover{background:color-mix(in srgb,var(--accent) 88%,white)}
+.rd-bt.rd-principal:active{background:color-mix(in srgb,var(--accent) 80%,black)}
+.rd-bt.rd-principal:disabled,.rd-bt.rd-principal[aria-disabled="true"]{background:var(--accent);color:var(--on-accent);opacity:.4}
+
+/* destrutivo: fundo neutro, só o texto vermelho */
+.rd-bt.rd-destrutivo{color:var(--status-error)}
+.rd-bt.rd-destrutivo:disabled,.rd-bt.rd-destrutivo[aria-disabled="true"]{color:var(--label-3)}
+
+/* sem moldura (e o botão-ícone, que é o mesmo com 26×26 e raio 6) */
+.rd-bt.rd-sem-moldura,.rd-bt-icone{background:transparent;color:var(--label-2)}
+.rd-bt.rd-sem-moldura:hover,.rd-bt-icone:hover{background:var(--fill-3);color:var(--label-1)}
+.rd-bt.rd-sem-moldura:active,.rd-bt-icone:active{background:var(--fill-2);color:var(--label-1)}
+.rd-bt.rd-sem-moldura:disabled,.rd-bt.rd-sem-moldura[aria-disabled="true"],
+.rd-bt-icone:disabled,.rd-bt-icone[aria-disabled="true"]{background:transparent;color:var(--label-4);cursor:default}
+.rd-bt-icone{display:inline-grid;place-items:center;flex:none;width:26px;height:26px;padding:0;
+  border:0;border-radius:6px;cursor:pointer;
+  transition:background-color var(--dur-fast) ease-out,color var(--dur-fast) ease-out}
+.rd-bt-icone:focus-visible{outline:none;box-shadow:var(--anel-foco)}
+.rd-bt-icone .ic{width:var(--ic-botao);height:var(--ic-botao)}
+
+/* cápsula de sheet (Começar, Cancelar): 28 de altura, raio de cápsula */
+.rd-bt.rd-capsula{height:28px;border-radius:var(--r-capsule)}
+
+/* ---------- vidro (só na camada de controles) ----------
+   Caixa de escrever, popover, autorização, busca e coluna lateral. Nunca no conteúdo e nunca
+   vidro sobre vidro. Com contraste aumentado os tokens tiram o desfoque e o vidro vira opaco
+   com contorno visível. */
+.rd-vidro{background:var(--glass-regular);-webkit-backdrop-filter:var(--blur-glass);
+  backdrop-filter:var(--blur-glass);box-shadow:var(--shadow-float)}
+html[data-theme$="-hc"] .rd-vidro{box-shadow:var(--shadow-float),inset 0 0 0 1px var(--glass-edge)}
+
+/* ---------- sinais de estado (um por aba e por chat: esperando > trabalhando > nova) ----------
+   Trabalhando: anel neutro girando 1 volta/s. Esperando você: círculo âmbar com "!".
+   Resposta nova: ponto azul. Pronto/parado: nada. Sempre forma + texto, nunca só cor. */
+@keyframes ck-spin{to{transform:rotate(360deg)}}
+.rd-anel{display:inline-block;flex:none;width:12px;height:12px;border-radius:50%;box-sizing:border-box;
+  border:1.5px solid var(--fill-1);border-top-color:var(--label-1);border-right-color:var(--label-1);
+  animation:ck-spin 1s linear infinite}
+.rd-espera{display:inline-grid;place-items:center;flex:none;width:14px;height:14px;border-radius:50%;
+  background:var(--status-wait);color:#1A1000;font:800 9.5px/1 var(--font-sans)}
+.rd-espera::before{content:"!"}
+.rd-nova{display:inline-block;flex:none;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+
+/* ---------- Reduzir movimento ----------
+   O giro para (o tempo ao lado continua contando) e as transições de hover somem. */
+@media (prefers-reduced-motion: reduce){
+  .rd-anel,[data-spin]{animation:none !important}
+  .rd-bt,.rd-bt-icone{transition:none}
+  *{scroll-behavior:auto !important}
+}

@@ -1,0 +1,134 @@
+/* Cockpit — tokens de design (macOS 26 / HIG 2026)
+   Aplicar data-theme="dark" | "light" | "dark-hc" | "light-hc" no <html> do app.
+   No app real, o tema segue a aparência do sistema (ver @media no fim). */
+
+.ck, [data-theme] {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* raios — regra concêntrica: interno = externo − distância */
+  --r-window: 20px;   /* janela macOS 26 */
+  --r-panel: 12px;    /* painel a 8pt da borda da janela: 20 − 8 */
+  --r-control: 8px;   /* controle a 4pt da borda do painel: 12 − 4 */
+  --r-mini: 6px;      /* mini/small, raio de reserva */
+  --r-capsule: 999px; /* large e x-large */
+
+  /* espaço */
+  --s-1: 2px; --s-2: 4px; --s-3: 6px; --s-4: 8px; --s-5: 12px;
+  --s-6: 16px; --s-7: 20px; --s-8: 24px; --s-9: 32px;
+
+  /* movimento */
+  --dur-instant: 0ms;     /* trocar aba, trocar chat */
+  --dur-fast: 120ms;      /* hover, pressionado */
+  --dur-base: 200ms;      /* abrir disclosure, popover */
+  --dur-slow: 320ms;      /* sheet */
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --ease-in-out: cubic-bezier(.45, 0, .25, 1);
+  --ease-spring: cubic-bezier(.3, 1.25, .6, 1);
+
+  --blur-glass: saturate(180%) blur(24px);
+}
+
+[data-theme="dark"], [data-theme="dark-hc"] {
+  color-scheme: dark;
+  --bg-window: #1F1F21;       /* chrome: barra do topo e barra de ícones */
+  --bg-content: #161617;      /* conversa */
+  --bg-grouped: #1E1E20;      /* blocos de código, cartões dentro do conteúdo */
+  --bg-sidebar: rgba(40, 40, 43, .84);
+  --bg-elevated: #2A2A2D;     /* popover opaco (reduzir transparência) */
+  --glass-regular: rgba(46, 46, 50, .76);
+  --glass-edge: rgba(255, 255, 255, .10);
+  --fill-1: rgba(255, 255, 255, .11);  /* selecionado */
+  --control-selected: rgba(255, 255, 255, .17); /* segmento ativo */
+  --fill-2: rgba(255, 255, 255, .075); /* pressionado, campo */
+  --fill-3: rgba(255, 255, 255, .05);  /* hover, bolha */
+  --fill-4: rgba(255, 255, 255, .03);
+  --label-1: rgba(255, 255, 255, .92);
+  --label-2: rgba(235, 235, 245, .62);
+  --label-3: rgba(235, 235, 245, .40);
+  --label-4: rgba(235, 235, 245, .20);
+  --separator: rgba(255, 255, 255, .085);
+  --separator-strong: rgba(255, 255, 255, .15);
+  --accent: #0A84FF;
+  --accent-text: #4DA3FF;
+  --on-accent: #FFFFFF;
+  --status-wait: #FFB340;
+  --status-wait-text: #FFC266;
+  --status-wait-line: rgba(255, 179, 64, .42);
+  --highlight: rgba(255, 214, 10, .34);
+  --status-error: #FF6961;
+  --status-ok: #30D158;
+  --diff-add-fg: #6BDB84; --diff-add-bg: rgba(48, 209, 88, .09);
+  --diff-del-fg: #FF8A80; --diff-del-bg: rgba(255, 69, 58, .09);
+  --shadow-float: 0 12px 32px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.3), 0 0 0 .5px rgba(255,255,255,.12);
+  --shadow-window: 0 30px 80px rgba(0,0,0,.55), 0 0 0 .5px rgba(255,255,255,.14);
+  --scrim: rgba(0, 0, 0, .45);
+  --code-bg: #0E0E0F;
+  --logo-claude: #D97757; --logo-codex: #6C9BFF; --logo-gemini: #9B8AFB; --logo-grok: rgba(255,255,255,.92);
+}
+
+[data-theme="light"], [data-theme="light-hc"] {
+  color-scheme: light;
+  --bg-window: #F1F1F3;
+  --bg-content: #FFFFFF;
+  --bg-grouped: #F6F6F8;
+  --bg-sidebar: rgba(238, 238, 241, .86);
+  --bg-elevated: #FFFFFF;
+  --glass-regular: rgba(252, 252, 253, .80);
+  --glass-edge: rgba(0, 0, 0, .10);
+  --fill-1: rgba(0, 0, 0, .075);
+  --control-selected: #FFFFFF;
+  --fill-2: rgba(0, 0, 0, .055);
+  --fill-3: rgba(0, 0, 0, .035);
+  --fill-4: rgba(0, 0, 0, .02);
+  --label-1: rgba(0, 0, 0, .88);
+  --label-2: rgba(40, 40, 48, .68);
+  --label-3: rgba(40, 40, 48, .44);
+  --label-4: rgba(40, 40, 48, .22);
+  --separator: rgba(0, 0, 0, .085);
+  --separator-strong: rgba(0, 0, 0, .15);
+  --accent: #0071E3;
+  --accent-text: #0062C4;
+  --on-accent: #FFFFFF;
+  --status-wait: #E08A00;
+  --status-wait-text: #935300;
+  --status-wait-line: rgba(224, 138, 0, .45);
+  --highlight: rgba(255, 204, 0, .38);
+  --status-error: #D70015;
+  --status-ok: #248A3D;
+  --diff-add-fg: #1A7F37; --diff-add-bg: rgba(26, 127, 55, .075);
+  --diff-del-fg: #C21F2D; --diff-del-bg: rgba(207, 34, 46, .065);
+  --shadow-float: 0 12px 32px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.06), 0 0 0 .5px rgba(0,0,0,.12);
+  --shadow-window: 0 30px 80px rgba(0,0,0,.18), 0 0 0 .5px rgba(0,0,0,.16);
+  --scrim: rgba(0, 0, 0, .20);
+  --code-bg: #F6F6F8;
+  --logo-claude: #C4623F; --logo-codex: #2F6BEB; --logo-gemini: #6D5CE7; --logo-grok: rgba(0,0,0,.88);
+}
+
+/* Aumentar contraste + Reduzir transparência */
+[data-theme="dark-hc"] {
+  --bg-sidebar: #232326; --glass-regular: #2C2C30; --bg-elevated: #2C2C30;
+  --label-1: #FFFFFF; --label-2: rgba(245,245,250,.80); --label-3: rgba(245,245,250,.62); --label-4: rgba(245,245,250,.40);
+  --separator: rgba(255,255,255,.26); --separator-strong: rgba(255,255,255,.42);
+  --glass-edge: rgba(255,255,255,.40);
+  --fill-1: rgba(255,255,255,.18); --fill-2: rgba(255,255,255,.12); --fill-3: rgba(255,255,255,.09);
+  --accent: #409CFF; --accent-text: #6BB3FF; --status-wait: #FFC45C; --status-wait-text: #FFD48A; --status-wait-line: #FFC45C;
+  --blur-glass: none;
+}
+[data-theme="light-hc"] {
+  --bg-sidebar: #ECECEF; --glass-regular: #FFFFFF;
+  --label-1: #000; --label-2: rgba(0,0,0,.78); --label-3: rgba(0,0,0,.6); --label-4: rgba(0,0,0,.38);
+  --separator: rgba(0,0,0,.26); --separator-strong: rgba(0,0,0,.42); --glass-edge: rgba(0,0,0,.40);
+  --accent: #0050B3; --accent-text: #0050B3; --status-wait-text: #7A4400;
+  --blur-glass: none;
+}
+
+/* identidade do assistente — só no logo e no nome */
+[data-agent="claude"] { --agent: var(--logo-claude); }
+[data-agent="codex"]  { --agent: var(--logo-codex); }
+[data-agent="gemini"] { --agent: var(--logo-gemini); }
+[data-agent="grok"]   { --agent: var(--logo-grok); }
+
+/* indicador "trabalhando": giro contínuo, sem pulsar; parado em Reduzir movimento */
+@keyframes ck-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { [data-spin] { animation: none !important; } }

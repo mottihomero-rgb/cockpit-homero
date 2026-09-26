@@ -1,0 +1,12 @@
+/* ============================================================================
+   REDESENHO · SHEETS E JANELAS (handoff do Claude Design, 25/09/2026 — README, "Telas e componentes")
+   Sheets que descem do topo (--bg-elevated, raio 16, padding 20, escurecimento --scrim): Nova aba
+   (520: 4 cartões de assistente, Neste Mac | No servidor, fichas de pasta, Cancelar e Começar
+   sempre azul), Atalhos (880, 3 colunas), Configuração do assistente (680), Conta (420). O quadro
+   branco (barra de 44, ferramentas em coluna de vidro, 6 cores, rodapé de 52), o visor de arquivo
+   (inset 16 40, raio 14) e o terminal (#0B0B0C nos dois temas, 760×460).
+   Seletores de hoje: #novaAba, .na-*, #telaAtalhos, .at-*, .modal*, .mo-*, .p-modal, .ct-*, .us*, .cf*,
+   #qdPainel e .qd-* (quadro.css), .p-visor, .visor-*, .cx-term, .term-*, #agPainel, .ag-*.
+   Carrega DEPOIS do style.css e do quadro.css (e do celular.css no iPhone): ganha deles sem
+   !important. Usar os tokens (../cockpit-tokens.css) e as peças rd- do base.css.
+   ============================================================================ */

@@ -1,0 +1,10 @@
+/* ============================================================================
+   REDESENHO · PASSOS (handoff do Claude Design, 25/09/2026 — README, "Telas e componentes")
+   Pensamento e grupo de passos: disclosure (chevron de 12) + "Executou 5 comandos" + tempo; passos
+   recuados com guia de 1pt (--separator-strong); cada passo com verbo + objeto em mono e o bloco
+   "$ comando" + saída; passo com erro; edição com diff (cabeçalho de 30, linhas de 20, número +
+   sinal + texto, fundo só tingido). O "Trabalhando" (anel de 12 + verbo + objeto + tempo).
+   Seletores de hoje: .exec*, .think*, .tool*, .dif*, .dl, .tar*, .trab*.
+   Carrega DEPOIS do style.css e do quadro.css (e do celular.css no iPhone): ganha deles sem
+   !important. Usar os tokens (../cockpit-tokens.css) e as peças rd- do base.css.
+   ============================================================================ */

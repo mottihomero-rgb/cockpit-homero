@@ -199,12 +199,12 @@ test('terminal substituído ignora dados e fechamento do processo antigo', () =>
 test('salvar configuração informa falha e preserva o arquivo anterior', () => {
   const h = loadMain();
   const config = h.HOME + '/app-data/config.json';
-  h.put(config, JSON.stringify({ tema: 'escuro', abas: [] }));
+  h.put(config, JSON.stringify({ tema: 'escura', abas: [] }));
   h.evaluate('fs.renameSync = () => { throw new Error("disco cheio"); }');
-  const result = h.call('config:set', { tema: 'claro', abas: [] });
+  const result = h.call('config:set', { tema: 'clara', abas: [] });
   assert.equal(result.ok, false);
   assert.match(result.error, /salvar/i);
-  assert.equal(JSON.parse(h.files.get(config)).tema, 'escuro');
+  assert.equal(JSON.parse(h.files.get(config)).tema, 'escura');
 });
 
 test('duas imagens salvas no mesmo milissegundo conservam ambos os anexos', () => {

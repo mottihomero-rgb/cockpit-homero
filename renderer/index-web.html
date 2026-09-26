@@ -1,21 +1,35 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-7MDLgtz5Nvww7/4cnFsY0yGgj2afKGDctkqwa0E2N1I='; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-CWfdx/lhtmqaa7a1bcOkZ/0PMhPkxWNCDHgrui0+H4Q='; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
 <title>Cockpit</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Cockpit">
-<meta name="theme-color" content="#1e1e1e">
+<meta name="theme-color" content="#161617">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icone-180.png">
 <link rel="stylesheet" href="vendor/xterm.css">
+<!-- tokens do redesenho (cores, raios, espaço, movimento) ANTES do style.css: ele e o
+     redesign/*.css só usam as variáveis daqui. -->
+<link rel="stylesheet" href="cockpit-tokens.css">
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="celular.css">
 <link rel="stylesheet" href="quadro.css">
+<!-- redesenho por área (25/09): cada arquivo cobre uma parte da tela e vem DEPOIS do CSS antigo,
+     para ganhar dele sem precisar de !important. base.css primeiro (tipografia, foco, botões rd-). -->
+<link rel="stylesheet" href="redesign/base.css">
+<link rel="stylesheet" href="redesign/janela.css">
+<link rel="stylesheet" href="redesign/painel.css">
+<link rel="stylesheet" href="redesign/mensagens.css">
+<link rel="stylesheet" href="redesign/passos.css">
+<link rel="stylesheet" href="redesign/caixa.css">
+<link rel="stylesheet" href="redesign/lateral.css">
+<link rel="stylesheet" href="redesign/menus.css">
+<link rel="stylesheet" href="redesign/sheets.css">
 <!-- Capa de abertura: a caixa #abrindo, a primeira coisa do corpo da pagina. Este estilo vem
      DEPOIS dos .css de proposito, para nenhuma regra de fora mexer nela. Cor so por variavel. -->
 <style>
@@ -28,7 +42,7 @@
 #abrindo .ab-risco{position:relative;width:110px;height:3px;border-radius:2px;
   background:var(--bg4);overflow:hidden}
 #abrindo .ab-risco::after{content:"";position:absolute;top:0;bottom:0;width:38%;border-radius:2px;
-  background:var(--claude);animation:ab-anda 1.05s ease-in-out infinite}
+  background:var(--accent);animation:ab-anda 1.05s ease-in-out infinite}
 @keyframes ab-anda{from{transform:translateX(-110%)}to{transform:translateX(300%)}}
 @media (prefers-reduced-motion:reduce){#abrindo .ab-risco::after{animation:none;width:100%}}
 </style>
@@ -49,7 +63,16 @@
 (function () {
   var capa = document.getElementById('abrindo');
   var meta = document.querySelector('meta[name="theme-color"]');
-  // a cor da barra do Safari segue o fundo do tema escolhido (escuro, claro ou jornal)
+  // Aparencia antes do primeiro quadro. No celular todo .js vem com defer (senao a capa demora),
+  // entao o aparencia.js roda tarde demais para isso: o palpite de partida mora aqui. Segue o
+  // iPhone; quando o config chega, o app.js aplica a escolha salva (Automatica, Clara ou Escura).
+  try {
+    var hc = matchMedia('(prefers-contrast: more)').matches || matchMedia('(prefers-reduced-transparency: reduce)').matches;
+    document.documentElement.setAttribute('data-theme',
+      (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') + (hc ? '-hc' : ''));
+  } catch (e) {}
+  corDaBarra();   // o CSS ja carregou (vem antes no <head>): a barra do Safari nasce na cor certa
+  // a cor da barra do Safari segue o fundo da aparencia escolhida (automatica, clara ou escura)
   function corDaBarra() {
     var bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
     if (meta && bg) meta.setAttribute('content', bg);
@@ -64,9 +87,9 @@
   // o app.js avisa que terminou de montar; o prazo e so a rede de seguranca
   window.addEventListener('cockpit:pronto', tirarCapa, { once: true });
   setTimeout(tirarCapa, 12000);
-  // o tema so chega depois dos Ajustes, e muda de novo quando ele troca de tema
+  // a aparencia so chega depois dos Ajustes, e muda de novo quando ele troca (ou o iPhone troca)
   new MutationObserver(corDaBarra)
-    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-tema'] });
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 })();
 </script>
 
@@ -94,9 +117,9 @@
   <!-- as duas folgas crescem por igual: as abas ficam no meio do topo -->
   <span class="abas-gap"></span>
   <div class="abas-lista" id="abasLista"></div>
-  <button class="aba-mais" id="btnNovaAba" title="Nova aba de projeto (⌘⇧T)"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg></button>
+  <button class="aba-mais" id="btnNovaAba" title="Nova aba de projeto (⌘⇧T)"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3v10M3 8h10"></path></g></svg></button>
   <span class="abas-gap"></span>
-  <button class="aba-mais canto" id="btnNovoChat" title="Novo chat nesta aba (⌘T)"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14" /> <path d="M5 12h14" /></svg><span class="am-txt">chat</span></button>
+  <button class="aba-mais canto" id="btnNovoChat" title="Novo chat nesta aba (⌘T)"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3v10M3 8h10"></path></g></svg><span class="am-txt">chat</span></button>
 </div>
 
 <div id="shell">
@@ -117,44 +140,44 @@
     </button>
     <!-- leva 10.2: torre de controle — todas as sessões, aqui e fora do Cockpit -->
     <button class="act" data-view="torre" title="Torre de controle: todos os chats, aqui e fora do Cockpit">
-      <svg viewBox="0 0 24 24"><path d="M12 2v20"/><path d="M5 22 12 8l7 14"/><circle cx="12" cy="4.5" r="2"/></svg>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="1.3" fill="currentColor" stroke="none"></circle><path d="M5.3 5.3a3.8 3.8 0 0 0 0 5.4M10.7 5.3a3.8 3.8 0 0 1 0 5.4M3.2 3.2a6.8 6.8 0 0 0 0 9.6M12.8 3.2a6.8 6.8 0 0 1 0 9.6"></path></g></svg>
     </button>
     <!-- leva 11: rotinas — os robôs agendados que rodam sozinhos nesta máquina -->
     <button class="act" data-view="rotinas" title="Rotinas: os robôs agendados que rodam sozinhos nesta máquina">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="6"></circle><path d="M8 4.75V8l2.25 1.5"></path></g></svg>
     </button>
     <button class="act" data-view="settings" title="Ajustes">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2.5 5h5.5M12 5h1.5M2.5 11h1.5M8 11h5.5"></path><circle cx="10" cy="5" r="1.75"></circle><circle cx="6" cy="11" r="1.75"></circle></g></svg>
     </button>
   </nav>
 
   <aside id="sidebar">
     <div class="side-view" data-view="hclaude">
-      <div class="side-head"><span>Conversas do Claude</span><button class="mini" data-reload="claude"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /> <path d="M21 3v5h-5" /></svg></button></div>
+      <div class="side-head"><span>Conversas do Claude</span><button class="mini" data-reload="claude"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3"></path></g></svg></button></div>
       <div class="side-conta" data-conta="claude"></div>
       <button class="side-filtro" data-filtro="claude"><span class="sf-txt">Mac inteiro</span><span class="sf-seta"></span></button>
       <div class="side-pastas hidden" data-pastas="claude"></div>
       <input class="side-busca" data-busca="claude" placeholder="Buscar em tudo…">
       <!-- faixa de grupos de conversa (leva 8): desenhada por pintarAbasGrupo -->
       <div class="grp-abas" data-grupos="claude"></div>
-      <button class="new-chat" data-new="claude"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg> Novo chat nesta aba</button>
+      <button class="new-chat" data-new="claude"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3v10M3 8h10"></path></g></svg> Novo chat nesta aba</button>
       <div class="hist" id="histClaude"></div>
     </div>
     <div class="side-view hidden" data-view="hcodex">
-      <div class="side-head"><span>Conversas do Codex</span><button class="mini" data-reload="codex"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /> <path d="M21 3v5h-5" /></svg></button></div>
+      <div class="side-head"><span>Conversas do Codex</span><button class="mini" data-reload="codex"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3"></path></g></svg></button></div>
       <div class="side-conta" data-conta="codex"></div>
       <button class="side-filtro" data-filtro="codex"><span class="sf-txt">Mac inteiro</span><span class="sf-seta"></span></button>
       <div class="side-pastas hidden" data-pastas="codex"></div>
       <input class="side-busca" data-busca="codex" placeholder="Buscar em tudo…">
       <!-- faixa de grupos de conversa (leva 8): desenhada por pintarAbasGrupo -->
       <div class="grp-abas" data-grupos="codex"></div>
-      <button class="new-chat" data-new="codex"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg> Novo chat nesta aba</button>
+      <button class="new-chat" data-new="codex"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3v10M3 8h10"></path></g></svg> Novo chat nesta aba</button>
       <div class="hist" id="histCodex"></div>
     </div>
     <!-- leva 12.4: a coluna do motor ACP, cópia da do Codex (mesmo filtro de pasta, mesma
          busca, mesma faixa de grupos, mesmo "Novo chat nesta aba") -->
     <div class="side-view hidden" data-view="hacp">
-      <div class="side-head"><span>Conversas do ACP</span><button class="mini" data-reload="acp"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /> <path d="M21 3v5h-5" /></svg></button></div>
+      <div class="side-head"><span>Conversas do ACP</span><button class="mini" data-reload="acp"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3"></path></g></svg></button></div>
       <div class="side-conta" data-conta="acp"></div>
       <button class="side-filtro" data-filtro="acp"><span class="sf-txt">Mac inteiro</span><span class="sf-seta"></span></button>
       <div class="side-pastas hidden" data-pastas="acp"></div>
@@ -164,25 +187,25 @@
       <div class="hist" id="histAcp"></div>
     </div>
     <div class="side-view hidden" data-view="hgemini">
-      <div class="side-head"><span>Conversas do Gemini</span><button class="mini" data-reload="gemini"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /> <path d="M21 3v5h-5" /></svg></button></div>
+      <div class="side-head"><span>Conversas do Gemini</span><button class="mini" data-reload="gemini"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3"></path></g></svg></button></div>
       <div class="side-conta" data-conta="gemini"></div>
       <button class="side-filtro" data-filtro="gemini"><span class="sf-txt">Mac inteiro</span><span class="sf-seta"></span></button>
       <div class="side-pastas hidden" data-pastas="gemini"></div>
       <input class="side-busca" data-busca="gemini" placeholder="Buscar em tudo…">
       <!-- faixa de grupos de conversa (leva 8): desenhada por pintarAbasGrupo -->
       <div class="grp-abas" data-grupos="gemini"></div>
-      <button class="new-chat" data-new="gemini"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg> Novo chat nesta aba</button>
+      <button class="new-chat" data-new="gemini"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3v10M3 8h10"></path></g></svg> Novo chat nesta aba</button>
       <div class="hist" id="histGemini"></div>
     </div>
     <div class="side-view hidden" data-view="hgrok">
-      <div class="side-head"><span>Conversas do Grok</span><button class="mini" data-reload="grok"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /> <path d="M21 3v5h-5" /></svg></button></div>
+      <div class="side-head"><span>Conversas do Grok</span><button class="mini" data-reload="grok"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5v3h-3"></path></g></svg></button></div>
       <div class="side-conta" data-conta="grok"></div>
       <button class="side-filtro" data-filtro="grok"><span class="sf-txt">Mac inteiro</span><span class="sf-seta"></span></button>
       <div class="side-pastas hidden" data-pastas="grok"></div>
       <input class="side-busca" data-busca="grok" placeholder="Buscar em tudo…">
       <!-- faixa de grupos de conversa (leva 8): desenhada por pintarAbasGrupo -->
       <div class="grp-abas" data-grupos="grok"></div>
-      <button class="new-chat" data-new="grok"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg> Novo chat nesta aba</button>
+      <button class="new-chat" data-new="grok"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3v10M3 8h10"></path></g></svg> Novo chat nesta aba</button>
       <div class="hist" id="histGrok"></div>
     </div>
     <!-- leva 10.2: a torre é desenhada por pintarTorre() -->
@@ -203,11 +226,11 @@
            mostra o texto de data-dica ao passar o mouse (no celular, ao tocar). -->
       <div class="settings">
         <section class="aj">
-          <div class="aj-tit">Tema</div>
+          <div class="aj-tit">Aparência<button class="info" type="button" aria-label="Como funciona" data-dica="Automática segue o claro e o escuro do Mac. Com Aumentar contraste ou Reduzir transparência ligados no Mac, o Cockpit reforça o contraste sozinho."></button></div>
           <div class="temas">
-            <button class="tema-bt" data-tema="escuro"><span class="tema-am esc"></span>Escuro</button>
-            <button class="tema-bt" data-tema="claro"><span class="tema-am cla"></span>Claro</button>
-            <button class="tema-bt" data-tema="jornal"><span class="tema-am jor"></span>Jornal</button>
+            <button class="tema-bt" data-aparencia="auto"><span class="tema-am aut"></span>Automática</button>
+            <button class="tema-bt" data-aparencia="clara"><span class="tema-am cla"></span>Clara</button>
+            <button class="tema-bt" data-aparencia="escura"><span class="tema-am esc"></span>Escura</button>
           </div>
         </section>
 
@@ -332,7 +355,7 @@
   <div class="aba" draggable="false">
     <span class="aba-topo"><span class="aba-ic"></span><span class="aba-proj"></span><span class="aba-dot dot off"></span></span>
     <span class="aba-tit"></span>
-    <button class="aba-x" title="Fechar a aba e os chats dela"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" /> <path d="m6 6 12 12" /></svg></button>
+    <button class="aba-x" title="Fechar a aba e os chats dela"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"></path></g></svg></button>
   </div>
 </template>
 
@@ -350,7 +373,7 @@
       <div class="hd-lado hd-dir">
       <span class="p-tokens" title="Tamanho da conversa agora, comparado ao que cabe neste modelo"></span>
       <span class="p-dot dot off"></span>
-      <button class="p-close" title="Fechar este chat (⌘W)"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18" /> <path d="m6 6 12 12" /></svg></button>
+      <button class="p-close" title="Fechar este chat (⌘W)"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"></path></g></svg></button>
       </div>
     </header>
     <div class="modal p-modal hidden"><div class="modal-cx"></div></div>
@@ -378,7 +401,7 @@
         <textarea class="p-input" rows="1" placeholder="Escreva aqui…"></textarea>
       </div>
       <div class="cmp-bar">
-        <button class="cb p-plus" title="Anexar"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg></button>
+        <button class="cb p-plus" title="Anexar"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3v10M3 8h10"></path></g></svg></button>
         <button class="cb p-slash" title="Ações e comandos">/</button>
         <button class="cb p-modoenvio" title="O que fazer se ele já estiver trabalhando"></button>
         <!-- Plano/Executar do Codex: o app.js desenha o ícone e só mostra em chat do Codex -->
@@ -396,8 +419,8 @@
         <button class="modo-btn p-modo" title="O que ele pode fazer sem perguntar">
           <span class="modo-ic"></span><span class="modo-nome">Sem pedir permissão</span>
         </button>
-        <button class="p-stop hidden" title="Parar"><svg viewBox="0 0 24 24" class="ic" fill="currentColor" stroke="none"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg></button>
-        <button class="p-send" title="Enviar"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7" /> <path d="M12 19V5" /></svg></button>
+        <button class="p-stop hidden" title="Parar"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="4.5" width="7" height="7" rx="1.5" fill="currentColor"></rect></svg></button>
+        <button class="p-send" title="Enviar"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 12.5v-9M4.5 7L8 3.5 11.5 7"></path></g></svg></button>
       </div>
     </div>
   </section>
@@ -406,9 +429,11 @@
 <!-- "defer" e o que faz a capa de abertura aparecer DE CARA: sem ele o Safari trava a
      montagem da pagina no primeiro arquivo .js e so pinta depois de baixar os ~900 KB.
      A ordem continua a mesma (defer roda na ordem de cima para baixo). -->
+<script defer src="aparencia.js"></script>
 <script defer src="web.js"></script>
 <script defer src="vendor/marked.min.js"></script>
 <script defer src="vendor/xterm.js"></script>
+<script defer src="icones.js"></script>
 <script defer src="quadro-texto.js"></script>
 <script defer src="quadro.js"></script>
 <script defer src="layout-hugo.js"></script>

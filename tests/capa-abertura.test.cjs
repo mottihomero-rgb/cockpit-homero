@@ -60,7 +60,7 @@ test('o basico do iPhone esta no lugar: recorte da tela, icone e cor da barra', 
   assert.match(html, /name="apple-mobile-web-app-capable" content="yes"/);
   assert.match(html, /rel="apple-touch-icon" href="icone-180\.png"/);
   assert.match(html, /name="theme-color"/);
-  // a cor da barra segue o tema escolhido (escuro, claro ou jornal), nao fica cravada
+  // a cor da barra segue o tema escolhido (automatica, clara ou escura), nao fica cravada
   assert.match(html, /meta\[name="theme-color"\]/, 'falta acertar a cor da barra pelo tema');
   assert.match(html, /getPropertyValue\('--bg'\)/, 'a cor tem de sair da variavel do tema');
 

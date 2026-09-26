@@ -38,6 +38,9 @@ contextBridge.exposeInMainWorld('api', {
   acpConfig: (o) => ipcRenderer.invoke('acp:config', o),
   sessionHistory: (o) => ipcRenderer.invoke('sessions:history', o),
   sessionTitulo: (o) => ipcRenderer.invoke('sessions:titulo', o),
+  // a costura das conversas quando se troca de IA no meio (ligacoes.json)
+  ligacoesLer: () => ipcRenderer.invoke('ligacoes:ler'),
+  ligacoesGravar: (o) => ipcRenderer.invoke('ligacoes:gravar', o),
   skills: (e) => ipcRenderer.invoke('skills:list', e),
   // prompts salvos com nome (~/.claude/cockpit-prompts.json): reaproveitar pedidos longos
   promptsLer: () => ipcRenderer.invoke('prompts:ler'),

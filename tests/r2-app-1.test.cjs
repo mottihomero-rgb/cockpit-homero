@@ -106,6 +106,7 @@ test('R2-001: restaurarAbasCorpo nao espera a VPS travada pra carregar a aba loc
     $: () => null, $$: () => [],
     painelAindaAtual: (P, revisao) => c.panes.get(P.id) === P && (P.revisaoConversa || 0) === revisao,
     renderizarHistorico: (P) => chamadas.push('render:' + P.id),
+    partesDaCadeia: (ref) => [ref],   // 25/09: sem ligacao, a conversa volta sozinha (sem cadeia)
   });
   c.window = {
     api: {
@@ -180,6 +181,7 @@ test('R2-004: P.engine so muda depois que o paneStop confirma, e blocks/tools ze
     fillModels: () => {}, paintEngine: () => {}, pintarModo: () => {}, setDot: () => {},
     montarContexto: () => 'CTX', avisarInstalacaoMotor: () => {},
     pintarUso: () => {}, lerUso: () => {}, savePanes: () => {},
+    guardarParteAnterior: () => {},   // 25/09: a troca guarda a parte anterior (conversa costurada)
     cfg: {}, panes: new Map(),
   });
   const parada = deferred();

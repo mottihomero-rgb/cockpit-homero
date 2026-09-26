@@ -333,6 +333,9 @@
     acpConfig: (o) => chamar('acp:config', o),
     sessionHistory: (o) => chamar('sessions:history', o),
     sessionTitulo: (o) => chamar('sessions:titulo', o),
+    // trocar de IA no iPhone costura a conversa igual ao Mac: o app.js e o MESMO nos dois
+    ligacoesLer: () => chamar('ligacoes:ler'),
+    ligacoesGravar: (o) => chamar('ligacoes:gravar', o),
     buscarConversas: (o) => chamar('sessions:buscar', o),
     renomear: (o) => chamar('sessao:renomear', o),
     nomeCurto: (o) => chamar('sessao:nomeCurto', o),

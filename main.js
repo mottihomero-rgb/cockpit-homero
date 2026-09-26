@@ -1899,6 +1899,97 @@ const NOMES_PATH = () => path.join(app.getPath('userData'), 'nomes.json');
 function lerNomes() { try { return JSON.parse(fs.readFileSync(NOMES_PATH(), 'utf8')); } catch { return {}; } }
 function salvarNomes(o) { gravarSeguro(NOMES_PATH(), JSON.stringify(o)); }
 
+/* ======================= ligacoes entre conversas (troca de IA) =======================
+   Trocar de IA no meio de um chat faz o motor novo abrir OUTRA conversa, no armazenamento
+   DELE (o Claude em ~/.claude/projects, o Codex em ~/.codex/sessions...). Sem nada ligando os
+   dois pedacos, a conversa virava duas metades em listas diferentes e reabrir uma mostrava so
+   aquela metade. Este arquivo guarda, para cada conversa que nasceu de uma troca, qual era a
+   parte anterior. Formato:
+     { "v": 1, "ligacoes": { "<motor>:<id da nova>": { engine, id, file, cwd, quando,
+                                                        anterior: { engine, id, file, cwd } } } }
+   A chave e so motor+id (sem o arquivo): a parte nova e uma conversa so, e o Codex pode gravar
+   o mesmo id em mais de uma .jsonl. Quem ve a lista monta a cadeia andando de anterior em
+   anterior. Gravacao atomica pelo gravarSeguro, igual ao nomes.json. */
+const LIGACOES_PATH = () => path.join(app.getPath('userData'), 'ligacoes.json');
+function parteDaLigacao(p) {
+  if (!p || typeof p !== 'object') return null;
+  const engine = String(p.engine || ''), id = String(p.id || '');
+  // motor e sempre uma palavra curta; id vazio ou gigante e lixo (arquivo editado na mao)
+  if (!/^[a-z]{2,12}$/.test(engine) || !id || id.length > 200) return null;
+  return {
+    engine, id,
+    file: typeof p.file === 'string' ? p.file.slice(0, 2000) : '',
+    cwd: typeof p.cwd === 'string' ? p.cwd.slice(0, 2000) : '',
+  };
+}
+function lerLigacoes() {
+  let bruto = null;
+  try { bruto = JSON.parse(fs.readFileSync(LIGACOES_PATH(), 'utf8')); }
+  catch (e) {
+    /* arquivo corrompido: guarda uma copia antes de a proxima gravacao escrever por cima, o
+       mesmo cuidado do config.json. As conversas em si nao correm risco — so a costura. */
+    try {
+      if (fs.existsSync(LIGACOES_PATH())) {
+        fs.copyFileSync(LIGACOES_PATH(), LIGACOES_PATH() + '.quebrado');
+        anota('ligacoes.json ilegivel, copia em ligacoes.json.quebrado:', e && e.message);
+      }
+    } catch {}
+    return {};
+  }
+  const lig = bruto && typeof bruto === 'object' ? bruto.ligacoes : null;
+  if (!lig || typeof lig !== 'object') return {};
+  const out = {};
+  for (const [k, v] of Object.entries(lig)) {
+    const nova = parteDaLigacao(v), anterior = parteDaLigacao(v && v.anterior);
+    if (!nova || !anterior) continue;
+    if (k !== nova.engine + ':' + nova.id) continue;                        // chave que nao bate: lixo
+    if (anterior.engine === nova.engine && anterior.id === nova.id) continue;   // conversa ligada nela mesma
+    out[k] = { ...nova, anterior, quando: Number(v.quando) || 0 };
+  }
+  return out;
+}
+function salvarLigacoes(o) { return gravarSeguro(LIGACOES_PATH(), JSON.stringify({ v: 1, ligacoes: o })); }
+// tira tudo que aponta para esta conversa: a ligacao em que ela e a nova e as em que e a anterior
+function esquecerLigacoesDe(engine, id) {
+  if (!engine || !id) return;
+  const todas = lerLigacoes();
+  let mudou = false;
+  for (const [k, v] of Object.entries(todas)) {
+    if ((v.engine === engine && v.id === id) || (v.anterior.engine === engine && v.anterior.id === id)) {
+      delete todas[k]; mudou = true;
+    }
+  }
+  if (mudou) salvarLigacoes(todas);
+}
+/* A lista lateral le as ligacoes junto com os nomes que ele deu as partes: o titulo da cadeia
+   e o nome salvo de qualquer parte (da mais nova para a mais velha). Os nomes do Gemini e do
+   Grok nao passam pelo nomes.json na lista deles, entao a tela nao teria como saber. */
+handle('ligacoes:ler', () => {
+  const ligacoes = lerLigacoes();
+  const nomes = lerNomes(), deles = {};
+  for (const l of Object.values(ligacoes)) {
+    for (const p of [l, l.anterior]) if (nomes[p.id]) deles[p.id] = nomes[p.id];
+  }
+  return { ligacoes, nomes: deles };
+});
+// Vai pelo handle(): trocar de IA no iPhone tambem costura a conversa, e nao apaga nada.
+handle('ligacoes:gravar', (_e, dados) => {
+  const nova = parteDaLigacao(dados && dados.nova), anterior = parteDaLigacao(dados && dados.anterior);
+  if (!nova || !anterior) return { error: 'ligação incompleta' };
+  if (nova.engine === anterior.engine && nova.id === anterior.id) return { error: 'uma conversa não continua ela mesma' };
+  const todas = lerLigacoes();
+  /* Ciclo (A continua B que continua A) faria a cadeia andar em roda. Se a anterior ja
+     descende da nova, a ligacao e recusada: a tela so perde a costura, nunca trava. */
+  let k = anterior.engine + ':' + anterior.id;
+  for (let passos = 0; todas[k] && passos < 200; passos++) {
+    const a = todas[k].anterior;
+    if (a.engine === nova.engine && a.id === nova.id) return { error: 'ligação em círculo' };
+    k = a.engine + ':' + a.id;
+  }
+  todas[nova.engine + ':' + nova.id] = { ...nova, anterior, quando: Date.now() };
+  return salvarLigacoes(todas) ? { ok: true } : { error: 'Não consegui gravar a ligação.' };
+});
+
 handle('sessao:renomear', async (_e, { engine, id, nome }) => {
   const todos = lerNomes();
   if (nome && nome.trim()) todos[id] = nome.trim(); else delete todos[id];
@@ -2625,7 +2716,13 @@ function acharConversaClaude(id, cwd) {
 
 handle('sessions:history', async (_e, { engine, file, id, cwd }) => {
   let alvo = file && fs.existsSync(file) ? file : '';
-  if (engine === 'gemini') return cortarHistorico(cli.historico(alvo), 600, 250);
+  /* a 1a fala depois de uma troca de IA leva o contexto colado pelo app ("Estou continuando uma
+     conversa... Agora, o novo pedido:"). O Claude, o Codex e o ACP ja tiravam; o Gemini
+     mostrava a meia pagina de contexto na bolha dele ao reabrir a conversa. */
+  if (engine === 'gemini') {
+    return cortarHistorico(cli.historico(alvo)
+      .map((m) => (m.role === 'user' && m.text ? { ...m, text: semContexto(m.text) || m.text } : m)), 600, 250);
+  }
   /* leva 12.5 — o ACP: o corte é o mesmo dos outros dois motores (600 falas / 250 passos),
      e NÃO o corte de 60 do acp.js, que é o default de quem chama sem dizer nada. Com 60 a
      conversa voltava só com o fim, que é exatamente o bug que a leva do histórico consertou.
@@ -2831,6 +2928,9 @@ ipcMain.handle('sessao:apagar', async (_e, dados) => {
     try { const c = lerCarimbos(); if (c && c[f]) { delete c[f]; gravarCarimbosDepois(); } } catch {}
     // e o apelido que ele deu para ela
     try { const nomes = lerNomes(); if (id && nomes[id]) { delete nomes[id]; salvarNomes(nomes); } } catch {}
+    // e a costura com as outras partes: ligacao apontando para arquivo na Lixeira so faria a
+    // lista procurar uma parte que nao existe mais
+    try { esquecerLigacoesDe(engine, id); } catch {}
     // o indice de titulos tambem aponta para o arquivo que acabou de sumir
     try { const ind2 = lerIndice(); if (ind2 && ind2[f]) { delete ind2[f]; gravarIndice(); } } catch {}
     return { ok: true };
@@ -5147,7 +5247,9 @@ const cli = require('./cli-motors').criarCli({ HOME, emit: (paneId, kind, data) 
 }, spawnBin, acharBin, temBin, buildEnv: () => contasCli.ambiente('gemini'),
   pastaDados: () => app.getPath('userData'), matarGrupo: matarGrupoExtra,
   aoConfirmarConta: () => contasCli.confirmar('gemini'), aoFalharConta: () => contasCli.invalidar('gemini') });
-handle('sessions:cli', (_e, engine) => engine === 'gemini' ? cli.sessoes()
+// o titulo do Gemini sai da 1a fala, como no ACP: depois de uma troca de IA ela comeca com o
+// contexto colado, e o tituloAcp rele o arquivo so nesse caso para mostrar o pedido de verdade
+handle('sessions:cli', (_e, engine) => engine === 'gemini' ? cli.sessoes().map(s => ({ ...s, title: tituloAcp(s) }))
   : engine === 'grok' ? acp.sessoes().filter(s => /(?:^|[\\/])grok(?:\s|$)/.test(s.comando)).map(s => ({ ...s, engine: 'grok', title: tituloAcp(s) })) : []);
 
 

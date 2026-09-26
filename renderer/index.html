@@ -36,19 +36,8 @@
   <nav id="activitybar">
     <!-- sem "active" aqui: a coluna comeca FECHADA, entao nenhum icone pode nascer marcado.
          quem marca e o sincronizarIconesLaterais(), sempre olhando se a coluna esta aberta -->
-    <button class="act ic-claude" data-view="hclaude" title="Conversas do Claude">
-      <svg viewBox="0 0 24 24" class="logo-motor" id="svgClaude"></svg>
-    </button>
-    <button class="act ic-codex" data-view="hcodex" title="Conversas do Codex">
-      <svg viewBox="0 0 24 24" class="logo-motor" id="svgCodex"></svg>
-    </button>
-    <!-- leva 12.4: o terceiro motor. Qualquer agente que fale o Agent Client Protocol
-         (Gemini CLI, Qwen, OpenCode, os adaptadores do Zed) entra por este mesmo cano. -->
-    <button class="act ic-gemini" data-view="hgemini" title="Conversas do Gemini">
-      <svg viewBox="0 0 24 24" class="logo-motor" id="svgGemini"></svg>
-    </button>
-    <button class="act ic-grok" data-view="hgrok" title="Conversas do Grok">
-      <svg viewBox="0 0 24 24" class="logo-motor" id="svgGrok"></svg>
+    <button class="act ic-conversas" data-view="conversas" title="Conversas">
+      <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
     </button>
     <!-- leva 10.2: torre de controle — todas as sessões, aqui e fora do Cockpit -->
     <button class="act" data-view="torre" title="Torre de controle: todos os chats, aqui e fora do Cockpit">
@@ -66,61 +55,21 @@
   </nav>
 
   <aside id="sidebar">
-    <div class="side-view" data-view="hclaude">
-      <div class="side-head"><span>Conversas do Claude</span><button class="mini" data-reload="claude"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /> <path d="M21 3v5h-5" /></svg></button></div>
-      <div class="side-conta" data-conta="claude"></div>
-      <button class="side-filtro" data-filtro="claude"><span class="sf-txt">Mac inteiro</span><span class="sf-seta"></span></button>
-      <div class="side-pastas hidden" data-pastas="claude"></div>
-      <input class="side-busca" data-busca="claude" placeholder="Buscar em tudo…">
+    <!-- UMA lista so, de todas as IAs (25/09). Antes era uma coluna por motor: trocar de IA
+         no meio do chat partia a conversa em dois pedacos, cada um numa coluna diferente.
+         Agora a conversa costurada aparece uma vez, com o logo de cada IA que trabalhou nela.
+         O filtro, a busca, os grupos e o "Novo chat" continuam os mesmos, so que valem para tudo. -->
+    <div class="side-view" data-view="conversas">
+      <div class="side-head"><span>Conversas</span><button class="mini" data-reload="todas" title="Atualizar agora"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /> <path d="M21 3v5h-5" /></svg></button></div>
+      <!-- uso do plano: um bloco curto por IA que tem numero (pintarUsoLateral) -->
+      <div class="cv-uso" id="cvUso"></div>
+      <button class="side-filtro" data-filtro="todas"><span class="sf-txt">Mac inteiro</span><span class="sf-seta"></span></button>
+      <div class="side-pastas hidden" data-pastas="todas"></div>
+      <input class="side-busca" data-busca="todas" placeholder="Buscar em tudo…">
       <!-- faixa de grupos de conversa (leva 8): desenhada por pintarAbasGrupo -->
-      <div class="grp-abas" data-grupos="claude"></div>
-      <button class="new-chat" data-new="claude"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg> Novo chat nesta aba</button>
-      <div class="hist" id="histClaude"></div>
-    </div>
-    <div class="side-view hidden" data-view="hcodex">
-      <div class="side-head"><span>Conversas do Codex</span><button class="mini" data-reload="codex"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /> <path d="M21 3v5h-5" /></svg></button></div>
-      <div class="side-conta" data-conta="codex"></div>
-      <button class="side-filtro" data-filtro="codex"><span class="sf-txt">Mac inteiro</span><span class="sf-seta"></span></button>
-      <div class="side-pastas hidden" data-pastas="codex"></div>
-      <input class="side-busca" data-busca="codex" placeholder="Buscar em tudo…">
-      <!-- faixa de grupos de conversa (leva 8): desenhada por pintarAbasGrupo -->
-      <div class="grp-abas" data-grupos="codex"></div>
-      <button class="new-chat" data-new="codex"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg> Novo chat nesta aba</button>
-      <div class="hist" id="histCodex"></div>
-    </div>
-    <!-- leva 12.4: a coluna do motor ACP, cópia da do Codex (mesmo filtro de pasta, mesma
-         busca, mesma faixa de grupos, mesmo "Novo chat nesta aba") -->
-    <div class="side-view hidden" data-view="hacp">
-      <div class="side-head"><span>Conversas do ACP</span><button class="mini" data-reload="acp"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /> <path d="M21 3v5h-5" /></svg></button></div>
-      <div class="side-conta" data-conta="acp"></div>
-      <button class="side-filtro" data-filtro="acp"><span class="sf-txt">Mac inteiro</span><span class="sf-seta"></span></button>
-      <div class="side-pastas hidden" data-pastas="acp"></div>
-      <input class="side-busca" data-busca="acp" placeholder="Buscar em tudo…">
-      <!-- faixa de grupos de conversa (leva 8): desenhada por pintarAbasGrupo -->
-      <div class="grp-abas" data-grupos="acp"></div>
-      <div class="hist" id="histAcp"></div>
-    </div>
-    <div class="side-view hidden" data-view="hgemini">
-      <div class="side-head"><span>Conversas do Gemini</span><button class="mini" data-reload="gemini"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /> <path d="M21 3v5h-5" /></svg></button></div>
-      <div class="side-conta" data-conta="gemini"></div>
-      <button class="side-filtro" data-filtro="gemini"><span class="sf-txt">Mac inteiro</span><span class="sf-seta"></span></button>
-      <div class="side-pastas hidden" data-pastas="gemini"></div>
-      <input class="side-busca" data-busca="gemini" placeholder="Buscar em tudo…">
-      <!-- faixa de grupos de conversa (leva 8): desenhada por pintarAbasGrupo -->
-      <div class="grp-abas" data-grupos="gemini"></div>
-      <button class="new-chat" data-new="gemini"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg> Novo chat nesta aba</button>
-      <div class="hist" id="histGemini"></div>
-    </div>
-    <div class="side-view hidden" data-view="hgrok">
-      <div class="side-head"><span>Conversas do Grok</span><button class="mini" data-reload="grok"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /> <path d="M21 3v5h-5" /></svg></button></div>
-      <div class="side-conta" data-conta="grok"></div>
-      <button class="side-filtro" data-filtro="grok"><span class="sf-txt">Mac inteiro</span><span class="sf-seta"></span></button>
-      <div class="side-pastas hidden" data-pastas="grok"></div>
-      <input class="side-busca" data-busca="grok" placeholder="Buscar em tudo…">
-      <!-- faixa de grupos de conversa (leva 8): desenhada por pintarAbasGrupo -->
-      <div class="grp-abas" data-grupos="grok"></div>
-      <button class="new-chat" data-new="grok"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg> Novo chat nesta aba</button>
-      <div class="hist" id="histGrok"></div>
+      <div class="grp-abas" data-grupos="todas"></div>
+      <button class="new-chat" data-new="foco"><svg viewBox="0 0 24 24" class="ic" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /> <path d="M12 5v14" /></svg> Novo chat nesta aba</button>
+      <div class="hist" id="histTodas"></div>
     </div>
     <!-- leva 10.2: a torre é desenhada por pintarTorre() -->
     <div class="side-view hidden" data-view="torre">

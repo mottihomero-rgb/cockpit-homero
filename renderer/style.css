@@ -1851,3 +1851,42 @@ html[data-tema="jornal"] { --gemini:#39764b; --grok:#586e75; }
 @media(max-height:600px){.pl-corpo,.empilhado .pl-corpo{max-height:48px}}
 
 @media(max-width:380px){.na-motores{grid-template-columns:repeat(2,minmax(0,1fr))}.na-motor{flex-direction:row;justify-content:center;padding:10px 6px}.na-ico{width:20px;height:20px}}
+
+/* ---------- lista única de conversas (25/09) ----------
+   Uma vista só para as conversas de todas as IAs. Duas peças novas:
+   .cv-uso      o uso do plano no topo: um bloco curto por IA com número (logo + Sessão e
+                Semana, % e "zera …", barra de 3px). Sem frase: o detalhe fica no title.
+   .hi-motores  os logos das IAs que trabalharam na conversa, na ordem em que entraram, 12px,
+                cada um na cor da sua IA (a cor aparece SÓ no logo).
+   Os tokens do redesign (--fill-*, --label-*, --logo-*) entram na frente quando existirem;
+   até lá valem as cores de sempre. */
+.cv-uso{flex:none;display:flex;flex-direction:column;gap:8px;padding:2px 12px 8px}
+.cv-uso:empty{display:none}
+.cv-uso-motor{display:flex;align-items:flex-start;gap:8px;cursor:pointer;border-radius:6px}
+.cv-uso-logo{flex:none;width:12px;height:12px;margin-top:1px;display:grid;place-items:center}
+.cv-uso-logo svg{width:12px;height:12px}
+.cv-uso-janelas{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.cv-uso-janela{display:flex;flex-direction:column;gap:3px}
+.cv-uso-top{display:flex;align-items:baseline;font-size:11px;line-height:14px;font-variant-numeric:tabular-nums}
+.cv-uso-rot{flex:1;color:var(--label-2,var(--fg-dim))}
+.cv-uso-pct{font-weight:600;color:var(--label-1,var(--fg-strong))}
+.cv-uso-zera{margin-left:6px;color:var(--label-3,var(--fg-fraco))}
+.cv-uso-barra{height:3px;border-radius:2px;background:var(--fill-1,var(--bg4));overflow:hidden}
+.cv-uso-barra span{display:block;height:3px;border-radius:2px;background:var(--label-2,var(--fg-dim))}
+.cv-uso-motor:hover .cv-uso-rot{color:var(--label-1,var(--fg))}
+.hi-motores{flex:none;display:inline-flex;align-items:center;gap:3px}
+.hi-motor{width:12px;height:12px;display:grid;place-items:center}
+.hi-motor svg{width:12px;height:12px}
+.cv-uso-motor[data-motor="claude"] .cv-uso-logo,.hi-motor[data-motor="claude"]{color:var(--logo-claude,var(--claude))}
+.cv-uso-motor[data-motor="codex"] .cv-uso-logo,.hi-motor[data-motor="codex"]{color:var(--logo-codex,var(--codex))}
+.cv-uso-motor[data-motor="gemini"] .cv-uso-logo,.hi-motor[data-motor="gemini"]{color:var(--logo-gemini,var(--gemini))}
+.cv-uso-motor[data-motor="grok"] .cv-uso-logo,.hi-motor[data-motor="grok"]{color:var(--logo-grok,var(--grok))}
+.hi-motor[data-motor="acp"]{color:var(--acp)}
+/* na linha de resultado de busca o item vira bloco: os logos ficam à esquerda do título,
+   na mesma linha, em vez de ganhar uma linha só para eles */
+.hist-item.com-onde .hi-motores,.hist-item.com-trecho .hi-motores{float:left;margin:2px 6px 0 0}
+/* resposta de outra IA dentro da conversa costurada: o logo na cor de quem respondeu */
+.msg.bot[data-motor="claude"] .av{color:var(--logo-claude,var(--claude))}
+.msg.bot[data-motor="codex"] .av{color:var(--logo-codex,var(--codex))}
+.msg.bot[data-motor="gemini"] .av{color:var(--logo-gemini,var(--gemini))}
+.msg.bot[data-motor="grok"] .av{color:var(--logo-grok,var(--grok))}

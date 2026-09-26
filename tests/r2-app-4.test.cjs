@@ -65,7 +65,9 @@ test('R2-008: apagarConversa nao mexe no painel/lista/aba da conversa irma (mesm
   ctx.pararTrabalho = () => {}; ctx.limparPassos = () => {}; ctx.limparContinuar = () => {};
   ctx.escondePerm = () => {}; ctx.setDot = () => {}; ctx.savePanes = () => {};
   ctx.repintarGrupos = () => {}; ctx.marcarAbertas = () => {};
-  vm.runInContext(pegar('apagarConversa') + '\nthis.apagarConversa = apagarConversa;', ctx);
+  // 25/09: apagar passa por esquecerParteApagada (uma vez por parte da conversa costurada)
+  ctx.esquecerCadeiaDoPainel = () => {}; ctx.esquecerLigacoesLocais = () => {};
+  vm.runInContext(pegar('apagarConversa') + '\n' + pegar('esquecerParteApagada') + '\nthis.apagarConversa = apagarConversa;', ctx);
 
   // painel aberto com a conversa B (viva), que compartilha o id com a conversa A que vai pra Lixeira
   const Q = { id: 'painelB', engine: 'codex', resumeId: null, sessaoId: 'id1', sessaoFile: 'B.jsonl', busy: false };
@@ -109,6 +111,8 @@ function contextoOpenSession() {
   ctx.$$ = () => [];
   ctx.window.api.sessionHistory = async () => [];
   ctx.window.api.sessionHistoryRemoto = async () => [];
+  // 25/09: sem ligacao nenhuma, a cadeia de uma conversa e ela mesma
+  ctx.partesDaCadeia = s => [s]; ctx.refDaParte = p => p;
   vm.runInContext(pegar('openSession') + '\nthis.openSession = openSession;', ctx);
   return ctx;
 }

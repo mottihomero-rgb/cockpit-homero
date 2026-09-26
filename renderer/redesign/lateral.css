@@ -624,3 +624,12 @@ html.vidro-tonalizado[data-theme="light"]{--glass-regular:rgba(252,252,253,.98);
 #torreResposta .tr-corpo > .pane-perm{display:flex}
 .torre-aba .torre-conta{font-variant-numeric:tabular-nums}
 .torre-grupo-espera .torre-nome{color:var(--status-wait-text)}
+
+/* ---- janelinha de dica dos ícones (26/09, dica-icone.js) ----
+   O mesmo balão do (i) dos Ajustes (.dica), um pouco mais estreito: o nome em 12/600 em cima e a
+   linha do que faz em 12 label-2 embaixo. Não pega o mouse (não atrapalha o clique no ícone). */
+.dica.dica-icone{max-width:230px;display:flex;flex-direction:column;gap:1px;pointer-events:none}
+.dica-icone b{font:600 12px/16px var(--font-sans);color:var(--label-1)}
+.dica-icone span{font:400 12px/16px var(--font-sans);color:var(--label-2)}
+.dica-icone.so-nome span,.dica-icone.so-desc b{display:none}
+.dica-icone.so-desc span{color:var(--label-1)}

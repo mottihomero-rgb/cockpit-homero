@@ -5154,18 +5154,18 @@ function mostrarPlano(P, ev) {
   clearEmpty(P);
   const d = document.createElement('div');
   d.className = 'plano-pronto';
-  d.innerHTML = '<div class="pl-cab"><span class="pl-ic">' + ico('clipboard-list') + '</span><span class="pl-tit">Plano</span></div>'
-    + '<div class="msg bot pl-msg"><div class="msg-body pl-corpo"></div></div>'
-    + '<div class="pl-acoes"><button class="pl-ajustar" type="button">Ajustar</button><span class="pq-gap"></span>'
-    + '<button class="pl-executar" type="button">Executar</button></div>';
-  const corpo = $('.pl-corpo', d);
+  d.innerHTML = '<div class="plx-cab"><span class="plx-ic">' + ico('clipboard-list') + '</span><span class="plx-tit">Plano</span></div>'
+    + '<div class="msg bot plx-msg"><div class="msg-body plx-corpo"></div></div>'
+    + '<div class="plx-acoes"><button class="plx-ajustar" type="button">Ajustar</button><span class="pq-gap"></span>'
+    + '<button class="plx-executar" type="button">Executar</button></div>';
+  const corpo = $('.plx-corpo', d);
   try { corpo.innerHTML = marked.parse(ev.plano || ''); } catch { corpo.textContent = ev.plano || ''; }
   try { linkarArquivos(P, corpo); marcarLinksWeb(corpo); } catch {}
   P.chat.appendChild(d);
   const estado = { key: ev.key, el: d, enviando: false };
   P.planoPendente = estado;
-  $('.pl-executar', d).onclick = () => responderPlano(P, true);
-  $('.pl-ajustar', d).onclick = () => {
+  $('.plx-executar', d).onclick = () => responderPlano(P, true);
+  $('.plx-ajustar', d).onclick = () => {
     const campo = $('.p-input', P.el);
     if (campo) { campo.placeholder = 'O que mudar no plano?'; campo.focus(); }
   };
@@ -5182,9 +5182,9 @@ function fecharPlano(P, rotulo) {
   const d = est.el;
   if (d && d.isConnected) {
     d.classList.add('respondido');
-    const acoes = $('.pl-acoes', d);
-    if (acoes) acoes.innerHTML = rotulo ? '<span class="pl-estado"></span>' : '';
-    if (rotulo) $('.pl-estado', d).textContent = rotulo;
+    const acoes = $('.plx-acoes', d);
+    if (acoes) acoes.innerHTML = rotulo ? '<span class="plx-estado"></span>' : '';
+    if (rotulo) $('.plx-estado', d).textContent = rotulo;
   }
   const campo = P.el && $('.p-input', P.el);
   if (campo) campo.placeholder = 'Mensagem para ' + nomeDoMotor(P.engine);

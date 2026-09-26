@@ -26,8 +26,11 @@
   const NOTA_TINTA = '#23231f';
   const LIM_PNG = 2160;    // teto do lado maior: o WebSocket do telefone corta em 8MB
   /* 'tinta' e um sentinela, nao uma cor: vira o --fg-strong do tema na hora de pintar.
-     Sem isso, traco preto some no tema escuro e traco claro some no tema claro. */
-  const PALETA = ['tinta', '#d97757', '#4a90e2', '#4f9d5d', '#c9922b', '#d9534f', '#9b7bd4'];
+     Sem isso, traco preto some no tema escuro e traco claro some no tema claro.
+     As outras cinco sao as cores do sistema do redesenho (26/09): vermelho, laranja, verde, azul
+     e roxo, o mesmo hex nos dois temas (a cor vai gravada no desenho e no PNG). Desenho antigo
+     com as cores de antes continua com elas: so a paleta dos botoes mudou. */
+  const PALETA = ['tinta', '#FF453A', '#FF9F0A', '#34C759', '#0A84FF', '#BF5AF2'];
   /* hexes que versoes antigas gravavam no lugar de 'tinta' (um por tema) */
   const TINTAS_VELHAS = ['#e8e8e8', '#1c1c20', '#073642'];
   const PADRAO = {
@@ -47,7 +50,7 @@
     nota: 'note', seta: 'arrow', linha: 'line', texto: 'text', caneta: 'scribble', borracha: 'eraser',
     desfazer: 'rewind', refazer: 'redo', x: 'xmark', mandar: 'arrow-up', preencher: 'fill',
     frente: 'bring-front', tras: 'send-back', apagar: 'trash', imagem: 'download', copiar: 'copy',
-    ajustar: 'fit',
+    ajustar: 'fit', menos: 'minus', mais: 'plus',
   };
   const qico = (n) => '<svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" '
     + 'stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
@@ -2106,17 +2109,20 @@
 
     const zoom = document.createElement('div');
     zoom.className = 'qd-zoom';
-    const zMenos = bt('qd-zoom-bt', 'Menos zoom', '−');
+    const zMenos = bt('qd-zoom-bt', 'Menos zoom', qico('menos'));
     zMenos.onclick = () => zoomPara(Q.cam.z / 1.2, Q.larg / 2, Q.alt / 2);
     const zNum = document.createElement('span');
     zNum.className = 'qd-zoom-n'; zNum.textContent = '100%';
     zNum.style.cursor = 'pointer'; zNum.title = 'Voltar para 100%';
     zNum.onclick = () => zoomPara(1, Q.larg / 2, Q.alt / 2);
-    const zMais = bt('qd-zoom-bt', 'Mais zoom', '+');
+    const zMais = bt('qd-zoom-bt', 'Mais zoom', qico('mais'));
     zMais.onclick = () => zoomPara(Q.cam.z * 1.2, Q.larg / 2, Q.alt / 2);
     zoom.append(zMenos, zNum, zMais);
+    /* redesenho (25/09): o zoom mora na barra de cima, entre os botoes pequenos e o X
+       ("Quadro … − 100% + ×"), e nao mais boiando no canto do palco */
+    top.insertBefore(zoom, bX);
 
-    palco.append(canvas, dica, editor, zoom);
+    palco.append(canvas, dica, editor);
     meio.append(barra, palco);
 
     /* rodape */

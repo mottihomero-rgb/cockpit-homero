@@ -240,55 +240,63 @@
   <div id="panes"></div>
 </div>
 
-<!-- tela do meio: escolher motor e pasta da aba nova -->
+<!-- tela "Nova aba": sheet que desce do topo (redesenho 25/09). Cada grupo mora no seu
+     .na-sec; a fileira de pastas e o "Escolher pasta…" dividem a mesma linha (.na-fichas). -->
 <div id="novaAba" class="hidden">
-  <div class="na-cx">
-    <h1 class="na-tit">Nova aba</h1>
+  <div class="na-cx" role="dialog" aria-labelledby="naTit">
+    <h1 class="na-tit" id="naTit">Nova aba</h1>
 
-    <div class="na-rot">Com quem o primeiro chat vai ser</div>
-    <div class="na-motores">
-      <button class="na-motor on" data-motor="claude">
-        <span class="na-ico" id="naIcClaude"></span>
-        <span class="na-n">Claude</span>
-      </button>
-      <button class="na-motor" data-motor="codex">
-        <span class="na-ico" id="naIcCodex"></span>
-        <span class="na-n">Codex</span>
-      </button>
-      <button class="na-motor" data-motor="gemini">
-        <span class="na-ico" id="naIcGemini"></span>
-        <span class="na-n">Gemini</span>
-      </button>
-      <button class="na-motor" data-motor="grok">
-        <span class="na-ico" id="naIcGrok"></span>
-        <span class="na-n">Grok</span>
-      </button>
+    <div class="na-sec">
+      <div class="na-rot">Assistente</div>
+      <div class="na-motores">
+        <button class="na-motor on" data-motor="claude">
+          <span class="na-ico" id="naIcClaude"></span>
+          <span class="na-n">Claude</span>
+        </button>
+        <button class="na-motor" data-motor="codex">
+          <span class="na-ico" id="naIcCodex"></span>
+          <span class="na-n">Codex</span>
+        </button>
+        <button class="na-motor" data-motor="gemini">
+          <span class="na-ico" id="naIcGemini"></span>
+          <span class="na-n">Gemini</span>
+        </button>
+        <button class="na-motor" data-motor="grok">
+          <span class="na-ico" id="naIcGrok"></span>
+          <span class="na-n">Grok</span>
+        </button>
+      </div>
     </div>
 
-    <div class="na-rot">Onde ele vai trabalhar</div>
-    <div class="na-ondes">
-      <button class="na-onde on" data-onde="mac"><span class="na-onde-ic"></span><span>Neste Mac</span></button>
-      <button class="na-onde" data-onde="vps"><span class="na-onde-ic"></span><span>Na VPS</span></button>
+    <div class="na-sec">
+      <div class="na-rot">Onde trabalha</div>
+      <div class="na-ondes" role="group" aria-label="Onde trabalha">
+        <button class="na-onde on" data-onde="mac"><span class="na-onde-ic"></span><span>Neste Mac</span></button>
+        <button class="na-onde" data-onde="vps" title="Na VPS"><span class="na-onde-ic"></span><span>No servidor</span></button>
+      </div>
     </div>
 
-    <div class="na-rot">Pasta do projeto</div>
-    <!-- os clientes e as pastas usadas por ultimo, em botao. A janela de pastas do Mac (o
-         botao logo abaixo) virou o ultimo recurso, nao o unico caminho. -->
-    <div class="na-atalhos" id="naAtalhosMac"></div>
-    <button class="na-pasta" id="naPasta">
-      <span class="na-pasta-ic"></span>
-      <span class="na-pasta-txt">Escolher a pasta do projeto…</span>
-    </button>
-    <div class="na-remoto hidden" id="naRemoto">
-      <input class="na-caminho" id="naCaminho" placeholder="/opt/adsure" spellcheck="false">
-      <div class="na-atalhos" id="naAtalhos"></div>
-    </div>
-    <div class="na-escolhida hidden" id="naEscolhida">
-      <span class="na-esc-nome" id="naPastaNome"></span>
-      <button class="na-esc-x" id="naPastaX" title="Tirar a pasta"></button>
+    <div class="na-sec">
+      <div class="na-rot">Pasta do projeto</div>
+      <!-- os clientes e as pastas usadas por ultimo, em botao. A janela de pastas do Mac (o
+           botao logo depois da fileira) virou o ultimo recurso, nao o unico caminho. -->
+      <div class="na-fichas">
+        <div class="na-atalhos" id="naAtalhosMac"></div>
+        <button class="na-pasta" id="naPasta">
+          <span class="na-pasta-ic"></span>
+          <span class="na-pasta-txt">Escolher pasta…</span>
+        </button>
+      </div>
+      <div class="na-remoto hidden" id="naRemoto">
+        <input class="na-caminho" id="naCaminho" placeholder="/opt/adsure" spellcheck="false">
+        <div class="na-atalhos" id="naAtalhos"></div>
+      </div>
+      <div class="na-escolhida hidden" id="naEscolhida">
+        <span class="na-esc-nome" id="naPastaNome"></span>
+        <button class="na-esc-x" id="naPastaX" title="Tirar a pasta"></button>
+      </div>
     </div>
 
-    <button class="na-ok" id="naOk">Começar</button>
     <p class="na-dica" id="naDica"></p>
     <button class="na-dois hidden" id="naDois">
       <span class="na-ico peq" id="naDoisA"></span>
@@ -296,15 +304,21 @@
       <span class="na-ico peq" id="naDoisB"></span>
       <span>Começar com os dois lado a lado</span>
     </button>
+    <div class="na-rodape">
+      <button class="na-cancela" id="naCancela">Cancelar</button>
+      <button class="na-ok" id="naOk">Começar</button>
+    </div>
   </div>
 </div>
 
 <!-- lista de atalhos do teclado (⌘/) -->
 <div id="telaAtalhos" class="hidden">
   <div class="at-cx">
-    <h1 class="at-tit">Atalhos do teclado</h1>
+    <div class="at-topo">
+      <h1 class="at-tit" title="⌘/ abre e fecha esta lista · Esc fecha">Atalhos do teclado</h1>
+      <label class="at-busca"><span class="at-busca-ic"></span><input id="atBusca" type="text" placeholder="Buscar atalho" spellcheck="false" autocomplete="off"></label>
+    </div>
     <div id="atLista"></div>
-    <p class="at-pe">⌘/ abre e fecha esta lista · Esc fecha</p>
   </div>
 </div>
 
@@ -350,7 +364,8 @@
     </header>
     <div class="modal p-modal hidden"><div class="modal-cx"></div></div>
     <div class="modal p-visor hidden"><div class="visor-cx">
-      <div class="visor-top"><span class="visor-nome"></span>
+      <div class="visor-top"><span class="visor-ic"></span><span class="visor-nome"></span>
+        <span class="visor-caminho"></span><span class="visor-gap"></span>
         <button class="visor-abrir" title="Abrir no Mac"></button>
         <button class="visor-x" title="Fechar (Esc)"></button></div>
       <div class="visor-corpo"></div>

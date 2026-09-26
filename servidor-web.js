@@ -37,7 +37,7 @@ const PERMITIDOS = new Set([
   'voz:transcrever',
   'quadro:salvar', 'quadro:rascunhoGravar', 'quadro:rascunhoLer',
   'arquivo:ver', 'arquivo:verVps', 'term:linhaShell',
-  'conta:ler', 'uso:ler', 'agentes:claude', 'git:status', 'git:diff',
+  'conta:ler', 'uso:ler', 'agentes:claude', 'agentes:nomes', 'git:status', 'git:diff',
   'motores:versoes', 'motores:disponiveis', 'rotinas:listar',
   'mcp:list', 'mcp:acao', 'auth:acao',
   /* Estes tres a tela do celular OFERECE no menu, e sem eles aqui o toque so respondia

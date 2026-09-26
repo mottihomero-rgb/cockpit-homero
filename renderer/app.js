@@ -55,7 +55,7 @@ const ICONE_NOVO = {
   'refresh-cw': 'retry', 'rotate-cw': 'retry', 'panel-left': 'sidebar', 'columns-2': 'columns',
   'plug': 'plug', 'book': 'book', 'star': 'star', 'server': 'server', 'key-round': 'key',
   'log-out': 'log-out', 'circle-help': 'question', 'square': 'stop', 'agentes': 'team',
-  'quadro': 'board', 'crop': 'crop', 'camera': 'camera', 'git-branch': 'branch', 'clip': 'clip',
+  'quadro': 'board', 'crop': 'crop', 'camera': 'camera', 'git-branch': 'branch', 'clip': 'clip', 'reply': 'reply',
 };
 // sem o icones.js carregado (os testes rodam o app.js solto) os ícones saem vazios, sem quebrar
 const CK_TRACOS = (typeof window !== 'undefined' && window.CK_ICONES) || {};
@@ -2207,7 +2207,13 @@ function userMsg(P, text, anexos) {
     for (const a of anexos) cx.appendChild(fichaAnexo(a, false, null, P));
   }
   const corpo = $('.msg-body', d);
-  corpo.textContent = text;
+  // mensagem presa a um trecho da resposta: o trecho aparece como citação e a fala dele embaixo
+  const cit = separarCitacao(text);
+  if (cit) {
+    const q = document.createElement('div'); q.className = 'msg-citacao'; q.textContent = cit.trecho;
+    corpo.before(q);
+    corpo.textContent = cit.fala;
+  } else corpo.textContent = text;
   // print colado sem uma palavra escrita: some com a bolha vazia que ficaria embaixo da fichinha
   if (!text) corpo.classList.add('hidden');
   // marca onde esta mensagem entra na fila de edições: é o que permite voltar no tempo
@@ -4090,7 +4096,7 @@ async function send(P) {
     if (chipNaVista(P, chipCont)) inp.value = 'continue';
     else chipCont.scrollIntoView({ block: 'nearest' });
   }
-  const text = inp.value.trim();
+  let text = inp.value.trim();
   if (text || (P.anexos || []).length || P.quadroColado) limparSugestoes(P);
   /* Print colado sozinho TEM de sair. Antes o envio exigia texto: ele colava a imagem, apertava
      Enter e nao acontecia nada — a fichinha ficava presa no campo e ele achava que tinha
@@ -4104,6 +4110,10 @@ async function send(P) {
     planoPelaCaixa(P, text);
     return;
   }
+  /* 26/09: trecho da resposta que ele selecionou e mandou "Responder": a mensagem vai presa a ele.
+     O trecho entra no começo do texto (o motor lê; o histórico guarda igual) e o balão dele mostra
+     o trecho como citação em cima da fala (userMsg). */
+  if (P.citacao && text) { text = comCitacao(P.citacao, text); limparCitacao(P); }
   /* A mensagem VAI sair: soltar o microfone. Fica DEPOIS da saída acima de propósito — Enter
      no campo vazio no meio do ditado é falha de captação, e ali o ditado tem de continuar.
      `guardarTexto`: o texto já foi lido para `text` e o campo é limpo logo abaixo. */
@@ -5294,6 +5304,95 @@ function planoAoFimDoTurno(P) {
     enviarComoEle(P, 'Plano aprovado. Pode executar.');
   } });
 }
+
+/* ================= responder um trecho da resposta (26/09) =================
+   Pedido dele: selecionar uma frase do que a IA escreveu, clicar em "Responder" e o que ele
+   mandar a seguir tratar exatamente daquele trecho. Selecionou texto dentro de uma resposta →
+   aparece o botão "Responder" em cima da seleção. Clicou → o trecho vai para cima da caixa de
+   escrever (com × para desistir). A próxima mensagem sai com o trecho na frente. Vale para as
+   4 IAs: é só texto. */
+const CITACAO_ABRE = 'Sobre este trecho da sua resposta:\n';
+function comCitacao(trecho, fala) {
+  const linhas = String(trecho).split('\n').map(l => '> ' + l).join('\n');
+  return CITACAO_ABRE + linhas + '\n\n' + fala;
+}
+function separarCitacao(texto) {
+  const t = String(texto || '');
+  if (!t.startsWith(CITACAO_ABRE)) return null;
+  const resto = t.slice(CITACAO_ABRE.length);
+  const fim = resto.indexOf('\n\n');
+  if (fim < 0) return null;
+  const bloco = resto.slice(0, fim).split('\n');
+  if (!bloco.every(l => l.startsWith('> ') || l === '>')) return null;
+  return { trecho: bloco.map(l => l.replace(/^> ?/, '')).join('\n'), fala: resto.slice(fim + 2) };
+}
+function limparCitacao(P) {
+  P.citacao = null;
+  const el = P.el && $('.p-citacao', P.el);
+  if (el) el.remove();
+}
+function citarTrecho(P, trecho) {
+  const t = String(trecho || '').replace(/\n{3,}/g, '\n\n').trim().slice(0, 1500);
+  if (!t) return;
+  limparCitacao(P);
+  P.citacao = t;
+  const cx = $('.pane-cmp', P.el);
+  const el = document.createElement('div');
+  el.className = 'p-citacao';
+  el.innerHTML = '<span class="pc-ic">' + ico('reply') + '</span><span class="pc-txt"></span>'
+    + '<button class="pc-x" type="button" title="Tirar o trecho" aria-label="Tirar o trecho">' + ico('x') + '</button>';
+  $('.pc-txt', el).textContent = t;
+  $('.pc-x', el).onclick = () => { limparCitacao(P); const c = $('.p-input', P.el); if (c) c.focus(); };
+  cx.insertBefore(el, cx.firstChild);
+  setFocus(P);
+  const campo = $('.p-input', P.el); if (campo) campo.focus();
+}
+let botaoResponder = null;
+function esconderBotaoResponder() { if (botaoResponder) botaoResponder.classList.add('hidden'); }
+function selecaoNaResposta() {
+  const s = window.getSelection && window.getSelection();
+  if (!s || s.isCollapsed || !s.rangeCount) return null;
+  const texto = s.toString().trim();
+  if (texto.length < 2) return null;
+  const r = s.getRangeAt(0);
+  const no = r.commonAncestorContainer.nodeType === 1 ? r.commonAncestorContainer : r.commonAncestorContainer.parentElement;
+  const resposta = no && no.closest && no.closest('.msg.bot .msg-body, .msg.bot');
+  if (!resposta) return null;
+  const paneEl = resposta.closest('.pane');
+  const P = paneEl && [...panes.values()].find(q => q.el === paneEl);
+  if (!P) return null;
+  return { P, texto, caixa: r.getBoundingClientRect() };
+}
+function mostrarBotaoResponder() {
+  const sel = selecaoNaResposta();
+  if (!sel) { esconderBotaoResponder(); return; }
+  if (!botaoResponder) {
+    botaoResponder = document.createElement('button');
+    botaoResponder.type = 'button';
+    botaoResponder.className = 'bt-responder hidden';
+    botaoResponder.innerHTML = ico('reply') + '<span>Responder</span>';
+    // mousedown e não click: o clique tiraria a seleção antes de ler o trecho
+    botaoResponder.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const agora = selecaoNaResposta() || botaoResponder._sel;
+      esconderBotaoResponder();
+      if (agora) { citarTrecho(agora.P, agora.texto); try { window.getSelection().removeAllRanges(); } catch {} }
+    });
+    document.body.appendChild(botaoResponder);
+  }
+  botaoResponder._sel = sel;
+  botaoResponder.classList.remove('hidden');
+  const w = botaoResponder.offsetWidth || 100;
+  const x = Math.max(8, Math.min(sel.caixa.left + sel.caixa.width / 2 - w / 2, window.innerWidth - w - 8));
+  const y = sel.caixa.top - 36 > 8 ? sel.caixa.top - 36 : sel.caixa.bottom + 8;
+  botaoResponder.style.left = Math.round(x) + 'px';
+  botaoResponder.style.top = Math.round(y) + 'px';
+}
+document.addEventListener('mouseup', () => setTimeout(mostrarBotaoResponder, 0));
+document.addEventListener('keyup', (e) => { if (e.shiftKey || e.key === 'Shift') setTimeout(mostrarBotaoResponder, 0); });
+// no celular a seleção vem pelo toque longo: acompanha a seleção mudando
+document.addEventListener('selectionchange', () => { if (window.SEM_ELECTRON) setTimeout(mostrarBotaoResponder, 0); else if (!selecaoNaResposta()) esconderBotaoResponder(); });
+document.addEventListener('scroll', esconderBotaoResponder, true);
 
 function renderizarHistorico(P, m) {
   const role = m.role || m.kind || m.type;

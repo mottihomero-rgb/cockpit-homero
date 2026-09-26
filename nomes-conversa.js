@@ -81,6 +81,8 @@ function semColagem(t) {
   if (entra >= 0 && s.indexOf('esta mensagem chegou enquanto') >= 0) s = s.slice(entra + '--- o que eu pedi ---'.length);
   const novo = s.indexOf('Agora, o novo pedido:');
   if (novo >= 0) s = s.slice(novo + 'Agora, o novo pedido:'.length);
+  // resposta a um trecho (26/09): o trecho citado é da IA, não pedido dele
+  if (s.startsWith('Sobre este trecho da sua resposta:\n')) { const fim = s.indexOf('\n\n'); if (fim > 0) s = s.slice(fim + 2); }
   const anexos = s.indexOf('Arquivos que anexei');
   if (anexos > 0) s = s.slice(0, anexos);
   return s.trim();

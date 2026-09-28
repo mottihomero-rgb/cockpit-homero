@@ -43,6 +43,18 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - name: Abrir o app pronto e testar tela e terminal
         run: node tests/fumaca-app.cjs "${{ matrix.app }}" dist
+      - name: Windows - rodar o instalador e abrir o app instalado
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $inst = Get-ChildItem dist\*-Windows.exe | Select-Object -First 1
+          Start-Process $inst.FullName -ArgumentList '/S' -Wait
+          $exe = Get-ChildItem "$env:LOCALAPPDATA\Programs" -Recurse -Filter Cockpit.exe | Select-Object -First 1
+          if (-not $exe) { throw 'o instalador nao deixou o Cockpit.exe instalado' }
+          Write-Host "instalado em $($exe.FullName)"
+          $atalho = Test-Path "$env:USERPROFILE\Desktop\Cockpit.lnk"
+          Write-Host "atalho na area de trabalho: $atalho"
+          node tests/fumaca-app.cjs $exe.FullName dist
       - uses: actions/upload-artifact@v4
         if: always()
         with:

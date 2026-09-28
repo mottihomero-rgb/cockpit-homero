@@ -12,7 +12,7 @@
     "test:ui": "node tests/auditoria-ui.cjs && node tests/auditoria-renderer-interacao-26.cjs && node tests/auditoria-detalhes-interacao-26.cjs && node tests/auditoria-uuid-http-26.cjs && node tests/nomenclatura-ui-26.cjs",
     "test:electron": "node tests/auditoria-electron.cjs",
     "test:acp": "node tests/teste-acp.js && node tests/teste-acp-ponte.js",
-    "build:win": "electron-builder --win --x64"
+    "build:win": "electron-builder --win --x64 --publish never"
   },
   "dependencies": {
     "@lydell/node-pty": "^1.2.0-beta.15",

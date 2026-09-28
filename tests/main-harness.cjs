@@ -4,11 +4,15 @@
 // arquivos e processos). Nenhum motor, chaveiro, navegador ou rede é iniciado.
 const vm = require('node:vm');
 const fs = require('node:fs');
-const path = require('node:path');
+const pathNativo = require('node:path');
+// O main simulado roda como se fosse no Mac (platform 'darwin'), então os caminhos DELE são
+// sempre com '/', mesmo quando o teste roda no Windows. Os arquivos reais do projeto (root)
+// continuam no formato da máquina.
+const path = pathNativo.posix;
 const { EventEmitter } = require('node:events');
 
 function loadMain(options = {}) {
-  const root = path.resolve(__dirname, '..');
+  const root = pathNativo.resolve(__dirname, '..');
   const files = new Map();
   const ipc = new Map();
   const events = [], wire = [], spawned = [], timers = new Map();
@@ -122,7 +126,7 @@ function loadMain(options = {}) {
     clearTimeout(id) { timers.delete(id); },
     setInterval(fn) { const id = ++timerId; timers.set(id, fn); return id; },
     clearInterval(id) { timers.delete(id); },
-    fetch: forbidden('fetch'), __dirname: root, __filename: path.join(root, 'main.js'),
+    fetch: forbidden('fetch'), __dirname: root, __filename: pathNativo.join(root, 'main.js'),
   });
   function safeRequire(name) {
     if (name === 'electron') return electron;
@@ -130,19 +134,20 @@ function loadMain(options = {}) {
     if (name === 'os' || name === 'node:os') return { homedir: () => HOME, userInfo: () => ({ username: 'teste' }) };
     if (name === 'child_process' || name === 'node:child_process') return { spawn: fakeSpawn, execFileSync: forbidden('execFileSync') };
     if (name === './plataforma') return platform;
-    if (['path', 'node:path', 'crypto', 'node:crypto', 'string_decoder', 'node:string_decoder'].includes(name)) return require(name);
+    if (name === 'path' || name === 'node:path') return path;
+    if (['crypto', 'node:crypto', 'string_decoder', 'node:string_decoder'].includes(name)) return require(name);
     if (name.startsWith('./') && !name.includes('servidor-web')) {
-      const file = path.resolve(root, name.endsWith('.js') ? name : name + '.js');
+      const file = pathNativo.resolve(root, name.endsWith('.js') ? name : name + '.js');
       if (moduleCache.has(file)) return moduleCache.get(file).exports;
       const mod = { exports: {} }; moduleCache.set(file, mod);
       const compiled = vm.runInContext('(function(require,module,exports,__dirname,__filename){\n' + fs.readFileSync(file, 'utf8') + '\n})', ctx, { filename: file });
-      compiled(safeRequire, mod, mod.exports, path.dirname(file), file);
+      compiled(safeRequire, mod, mod.exports, pathNativo.dirname(file), file);
       return mod.exports;
     }
     throw new Error('require não permitido no harness: ' + name);
   }
   ctx.require = safeRequire;
-  const src = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+  const src = fs.readFileSync(pathNativo.join(root, 'main.js'), 'utf8');
   vm.runInContext(src, ctx, { filename: 'main.js', timeout: 3000 });
   ctx.__captureEvent = event => events.push(JSON.parse(JSON.stringify(event)));
   vm.runInContext("ouvintesWeb.add({send(line) { __captureEvent(JSON.parse(line)); }});", ctx);

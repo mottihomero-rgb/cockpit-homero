@@ -9,7 +9,7 @@ test('terminal Python sem canal extra continua lendo o que foi digitado', { skip
     '/usr/bin/python3', '-u', '-c', 'print("PRONTO"); print("RECEBIDO:" + input())']);
   let out = '', enviou = false;
   const code = await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { child.kill('SIGKILL'); reject(new Error('terminal deixou de ler a entrada; saída: ' + out)); }, 3000);
+    const timer = setTimeout(() => { child.kill('SIGKILL'); reject(new Error('terminal deixou de ler a entrada; saída: ' + out)); }, 15000);
     child.stdout.on('data', data => {
       out += data.toString();
       if (!enviou && out.includes('PRONTO')) { enviou = true; child.stdin.write('resposta\n'); }

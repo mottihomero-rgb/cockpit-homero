@@ -7,7 +7,7 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --mac --arm64",
+    "build": "electron-builder --mac --arm64 --publish never",
     "test": "node --test tests/*.test.cjs && npm run test:acp",
     "test:ui": "node tests/auditoria-ui.cjs && node tests/auditoria-renderer-interacao-26.cjs && node tests/auditoria-detalhes-interacao-26.cjs && node tests/auditoria-uuid-http-26.cjs && node tests/nomenclatura-ui-26.cjs",
     "test:electron": "node tests/auditoria-electron.cjs",

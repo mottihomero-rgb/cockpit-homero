@@ -1,6 +1,6 @@
 # Cockpit
 
-Codex e Claude lado a lado, numa tela só, com acesso a tudo no Mac.
+Codex e Claude lado a lado, numa tela só. Roda no Mac e no Windows.
 
 App de mesa (Electron) que abre vários painéis de terminal com agentes de IA rodando ao mesmo tempo. Dá pra falar com cada um, ver o gasto de tokens de cada conversa e continuar do celular pelo navegador.
 
@@ -13,7 +13,48 @@ App de mesa (Electron) que abre vários painéis de terminal com agentes de IA r
 
 ## Instalar
 
-Baixe o app pronto na aba [Releases](../../releases) (macOS).
+Baixe o instalador na aba [Releases](../../releases/latest).
+
+Antes, instale o que o Cockpit comanda (ele não traz as IAs dentro):
+- **Node.js 22 ou mais novo** — [nodejs.org](https://nodejs.org)
+- **Claude Code** — `npm install -g @anthropic-ai/claude-code`
+- **Codex** (opcional) — `npm install -g @openai/codex`
+
+Depois entre na sua conta pelo próprio Cockpit: **Ajustes › Contas › Vincular**.
+
+### Mac (Apple Silicon: M1, M2, M3, M4)
+
+1. Baixe o `Cockpit-...-Mac.dmg`, abra e arraste o Cockpit para **Aplicativos**.
+2. Na primeira vez o Mac avisa que não conhece o desenvolvedor. Abra o **Terminal** e rode:
+   ```bash
+   xattr -cr /Applications/Cockpit.app
+   ```
+   Depois abra normalmente. (Ou: botão direito no app › Abrir › Abrir.)
+3. Para o Cockpit enxergar todas as suas pastas: **Ajustes do Sistema › Privacidade e
+   Segurança › Acesso Total ao Disco** › ligar o Cockpit. A permissão fica mesmo quando
+   você instala uma versão nova.
+
+### Windows (10 ou 11, 64 bits)
+
+1. Baixe o `Cockpit-...-Windows.exe` e abra.
+2. O Windows pode mostrar "O Windows protegeu o computador". Clique em **Mais informações ›
+   Executar assim mesmo** (o app não tem certificado pago, é só isso).
+3. Siga o instalador. O atalho aparece na Área de Trabalho e no Menu Iniciar.
+
+No Windows ficam de fora só os recursos que dependem do macOS: ditado nativo e leitura de
+texto em imagem (OCR). O resto é igual.
+
+## Gerar uma versão nova
+
+Mude o `version` do `package.json`, grave e suba uma etiqueta:
+
+```bash
+git tag v1.2.0
+git push homero main v1.2.0
+```
+
+O GitHub monta sozinho o instalador do Mac e o do Windows e publica em Releases
+(receita em `.github/workflows/instaladores.yml`).
 
 ## Rodar a partir do código
 
@@ -49,7 +90,8 @@ pelo app. Atualizações de versão principal exigem repetir os testes nativos.
 ## Gerar o app
 
 ```bash
-npm run build
+npm run build       # Mac
+npm run build:win   # Windows
 ```
 
 O resultado sai na pasta `dist/`.

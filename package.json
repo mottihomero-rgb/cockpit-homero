@@ -1,6 +1,6 @@
 {
   "name": "cockpit",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Codex e Claude lado a lado, com acesso a tudo no Mac",
   "main": "main.js",
   "author": "Homero Motti",
@@ -11,7 +11,8 @@
     "test": "node --test tests/*.test.cjs && npm run test:acp",
     "test:ui": "node tests/auditoria-ui.cjs && node tests/auditoria-renderer-interacao-26.cjs && node tests/auditoria-detalhes-interacao-26.cjs && node tests/auditoria-uuid-http-26.cjs && node tests/nomenclatura-ui-26.cjs",
     "test:electron": "node tests/auditoria-electron.cjs",
-    "test:acp": "node tests/teste-acp.js && node tests/teste-acp-ponte.js"
+    "test:acp": "node tests/teste-acp.js && node tests/teste-acp-ponte.js",
+    "build:win": "electron-builder --win --x64"
   },
   "dependencies": {
     "@lydell/node-pty": "^1.2.0-beta.15",
@@ -62,15 +63,6 @@
       "**/node_modules/@lydell/**"
     ],
     "extraResources": [
-      "ptybridge.py",
-      {
-        "from": "voz/ditado-vivo",
-        "to": "ditado-vivo"
-      },
-      {
-        "from": "voz/ocr-vision",
-        "to": "ocr-vision"
-      },
       {
         "from": "assets/codex-notification.wav",
         "to": "codex-notification.wav"
@@ -79,14 +71,61 @@
     "mac": {
       "category": "public.app-category.developer-tools",
       "target": [
-        "dir"
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
       ],
       "icon": "assets/icon.icns",
       "identity": "-",
       "extendInfo": {
         "NSCameraUsageDescription": "O Cockpit usa a câmera para você fotografar um rascunho no papel ou um quadro físico e mandar direto para o Claude ou o Codex.",
         "NSMicrophoneUsageDescription": "O Cockpit usa o microfone para o ditado: você fala e o texto aparece no campo da mensagem."
-      }
+      },
+      "artifactName": "Cockpit-${version}-Mac.${ext}",
+      "extraResources": [
+        "ptybridge.py",
+        {
+          "from": "voz/ditado-vivo",
+          "to": "ditado-vivo"
+        },
+        {
+          "from": "voz/ocr-vision",
+          "to": "ocr-vision"
+        }
+      ],
+      "hardenedRuntime": false
+    },
+    "afterSign": "scripts/assinar-mac.cjs",
+    "publish": null,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "artifactName": "Cockpit-${version}-Windows.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Cockpit",
+      "language": "1046"
     }
   }
 }

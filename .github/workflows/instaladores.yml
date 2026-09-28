@@ -1,0 +1,51 @@
+# Gera o instalador do Mac e do Windows e publica na aba Releases.
+# Dispara ao subir uma etiqueta de versão (ex.: git tag v1.2.0 && git push homero v1.2.0)
+# ou à mão, pela aba Actions.
+name: Instaladores
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            comando: npm run build
+            arquivos: dist/*.dmg dist/*.zip
+          - os: windows-latest
+            comando: npm run build:win
+            arquivos: dist/*.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Testes
+        run: npm test
+      - name: Gerar instalador
+        run: ${{ matrix.comando }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cockpit-${{ matrix.os }}
+          path: ${{ matrix.arquivos }}
+      - name: Publicar na Release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "Cockpit $GITHUB_REF_NAME" --notes "Instaladores do Mac (Apple Silicon) e do Windows (64 bits). Como instalar: ver o README."
+          gh release upload "$GITHUB_REF_NAME" ${{ matrix.arquivos }} --clobber

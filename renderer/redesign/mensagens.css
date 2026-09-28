@@ -147,8 +147,12 @@
 .msg-body li + li{margin-top:4px}
 .msg-body li > :is(ul,ol){margin-top:4px}
 .msg-body li::before{position:absolute;left:4px;width:12px;text-align:right;color:var(--label-3)}
+/* nowrap: o overflow-wrap:anywhere da fala partia o "10." em duas linhas ("1" em cima, "0" embaixo) */
 .msg-body ol > li::before{content:counter(list-item) ".";font-variant-numeric:tabular-nums;
-  width:auto;min-width:12px;left:auto;right:calc(100% - 16px)}
+  width:auto;min-width:12px;left:auto;right:calc(100% - 16px);white-space:nowrap}
+/* 10 itens ou mais: a coluna do número cresce 8 para o "10." não vazar pela esquerda */
+.msg-body ol:has(> li:nth-child(10)) > li{padding-left:34px}
+.msg-body ol:has(> li:nth-child(10)) > li::before{right:calc(100% - 24px)}
 .msg-body ul > li::before{content:"•"}
 .msg-body ul ul > li::before{content:"◦"}
 /* lista de tarefas do markdown ("- [ ] item"): a caixinha já é o marcador */
@@ -227,7 +231,7 @@
    o textDelta marcou a fala (.chegando, o textFinal tira) E ela é o bloco logo antes do
    "trabalhando" (.trab), que só existe com o motor ocupado: turno parado não fica com cursor. */
 /* O cursor vai no fim do ÚLTIMO texto, seja ele parágrafo, título, citação ou o último item da
-   lista (a fala que chega terminando em "- Responder o Pedro sobre o" ficava sem cursor). No
+   lista (a fala que chega terminando em "- Responder a Maria sobre o" ficava sem cursor). No
    item que tem sublista ou parágrafos, o cursor desce para o último deles. */
 .msg.bot:has(+ .trab) .msg-body.chegando > :is(p,h1,h2,h3,h4,h5,h6):last-child::after,
 .msg.bot:has(+ .trab) .msg-body.chegando > blockquote:last-child > p:last-child::after,

@@ -315,6 +315,7 @@
     // Mac: quem manda nas abas do Mac e o Mac.
     setConfig: (cfg) => guardarConfig(cfg),
     home: () => chamar('sys:home'),
+    pessoal: () => chamar('sys:pessoal'),
     // no telefone estas tres nao existem: quem abre janela do sistema e o Mac. Responder na
     // hora evita o toque ficar 2 minutos esperando uma resposta que nunca vem.
     pickFolder: () => { alert('No iPhone use o campo de caminho ou os atalhos: a janela de pastas só abre no Mac.'); return Promise.resolve(null); },

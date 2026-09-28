@@ -3,7 +3,7 @@
  * Quando o Claude solta varios subagentes, o Cockpit desenha um cartao por agente (no painel
  * grande e no cartao "Time de agentes" da conversa). O cartao mostrava o nome tecnico que o
  * motor manda ("code-reviewer-1", "Explore codebase for auth flow") e uma linha em letra de
- * maquina com comando e caminho de arquivo. O Homero nao programa: batia o olho e nao entendia
+ * maquina com comando e caminho de arquivo. O usuário nao programa: batia o olho e nao entendia
  * quem estava fazendo o que.
  *
  * Agora cada cartao diz so duas coisas, em portugues de gente:

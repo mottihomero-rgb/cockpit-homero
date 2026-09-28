@@ -3,7 +3,7 @@
   "version": "1.2.0",
   "description": "Codex e Claude lado a lado, com acesso a tudo no Mac",
   "main": "main.js",
-  "author": "Homero Motti",
+  "author": "Cliente",
   "license": "MIT",
   "scripts": {
     "start": "electron .",

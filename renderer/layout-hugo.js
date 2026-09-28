@@ -233,7 +233,7 @@ function mostrarSugestoes(P, itens) {
     b.title = texto + '\nClique para colocar no campo de mensagem.';
     b.onclick = () => {
       const campo = $('.p-input', P.el);
-      // Um rascunho escrito pelo Homero nunca pode ser apagado pela sugestão.
+      // Um rascunho escrito pelo usuário nunca pode ser apagado pela sugestão.
       campo.value = campo.value.trim() ? campo.value.replace(/\s+$/, '') + '\n' + texto : texto;
       limparSugestoes(P); campo.dispatchEvent(new Event('input', { bubbles: true })); campo.focus();
       campo.setSelectionRange(campo.value.length, campo.value.length);

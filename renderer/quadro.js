@@ -165,7 +165,7 @@
     agendar();
   }
 
-  /* encaixe de 8px ligado por padrao: o Homero nao vai aprender a ligar snap.
+  /* encaixe de 8px ligado por padrao: o usuário nao vai aprender a ligar snap.
      Segurar Alt/Option desliga so enquanto durar o gesto. */
   const enc = (v, alt) => (alt ? v : Math.round(v / SNAP) * SNAP);
 

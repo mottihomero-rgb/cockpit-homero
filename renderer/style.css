@@ -845,7 +845,7 @@ textarea.cxq-input{min-height:62px;resize:vertical}
 .hist-item.com-trecho{display:block;position:relative;padding-right:52px}
 .hist-item.com-trecho .hi-t{display:block}
 .hist-item.com-trecho .hi-w{float:right;margin-left:8px}
-/* etiqueta "Codex · Pedro" do resultado de busca: a busca olha os quatro motores e
+/* etiqueta "Codex · Maria" do resultado de busca: a busca olha os quatro motores e
    todas as pastas, entao cada linha diz de onde veio. LINHA PROPRIA, embaixo do titulo:
    ao lado dele a etiqueta comia a coluna (medido: 230px de coluna, sobravam 20px pro
    titulo e aparecia uma letra so) — e o titulo e justamente o que ele esta procurando.
@@ -1500,7 +1500,7 @@ body.arrastando-aba,body.arrastando-aba *{cursor:grabbing !important}
 .hist-item.com-trecho .hi-edit{right:52px}
 .hist-item.com-trecho .hi-fav{right:75px}
 /* O resultado de busca SEM trecho vira display:block pelo mesmo motivo daqui de cima: a
-   etiqueta "Codex · Pedro" ganhou uma linha propria embaixo do titulo, e linha propria so
+   etiqueta "Codex · Maria" ganhou uma linha propria embaixo do titulo, e linha propria so
    existe fora do flex. Mesmos numeros das regras acima: 98px de folga e os quatro botoes
    ancorados no canto direito. Com trecho as duas marcas convivem e dao no mesmo. */
 .hist-item.com-onde{display:block;position:relative;padding-right:0}

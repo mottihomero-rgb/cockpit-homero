@@ -24,6 +24,14 @@ if (typeof app.requestSingleInstanceLock === 'function' && !app.requestSingleIns
 }
 
 const HOME = os.homedir();
+/* O que é só do dono DESTA máquina (servidor, vault, robôs, nome) mora fora do código, em
+   ~/.cockpit/pessoal.json. O app é mandado para outras pessoas: nada de nome, servidor ou pasta
+   de ninguém pode vir cravado aqui. Sem o arquivo, tudo isso fica desligado. */
+const PESSOAL = (() => {
+  try { const j = JSON.parse(fs.readFileSync(path.join(HOME, '.cockpit', 'pessoal.json'), 'utf8')); return j && typeof j === 'object' ? j : {}; }
+  catch { return {}; }
+})();
+const listaPessoal = (k) => (Array.isArray(PESSOAL[k]) ? PESSOAL[k].filter((x) => typeof x === 'string' && x) : []);
 const contasCli = require('./contas-cli').criarContasCli({ HOME, pastaDados: () => app.getPath('userData'), acharBin, temBin,
   buildEnv: () => plataforma.buildEnv(), ehWindows: EH_WIN });
 // no Mac o Claude mora sempre no mesmo lugar; no Windows a gente procura
@@ -919,10 +927,8 @@ function fileChangeSummary(it) {
 /* O app-server nao aplica sozinho o ~/.codex/AGENTS.md, entao mandamos as regras da casa
    junto com cada conversa nova. Se o arquivo existir, ele manda; senao, vai o basico. */
 function instrucoesCasa() {
-  const base = 'Responda SEMPRE em português do Brasil, nunca em inglês.\n'
-    + 'O Homero é leigo em código: fale em palavras simples, com exemplos do contexto dele.\n'
-    + 'Resposta curta: ele tem TDAH e não lê texto longo. Comece pelo resultado.\n'
-    + 'Não use travessão no texto para ele.';
+  // só o idioma: quem é a pessoa e como ela quer a resposta vem do AGENTS.md DELA, logo abaixo
+  const base = 'Responda SEMPRE em português do Brasil, nunca em inglês.';
   try {
     const f = path.join(HOME, '.codex/AGENTS.md');
     const txt = fs.readFileSync(f, 'utf8');
@@ -1014,12 +1020,12 @@ const claudeCwd = new Map();
 /* O Claude Code nomeia a pasta da sessao trocando TODO caractere que nao e letra nem numero
    por traco. Aqui so trocava "/" e ".", entao pasta com espaco ou acento gerava um caminho
    que nao existe no disco e a conversa nunca voltava. Conferido: a pasta real do cliente
-   "Matheus Mota" e "-Users-...-Projetos-Matheus-Mota", e a de "Adsure - Copy Lancamentos"
-   e "-Users-...-Adsure---Copy-Lan-amentos" (o "c cedilha" tambem vira traco). */
+   "Maria Silva" e "-Users-...-Projetos-Maria-Silva", e a de "Meu Vault"
+   e "-Users-...-Meu-Vault" (o "c cedilha" tambem vira traco). */
 function caminhoReal(dir) {
   // O Claude Code resolve o atalho (realpath) ANTES de montar o nome da pasta da conversa.
-  // A home do Homero tem varios atalhos (~/cockpit, ~/maquina-sites, ~/mcp-servers...)
-  // apontando para ~/Documents/Adsure - Sistemas/. Sem resolver aqui, o nome que montamos
+  // A home do usuário tem varios atalhos (~/cockpit, ~/maquina-sites, ~/mcp-servers...)
+  // apontando para ~/Documents/Sistemas/. Sem resolver aqui, o nome que montamos
   // aponta para uma pasta que nao existe no disco e a conversa volta vazia.
   try { return fs.realpathSync(String(dir)); } catch { return String(dir); }
 }
@@ -1584,9 +1590,10 @@ function listDir(dir) {
    Uma pasta remota vem escrita como "vps:/caminho/na/vps". Tudo que fala com
    pasta (motor, arvore de arquivos, visor) passa por aqui e vira comando por SSH.
    O Claude/Codex rodam LA, entao e a conta e o disco da VPS que valem. */
-const SERVIDORES = {
-  vps: { host: 'vps', usuario: 'homero', nome: 'VPS' },
-};
+const SERVIDORES = {};
+if (PESSOAL.vps && typeof PESSOAL.vps.host === 'string' && PESSOAL.vps.host) {
+  SERVIDORES.vps = { host: PESSOAL.vps.host, usuario: PESSOAL.vps.usuario || '', nome: PESSOAL.vps.nome || 'Servidor' };
+}
 const ehRemoto = (cwd) => /^[a-z0-9_-]+:\//i.test(String(cwd || '')) && !!SERVIDORES[String(cwd).split(':')[0]];
 function partesRemoto(cwd) {
   const txt = String(cwd || '');
@@ -2868,7 +2875,7 @@ function claudeSessions(limit, incluirRobos) {
 /* ---- quanto da conversa volta para a tela ----
    Antes era um `slice(-60)` cru sobre TUDO, e cada Edit, Bash ou Read conta como item. Numa
    conversa de trabalho as ferramentas comem as 60 vagas sozinhas: medido em 03/09/2026, uma
-   conversa de 10 falas do Homero + 59 respostas + 363 ferramentas voltava com 4 falas e 11
+   conversa de 10 falas do usuário + 59 respostas + 363 ferramentas voltava com 4 falas e 11
    respostas. Ou seja, o que sumia era justamente a CONVERSA — e ela ainda alimenta o P.hist,
    de onde sai o contexto quando o chat volta sem o fio. Agora quem manda no corte e a fala:
    elas voltam todas (ate maxFalas) e so as ferramentas mais ANTIGAS sao podadas, ate maxTools. */
@@ -3023,7 +3030,7 @@ const ORIGENS_DE_GENTE = ['cockpit', 'codex-tui', 'codex_tui', 'codex_vscode', '
 const TECNICO = /<recommended_plugins>|<environment_context>|<user_instructions>|<system-reminder>|<available_tools>|<plugins>|<task-notification>|<command-name>|<local-command-stdout>|<bash-input>|<function_results>|^Caveat:|^\[Request interrupted|^\[Image: original|^<[a-z_-]+>/i;
 const ehTecnico = (t) => !t || TECNICO.test(t.trim().slice(0, 400));
 
-/* O que o Claude Code injeta na conversa NAO e fala do Homero, mas fica gravado no mesmo lugar
+/* O que o Claude Code injeta na conversa NAO e fala do usuário, mas fica gravado no mesmo lugar
    e com o mesmo "role: user". Antes so era barrado o que comecava com a tag — o que vinha
    colado DEPOIS da fala dele (lembrete de sistema, contexto de hook, aviso de tarefa que
    terminou) passava batido e reaparecia na tela ao reabrir o app, misturado com a conversa.
@@ -4739,7 +4746,7 @@ handle('term:linhaShell', (_e, cwd) => {
   if (!r) return { error: 'servidor desconhecido' };
   const dir = aspaSh(r.caminho);
   /* Duas camadas, e a segunda foi MEDIDA na VPS dele em 08/09/2026: o ~/.bashrc de la tem um
-     `cd /opt/adsure/trabalho` FIXO (linha 119), que roda depois do nosso cd e o desfazia — o
+     `cd /opt/app/trabalho` FIXO (linha 119), que roda depois do nosso cd e o desfazia — o
      terminal abria sempre na mesma pasta, fosse qual fosse o painel. O PROMPT_COMMAND roda
      DEPOIS do rc, pouco antes do primeiro prompt, e se apaga na mesma linha para nao repetir a
      cada comando. O `cd` de antes fica porque vale para shell que nao usa PROMPT_COMMAND.
@@ -5133,7 +5140,7 @@ function createWindow() {
      as conversas paradas e o trabalho perdido. Por isso o aviso: o 'close' ainda da para
      cancelar; o 'closed' logo abaixo ja e depois do estrago. Cmd+Q nao pergunta nada, que ai
      a ordem de sair e clara. Se qualquer coisa der errado aqui, a janela fecha normal: nunca
-     prender o Homero dentro do app. */
+     prender o usuário dentro do app. */
   win.on('close', (e) => {
     if (saindoDoApp) return;
     let quantos = 0;
@@ -5261,6 +5268,12 @@ handle('config:set', (_e, c, origem) => {
   return { ok: true, abasDevolvidas: devolvidas };
 });
 handle('sys:home', () => HOME);
+// o que a tela precisa do pessoal.json: se tem servidor, os atalhos de pasta dele e o nome no vault
+handle('sys:pessoal', () => ({
+  servidor: !!SERVIDORES.vps,
+  pastasServidor: SERVIDORES.vps ? listaPessoal('pastasServidor') : [],
+  nome: typeof PESSOAL.nome === 'string' ? PESSOAL.nome : '',
+}));
 
 /* Escolher pasta sem um ponto de partida cai na home, e de la sao 3 cliques ate os projetos.
    O padrao passa a ser a pasta dos projetos do Claude, que e de onde quase toda aba nasce. */
@@ -5324,11 +5337,11 @@ handle('prompts:salvar', (_e, lista) => {
 /* ---------- guardar a conversa no Obsidian ----------
    Regra da casa: texto mora no vault. Conversa de cliente vai para a pasta dele; o resto cai
    em "3 - Operação". O nome do cliente sai da pasta do chat (…/Projetos/<Cliente>/…). */
-const VAULT = path.join(HOME, 'Documents', 'Adsure - Copy Lançamentos');
+const VAULT = typeof PESSOAL.vault === 'string' ? PESSOAL.vault : '';
 function pastaNoVault(cwd) {
   const m = String(cwd || '').match(/Projetos\/([^/]+)/);
   const cliente = m && m[1];
-  const genericos = ['Homero', 'Adsure'];
+  const genericos = listaPessoal('vaultGenericos');
   if (cliente && !genericos.includes(cliente)) {
     const dele = path.join(VAULT, '2 - Clientes', cliente, '_Fontes');
     if (fs.existsSync(path.join(VAULT, '2 - Clientes', cliente))) return dele;
@@ -5337,7 +5350,7 @@ function pastaNoVault(cwd) {
 }
 handle('vault:salvar', (_e, { titulo, cwd, motor, texto }) => {
   try {
-    if (!fs.existsSync(VAULT)) return { error: 'não achei o vault do Obsidian' };
+    if (!VAULT || !fs.existsSync(VAULT)) return { error: 'não achei o vault do Obsidian' };
     const pasta = pastaNoVault(cwd);
     fs.mkdirSync(pasta, { recursive: true });
     const d = new Date();
@@ -6697,7 +6710,7 @@ const ROTINAS_RUNS_PATH = () => path.join(app.getPath('userData'), 'rotinas-runs
 const ROT_UID = () => String(typeof process.getuid === 'function' ? process.getuid() : 501);
 // R1 do disparo e do print: label vem da tela, e vira caminho de domínio do launchctl
 const ROT_LABEL_OK = /^[A-Za-z0-9._-]{1,200}$/;
-const ROT_PREFIXOS = ['com.homero.', 'com.homeromotti.', 'com.adsure.'];
+const ROT_PREFIXOS = listaPessoal('rotinasPrefixos');
 const ROT_SINAL_QUEBRA = new Set([-4, -6, -8, -11]);   // ILL, ABRT, FPE, SEGV
 const ROT_CODIGOS = {
   1: 'o programa terminou com erro',
@@ -6733,7 +6746,8 @@ const ROT_CODIGOS = {
    - `application.*` é todo programa que o dono está com ABERTO agora (Chrome, Notes, Obsidian,
      WhatsApp, Terminal). Não é rotina: é app em uso. rotEhDele já trata esse prefixo como
      "não é dele". */
-const ROT_NAO_DISPARAR = [/com\.adsure\.cockpit/, /^application\./, /wa-ponte/, /executor-mac/, /tailscaled/];
+const ROT_NAO_DISPARAR = [/com\.adsure\.cockpit/, /^application\./, /tailscaled/]
+  .concat(listaPessoal('rotinasNaoDisparar').map((t) => new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))));
 
 const ROT_SEP_DES = '===COCKPIT-ROT-DESLIGADOS===';
 const ROT_SEP_PL = '===COCKPIT-ROT-PLISTS===';
@@ -7301,7 +7315,7 @@ function varrerInbox() {
     win.webContents.send('inbox', { arquivo: f, nome: n, tipo: ehImagem ? 'imagem' : 'texto', texto, legenda, quando: st.mtimeMs, ...(substituiuNome ? { substituiuNome } : {}) });
   }
   // R1-014: limpar tudo de uma vez reabria como "novo" um arquivo que ainda esta pendente
-  // na pasta (o Homero nao clicou "usar"). Poda so o que ja sumiu da pasta (`conjunto`).
+  // na pasta (o usuário nao clicou "usar"). Poda so o que ja sumiu da pasta (`conjunto`).
   if (inboxVistos.size > 500) {
     for (const k of [...inboxVistos]) if (!conjunto.has(k.slice(0, k.lastIndexOf(':')))) inboxVistos.delete(k);
     // R3-025: mesma poda pro Set irmao, senao uma base que nunca ganha imagem fica presa pra sempre

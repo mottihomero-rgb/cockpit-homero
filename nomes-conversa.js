@@ -125,16 +125,16 @@ function escolherRespostas(respostas) {
 }
 
 /* A pasta do chat vira pista do cliente/projeto (3a versao, 26/09). So as que dizem algo: a do
-   cliente (Projetos/<Cliente>/<demanda>) e a do sistema (Adsure - Sistemas/<Sistema>). A
+   cliente (Projetos/<Cliente>/<demanda>) e a do sistema (Sistemas/<Sistema>). A
    pasta pessoal e a raiz do Mac nao dizem nada e ficam de fora — na 1a versao a pasta ia crua e
-   tudo virava "Adsure". */
+   tudo virava "Cliente". */
 function pistaDaPasta(cwd) {
   const p = String(cwd || '');
   let m = /Projetos\/([^/]+)(?:\/([^/]+))?/.exec(p);
   // a demanda vem sem a data: "2026-09-26_cockpit-vincular" (antiga) ou "Cockpit Vincular Conta - 26-09-2026" (nova)
   if (m) return m[1] + (m[2] ? ' (' + m[2].replace(/^\d{4}-\d{2}-\d{2}_/, '').replace(/\s*-\s*\d{2}-\d{2}-\d{4}$/, '')
     .replace(/[-_]+/g, ' ').trim().toLowerCase() + ')' : '');
-  m = /Adsure - Sistemas\/([^/]+)/.exec(p);
+  m = /Sistemas\/([^/]+)/.exec(p);
   if (m) return m[1];
   m = /\/(Cockpit|cockpit)(?:\/|$)/.exec(p);
   if (m) return 'Cockpit';
@@ -169,7 +169,7 @@ function montarPedido({ mensagens, respostas, atual, total, pasta } = {}) {
    Claude, validado pelo chamador antes de gerar. --no-session-persistence: sem ele a propria chamada vira uma
    conversa nova na lista. --setting-sources vazio, sem MCP e sem ferramenta: com "project" e a
    pasta pessoal como diretorio, o Claude carregava o CLAUDE.md da casa junto (medido em 25/09) —
-   o nome saia puxado para "Adsure" — e levava o dobro do tempo. Raciocinio desligado: ligado, o
+   o nome saia puxado para "Cliente" — e levava o dobro do tempo. Raciocinio desligado: ligado, o
    Haiku pensava de 3.800 a 8.600 tokens para dar um nome de 4 palavras e levava de 38 a 86 s
    (medido em 25/09), estourando o prazo de 60 s — a chamada morria e ficava o nome provisorio.
    Desligado: 2,5 s e o mesmo nome. */
@@ -180,11 +180,11 @@ function argsDoNome(pedido) {
     '--system-prompt', PEDIDO_NOME, String(pedido || '')];
 }
 
-/* Nome generico do formato antigo: tipo de trabalho colado num nome so ("Alteracoes Adsure",
+/* Nome generico do formato antigo: tipo de trabalho colado num nome so ("Alteracoes Cliente",
    "Conserto Cockpit"). E o que a instrucao proibe; se a IA insistir, fica o nome que ja estava.
    Com preposicao passa ("Relatorio de Vendas" e um titulo de verdade). */
 const TIPO_GENERICO = /^(alterações|alteração|ajustes?|mudanças?|melhorias?|consertos?|correções?|criação|campanha|página|relatório|análise|pesquisa|copy|transcrição|organização|dúvidas?|suporte|trabalho|tarefas?|demanda|projeto) \S+$/i;
-/* O mesmo generico com o nome de duas palavras ("Alteracoes Excelencia Prev", que esta no nomes.json
+/* O mesmo generico com o nome de duas palavras ("Alteracoes Clinica Sorriso", que esta no nomes.json
    dele). So os tipos que nao dizem nada sozinhos: "Campanha Black Friday" e "Relatorio Meta Ads"
    dizem o assunto e passam. Com preposicao no meio tambem passa ("Criacao de Video"). */
 /* Cara de conversa em vez de titulo: a IA respondeu a mensagem dele, pediu desculpa, explicou.
@@ -210,7 +210,7 @@ const GENERICO_PURO = /^(conversa|chat|nova conversa|sem título|título|pedido|
 const VAGO = /^(?:(?:teste|testes|conexão|sistema|conversa|dúvidas?|geral|coisas|várias|hoje|chat)(?:\s+(?:de|do|da|e)?\s*)?)+$/i;
 
 /* Pontuacao: sai a das pontas e a solta (ponto final, aspas, dois-pontos, "!"), fica a que faz parte
-   do nome — ponto entre letras ou numeros (Claude.md, motti.ia.br, Node.js), virgula entre numeros
+   do nome — ponto entre letras ou numeros (Claude.md, exemplo.com.br, Node.js), virgula entre numeros
    (R$ 1.300,00) e a sigla com ponto (I.A.). Antes todo ponto virava espaco: "Ajustes no Claude md"
    saiu na propria tabela de avaliacao (achado da revisao de 25/09). */
 function limparPontuacao(t) {
@@ -257,7 +257,7 @@ function interpretarSaida(saida, atual) {
 }
 
 /* O nome que o Cockpit dava ANTES (formato "<tipo> <projeto>", de 2 ou 3 palavras e sem
-   preposicao): "Alteracoes Adsure", "Criacao Dupla", "Alteracoes Excelencia Prev". Em 25/09 eram
+   preposicao): "Alteracoes Cliente", "Criacao Dupla", "Alteracoes Clinica Sorriso". Em 25/09 eram
    166 dos 191 nomes do nomes.json dele. Serve para achar nome velho da IA gravado antes de existir
    a marca de quem deu o nome (_origem), e deixar a IA nova trocar. */
 const NOME_ANTIGO = /^(Alterações|Conserto|Criação|Campanha|Página|Relatório|Análise|Pesquisa|Copy|Transcrição|Organização) (\S+)(?: (\S+))?$/;
@@ -269,7 +269,7 @@ function nomeAntigoDaIA(t) {
 /* De quem e o nome de uma conversa, pelo nomes.json:
    'manual'  ele deu (lapis na barra ou na lista): nunca e mexido;
    'ia'      o Cockpit deu no formato novo: a IA continua acompanhando;
-   'antigo'  nome velho da IA ("Alteracoes Adsure"): a IA nova troca no fim do proximo turno;
+   'antigo'  nome velho da IA ("Alteracoes Cliente"): a IA nova troca no fim do proximo turno;
    ''        o nomes.json nao sabe (titulo do proprio Claude, frase provisoria).
    Quem deu fica em nomes._origem[id] ('manual' ou 'auto'), gravado junto com o nome. Nome gravado
    antes dessa marca: se tem a cara do formato antigo automatico, e da IA; se nao, e tratado como

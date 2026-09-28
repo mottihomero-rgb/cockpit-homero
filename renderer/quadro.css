@@ -247,7 +247,7 @@
   margin:0;padding:4px 6px;border:0;outline:0;resize:none;overflow:hidden;
   background:transparent;color:var(--fg-strong);
   font-family:var(--sans);font-size:13px;line-height:1.35;text-align:center;
-  /* body{user-select:none} e global: sem isto o Homero nao seleciona o que digita */
+  /* body{user-select:none} e global: sem isto o usuário nao seleciona o que digita */
   user-select:text;-webkit-user-select:text;
   caret-color:var(--accent)}
 .qd-editor.hidden{display:none !important}

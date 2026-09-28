@@ -12,7 +12,7 @@ function novoIdAleatorio() {
 }
 
 /* ============ estado global ============ */
-let cfg = {}, HOME = '';
+let cfg = {}, HOME = '', PESSOAL_NOME = '';
 let paneSeq = 0, focusPane = null;
 /* O iPhone roda este MESMO arquivo e fala com o MESMO processo principal do Mac. Como os dois
    contavam do zero, os dois criavam "p1", "p2"... e o telefone acabava mandando parar (ou
@@ -131,7 +131,7 @@ markdownSeguro.image = (href, _title, text) => {
   return caminho ? linkDeArquivo(caminho, text, true) : text;
 };
 marked.setOptions({ breaks: true, gfm: true, renderer: markdownSeguro });
-/* 26/09: as pastas novas têm espaço no nome ("~/Projetos/Pedro/Carrossel da Oficina - 26-09-2026")
+/* 26/09: as pastas novas têm espaço no nome ("~/Projetos/Maria/Carrossel da Loja - 26-09-2026")
    e o markdown não aceita espaço dentro de "(...)" do link: a entrega da IA virava texto morto.
    Antes de ler, o caminho de arquivo com espaço vai entre < >, que o markdown aceita. */
 const linksComEspaco = (md) => String(md || '').replace(/\]\(((?:file:\/\/)?\/(?:Users|Volumes|private|tmp|home|opt|srv|var|root)\/[^()\n<>]*?\s[^()\n<>]*?)\)/g,
@@ -152,7 +152,7 @@ const EF_DESC_PT = {
 
 // esforço com que TODA conversa nova nasce (não muda quando você mexe na barra de um painel)
 const EF_NOVO = 'xhigh';
-/* O que toda conversa NOVA do Claude e do Codex traz marcado (pedido do Homero, 15/09/2026):
+/* O que toda conversa NOVA do Claude e do Codex traz marcado (pedido do usuário, 15/09/2026):
    Codex no Sol, Claude no Opus 5.5 SEM o 1M, os dois no Alto (22/09/2026). Vale para aba nova, "nova
    conversa" e troca de motor no mesmo chat; conversa restaurada mantém o que estava salvo.
    Se o modelo sumir da lista do motor, cai no padrão dele (fillModels). */
@@ -1260,12 +1260,12 @@ function avisarAbasGuardadas(devolvidas) {
 /* ============ voltar como estava ============ */
 /* A trava "restaurando" impede o app de salvar enquanto monta as abas de volta. Antes ela so
    era desligada no caminho feliz: se qualquer coisa estourasse no meio, ela ficava ligada e o
-   savePanes() nunca mais gravava nada — em silencio. O Homero trabalhava o dia inteiro e no
+   savePanes() nunca mais gravava nada — em silencio. O usuário trabalhava o dia inteiro e no
    dia seguinte caia na tela de "Nova aba". O finally garante que ela sempre desliga. */
 /* Uma aba = uma pasta de cliente. O que esta gravado pode ter chat de outro cliente dentro
    (arrastado na mao, aberto pela lista antes desta regra existir, ou pasta trocada depois):
    ao voltar, cada chat vai para a aba do SEU cliente e duas abas do mesmo cliente viram uma so.
-   E o que impede a tela de abrir com "Matheus Mota" segurando uma conversa da pasta do Mac. */
+   E o que impede a tela de abrir com "Maria Silva" segurando uma conversa da pasta do Mac. */
 function agruparPorCliente(salvas) {
   const mapa = new Map();
   const grupos = [];
@@ -2810,7 +2810,7 @@ function lembrarEscolhaDaPasta(P) {
 }
 function aplicarEscolhaDaPasta(P) {
   /* Claude e Codex nascem SEMPRE no PADRAO_NOVO (pedido de 15/09/2026, "sempre"): a escolha da
-     pasta passava por cima (o Pedro abria no Opus 1M e no Extra alto). Continua valendo para os
+     pasta passava por cima (uma pasta abria no Opus 1M e no Extra alto). Continua valendo para os
      outros motores; o que ja foi guardado em cfg.porPasta fica la, para dar para voltar. */
   if (PADRAO_NOVO[P.engine]) return false;
   const g = cfg.porPasta && cfg.porPasta[chaveDaPasta(P)];
@@ -2881,7 +2881,7 @@ async function mandarAosOutros(P, texto, motores) {
    Texto mora no vault, nao no chat. Copiar e colar na mao dava tanto trabalho que nunca ia. */
 async function salvarConversaNoVault(P) {
   if (!P.hist.length) { avisoEnvio(P, 'Esta conversa ainda está vazia.'); return; }
-  const linhas = P.hist.map(h => '## ' + (h.quem === 'Você' ? 'Homero' : h.quem) + '\n\n' + (h.texto || '').trim());
+  const linhas = P.hist.map(h => '## ' + (h.quem === 'Você' ? (PESSOAL_NOME || 'Você') : h.quem) + '\n\n' + (h.texto || '').trim());
   const r = await window.api.salvarNoVault({
     titulo: (P.titulo || 'Conversa do Cockpit').trim(),
     cwd: P.cwd,
@@ -10555,7 +10555,7 @@ function pintarBotaoFiltro(engine) {
   const bt = $('.side-filtro[data-filtro="' + engine + '"]');
   if (!bt) return;
   /* Digitando, a busca olha o Mac inteiro e os quatro motores: o botao tem de DIZER isso.
-     Senao a tela mostra "Pedro" enquanto a lista embaixo traz conversa de todo mundo. */
+     Senao a tela mostra "Maria" enquanto a lista embaixo traz conversa de todo mundo. */
   const buscando = !!(buscaAtual[engine] || '').trim();
   const alvo = buscando ? '' : pastaDoFiltro(engine);
   $('.sf-txt', bt).textContent = alvo ? nomeProjeto(alvo) : 'Mac inteiro';
@@ -10961,7 +10961,7 @@ function abrirModalGrupo(existente) {
   const editando = !!existente;
   // a explicacao fica no balao do titulo: na tela, so o rotulo (redesenho 25/09)
   cx.innerHTML = '<div class="mo-top"><span class="mo-tit" title="Vale pro Claude e pro Codex juntos — o mesmo grupo pode ter conversa dos dois."></span><button class="mo-x"></button></div>'
-    + '<div class="mo-form"><input id="pnNome" maxlength="40" placeholder="Nome do grupo, ex: Pedro"></div>'
+    + '<div class="mo-form"><input id="pnNome" maxlength="40" placeholder="Nome do grupo, ex: Clientes"></div>'
     + '<div class="mo-dica" style="margin-top:10px">Cor</div>'
     + '<div class="cor-linha"></div>'
     + '<div class="mo-rodape"><button class="mo-btn destaque" id="pnOk"></button>'
@@ -11161,7 +11161,7 @@ function linhaConversa(s, termo, trecho) {
 }
 
 /* Linha de RESULTADO de busca. E a mesma linha de sempre, com uma etiqueta a mais: agora a
-   busca mistura os quatro motores e todas as pastas, entao sem dizer "Codex · Pedro" ele nao
+   busca mistura os quatro motores e todas as pastas, entao sem dizer "Codex · Maria" ele nao
    sabe de onde aquela conversa veio. So rotulo, sem frase.
    A etiqueta entra DEPOIS do titulo, e a marca com-onde poe cada um na sua linha: ao lado do
    titulo ela ficava com o nome inteiro do cliente e o titulo aparecia com uma letra so. */
@@ -11718,8 +11718,8 @@ function naPintar() {
   $('.na-cx').style.setProperty('--motor', 'var(--' + naEstado.motor + ')');
 }
 
-// atalhos das pastas que ele mais usa na VPS, para nao precisar digitar
-const PASTAS_VPS = ['/opt/adsure', '/opt/adsure/wa', '/root', '/home/homero', '/var/www'];
+// atalhos das pastas mais usadas no servidor, para nao precisar digitar (vem do ~/.cockpit/pessoal.json)
+let PASTAS_VPS = [];
 function naPintarAtalhos() {
   const cx = $('#naAtalhos');
   if (!cx || cx.children.length) return;
@@ -11769,7 +11769,7 @@ function naConfirmar(dois) {
   if (!dois && motorIndisponivelNaPasta(naEstado.motor, naEstado.onde === 'vps' ? 'vps:/' : '')) { naPintar(); return; }
   let cwd;
   if (naEstado.onde === 'vps') {
-    const p = ($('#naCaminho').value || '').trim() || '/opt/adsure';
+    const p = ($('#naCaminho').value || '').trim() || PASTAS_VPS[0] || '/';
     cwd = 'vps:' + (p.startsWith('/') ? p : '/' + p);
   } else {
     cwd = naEstado.pasta || HOME;
@@ -12837,6 +12837,11 @@ document.addEventListener('keydown', (e) => {
   // Sem "return" no catch: HOME/cfg já nascem com padrão no topo do arquivo e o boot segue.
   try {
     HOME = await window.api.home();
+    // servidor, atalhos e nome saem do ~/.cockpit/pessoal.json de quem instalou; sem ele, "No servidor" some
+    const pe = (window.api.pessoal ? await window.api.pessoal().catch(() => null) : null) || {};
+    PASTAS_VPS = Array.isArray(pe.pastasServidor) ? pe.pastasServidor : [];
+    PESSOAL_NOME = pe.nome || '';
+    $$('.na-onde[data-onde="vps"]').forEach(b => b.classList.toggle('hidden', !pe.servidor));
     cfg = await window.api.getConfig();
     cfg.defCwd = cfg.defCwd || HOME;
     pintarCaminho($('#defCwd'), cfg.defCwd);

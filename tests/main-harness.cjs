@@ -34,6 +34,15 @@ function loadMain(options = {}) {
   }
   mkdir(HOME);
   for (const dir of options.directories || []) mkdir(dir);
+  // o servidor, os robôs e o vault saem do ~/.cockpit/pessoal.json (fora do código); o teste semeia um
+  if (options.pessoal !== null) {
+    mkdir(HOME + '/.cockpit');
+    files.set(HOME + '/.cockpit/pessoal.json', Buffer.from(JSON.stringify(options.pessoal || {
+      vps: { host: 'vps', usuario: 'homero', nome: 'VPS' },
+      rotinasPrefixos: ['com.homero.', 'com.homeromotti.', 'com.adsure.'],
+      rotinasNaoDisparar: ['wa-ponte', 'executor-mac'],
+    })));
+  }
   const missing = name => Object.assign(new Error('ENOENT: ' + name), { code: 'ENOENT' });
   const fakeFs = {
     existsSync: name => files.has(String(name)) || directories.has(String(name)),

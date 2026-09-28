@@ -1,5 +1,5 @@
 'use strict';
-// Leitura de sessões/comandos portada do fork ohugomotti/cockpit (52dee0f).
+// Leitura de sessões/comandos portada do fork fork do Cockpit (52dee0f).
 const fs = require('fs');
 const { horaDaUltimaFala, horaDoRegistro } = require('./hora-da-fala');
 const path = require('path');

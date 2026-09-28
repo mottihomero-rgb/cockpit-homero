@@ -848,7 +848,7 @@
 
     // LINHA (sem ponta) com a outra extremidade no vazio: o desenho não diz sentido
     // nenhum. Narrar como "depois → seta solta apontando ..." inventava uma direção
-    // que o Homero não desenhou.
+    // que o usuário não desenhou.
     if (it.tipo === 'fora' && it.seta.tipo === 'linha') {
       var sl = it.seta;
       var linha = '   - sai uma linha ' + direcao(sl.para.x - sl.de.x, sl.para.y - sl.de.y) +
@@ -1230,7 +1230,7 @@
 
   /* ══════════════════════════════════════════════════════════════
      G2 — objeto de emergência: um bug aqui NUNCA pode impedir
-     o Homero de mandar o desenho.
+     o usuário de mandar o desenho.
      ══════════════════════════════════════════════════════════════ */
 
   function emergencia(opts) {

@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('api', {
   // { fechou: true }; sem isso o Mac nao deixa a gravacao diminuir a lista de abas.
   setConfig: (c, origem) => ipcRenderer.invoke('config:set', c, origem),
   home: () => ipcRenderer.invoke('sys:home'),
+  pessoal: () => ipcRenderer.invoke('sys:pessoal'),
 
   pickFolder: (start) => ipcRenderer.invoke('dialog:pickFolder', start),
   listDir: (d) => ipcRenderer.invoke('fs:list', d),

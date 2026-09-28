@@ -11806,6 +11806,8 @@ function novoChatNaAba(engine, aba) {
 }
 
 $$('.na-motor').forEach(b => b.addEventListener('click', () => { naEstado.motor = b.dataset.motor; naPintar(); }));
+// No Windows o botão não pode dizer "Neste Mac"
+if (navigator.platform.indexOf('Win') === 0) $$('.na-onde[data-onde="mac"] span:last-child').forEach(s => { s.textContent = 'Neste computador'; });
 $$('.na-onde').forEach(b => b.addEventListener('click', () => {
   naEstado.onde = b.dataset.onde; naPintarAtalhos(); naPintar();
   if (naEstado.onde === 'vps') setTimeout(() => $('#naCaminho').focus(), 40);

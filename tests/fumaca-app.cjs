@@ -39,6 +39,7 @@ const espera = ms => new Promise(r => setTimeout(r, ms));
     await pagina.screenshot({ path: path.join(saida, 'cockpit-' + process.platform + '.png') });
     if (tela.titulo !== 'Cockpit') throw new Error('título inesperado: ' + tela.titulo);
     if (!/Nova aba|Claude|Codex/.test(tela.texto)) throw new Error('a tela abriu vazia');
+    if (process.platform === 'win32' && !tela.texto.includes('Neste computador')) throw new Error('no Windows o botão ainda diz Mac');
 
     const term = await pagina.evaluate(() => new Promise(resolve => {
       let junto = '';

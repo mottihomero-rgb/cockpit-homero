@@ -57,7 +57,7 @@ test('Comandos de entrada são preparados sem executar login, com conta gratuita
   const m = montar(t);
   const g = m.contas.acao({ engine: 'gemini', acao: 'codigo' });
   assert.match(g.terminal, /NO_BROWSER='true'/); assert.match(g.terminal, /oauth-personal/);
-  assert.match(g.terminal, /contas-cli\/login/); assert.doesNotMatch(g.terminal, /segredo/);
+  assert.match(g.terminal, /contas-cli[\\/]login/); assert.doesNotMatch(g.terminal, /segredo/);
   assert.equal(g.confereDepois, true);
   const x = m.contas.acao({ engine: 'grok', acao: 'codigo' });
   assert.match(x.terminal, /'login' '--oauth' '--device-auth'/);

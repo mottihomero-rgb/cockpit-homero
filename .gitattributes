@@ -1,0 +1,7 @@
+# Mesmo fim de linha no Mac e no Windows: o selo do script (CSP) e os testes que leem o código dependem disso.
+* text=auto eol=lf
+*.png binary
+*.icns binary
+*.wav binary
+voz/ditado-vivo binary
+voz/ocr-vision binary

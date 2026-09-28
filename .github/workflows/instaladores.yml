@@ -19,7 +19,9 @@ jobs:
         include:
           - os: macos-latest
             comando: npm run build
-            arquivos: dist/*.dmg dist/*.zip
+            arquivos: |
+              dist/*.dmg
+              dist/*.zip
           - os: windows-latest
             comando: npm run build:win
             arquivos: dist/*.exe
@@ -48,4 +50,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "Cockpit $GITHUB_REF_NAME" --notes "Instaladores do Mac (Apple Silicon) e do Windows (64 bits). Como instalar: ver o README."
-          gh release upload "$GITHUB_REF_NAME" ${{ matrix.arquivos }} --clobber
+          gh release upload "$GITHUB_REF_NAME" $(echo ${{ matrix.arquivos }}) --clobber

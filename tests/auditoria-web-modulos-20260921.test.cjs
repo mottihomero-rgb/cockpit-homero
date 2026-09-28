@@ -207,7 +207,7 @@ test('Um ouvinte quebrado não impede os demais de receber evento e null é igno
   assert.equal(chegou, true); assert.equal(b.erros.length, 1);
 });
 
-test('Motor desinstalado ou sem permissão deixa de aparecer instalado, sem reiniciar app', t => {
+test('Motor desinstalado ou sem permissão deixa de aparecer instalado, sem reiniciar app', { skip: process.platform === 'win32' && 'permissão de execução (chmod) só existe no Mac' }, t => {
   const plataforma = require('../plataforma');
   const raiz = temporaria(t), nome = 'cockpit-bin-auditoria-' + Date.now();
   const bin = path.join(raiz, nome), antigo = process.env.PATH;
@@ -285,7 +285,7 @@ test('Uma sessão Gemini corrompida não esconde as demais nem quebra histórico
     JSON.stringify({ role: 'user', text: 'Conversa preservada' }), JSON.stringify({ role: 'bot', text: 'Resposta preservada' })].join('\n'));
   assert.equal(m.cli.sessoes().length, 1); assert.equal(m.cli.sessoes()[0].title, 'Conversa preservada');
   assert.equal(m.cli.historico(arquivo).length, 2);
-  const nativo = path.join(m.HOME, 'nativo.json');
+  const nativo = path.posix.join(m.HOME, 'nativo.json');
   fs.writeFileSync(nativo, JSON.stringify({ sessionId: 'nativa', messages: [null, { type: 'user', content: 'Pedido nativo' },
     { type: 'gemini', content: 'Resposta nativa', toolCalls: [null, { name: 'teste' }] }] }));
   assert.equal(m.cli.historico(nativo).length, 3);

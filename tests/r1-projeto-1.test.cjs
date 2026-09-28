@@ -128,7 +128,7 @@ test('R1-055: nome de rotina com caractere inválido é recusado antes de qualqu
 
 test('R1-055: rotina não listada, mas cujo plist local reabre o Cockpit.app, é recusada', async () => {
   const h = loadMain();
-  h.put(path.join(h.HOME, 'Library/LaunchAgents/com.homero.exemplo.plist'),
+  h.put(path.posix.join(h.HOME, 'Library/LaunchAgents/com.homero.exemplo.plist'),
     '<plist><string>/Applications/Cockpit.app/Contents/MacOS/Cockpit</string></plist>');
   const r = await h.call('rotinas:disparar', { nome: 'com.homero.exemplo' });
   assert.ok(r.error, 'plist que aponta pro Cockpit.app tem de barrar mesmo fora da lista negra');

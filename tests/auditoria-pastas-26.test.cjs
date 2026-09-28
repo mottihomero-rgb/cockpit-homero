@@ -53,7 +53,7 @@ test('E01: migração conhecida usa diretório exato e preserva retomada Claude'
 
 test('E01: config migra somente destino conhecido existente e preserva caminhos inválidos', t => {
   const h = ambiente(t), sumida = path.join(h.nova, 'sumida', 'codigo');
-  const semDestino = path.join(h.HOME, 'Desktop', 'Projetos-claude', 'Cliente ausente');
+  const semDestino = path.posix.join(h.HOME, 'Desktop', 'Projetos-claude', 'Cliente ausente');
   h.ctx.config = { abas: [{ cwd: h.antiga, chats: [{ cwd: h.antiga }, { cwd: sumida }, { cwd: semDestino }, { cwd: 'vps:/srv/projeto' }] }] };
   const d = h.handlers['config:get']();
   assert.equal(d.abas[0].cwd, h.nova);

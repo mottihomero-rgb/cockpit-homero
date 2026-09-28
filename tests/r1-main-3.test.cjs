@@ -18,7 +18,7 @@ const { loadMain } = require('./main-harness.cjs');
 
 test('R1-011: duas ditacoes ao mesmo tempo (2 paineis, ou Mac + celular) usam arquivo .webm DIFERENTE cada uma', async () => {
   const h = loadMain();
-  h.put(path.join(h.HOME, '.cockpit', 'modelos', 'ggml-small.bin'), 'modelo-fake');
+  h.put(path.posix.join(h.HOME, '.cockpit', 'modelos', 'ggml-small.bin'), 'modelo-fake');
   h.evaluate(`
     // o harness nao simula os.tmpdir(); so este handler usa
     os.tmpdir = () => '/cockpit-test/tmp';

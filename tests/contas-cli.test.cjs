@@ -11,7 +11,7 @@ function montar(t, agy = false) {
   const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'cockpit-contas-'));
   t.after(() => fs.rmSync(HOME, { recursive: true, force: true }));
   const dados = path.join(HOME, 'dados');
-  const contas = criarContasCli({ HOME, pastaDados: () => dados,
+  const contas = criarContasCli({ ehWindows: false, HOME, pastaDados: () => dados,
     acharBin: engine => '/Programa do usuário/' + engine, temBin: bin => bin !== 'agy' || agy,
     buildEnv: () => ({ PATH: '/bin', GEMINI_API_KEY: 'segredo-google', XAI_API_KEY: 'segredo-xai' }),
   });

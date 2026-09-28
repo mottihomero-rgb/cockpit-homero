@@ -184,7 +184,7 @@ test('R2-025 renderer/app.js: acaoDeMenu("quadro") avisa main.js se abriu (focus
 
 /* ===================== R2-017: Chaveiro negado trava a janela até 16s ===================== */
 
-test('R2-017 plataforma.js: tokenClaude() é assíncrono e não bloqueia o laço de eventos esperando o Chaveiro', async () => {
+test('R2-017 plataforma.js: tokenClaude() é assíncrono e não bloqueia o laço de eventos esperando o Chaveiro', { skip: process.platform === 'win32' && 'Chaveiro só existe no Mac' }, async () => {
   const src = fs.readFileSync(path.join(__dirname, '../plataforma.js'), 'utf8');
   const mod = { exports: {} };
   const modPath = path.join(__dirname, '../plataforma.js');

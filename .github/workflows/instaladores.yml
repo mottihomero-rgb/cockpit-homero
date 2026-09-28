@@ -19,11 +19,13 @@ jobs:
         include:
           - os: macos-latest
             comando: npm run build
+            app: dist/mac-arm64/Cockpit.app/Contents/MacOS/Cockpit
             arquivos: |
               dist/*.dmg
               dist/*.zip
           - os: windows-latest
             comando: npm run build:win
+            app: dist/win-unpacked/Cockpit.exe
             arquivos: dist/*.exe
     runs-on: ${{ matrix.os }}
     steps:
@@ -39,6 +41,13 @@ jobs:
         run: ${{ matrix.comando }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Abrir o app pronto e testar tela e terminal
+        run: node tests/fumaca-app.cjs "${{ matrix.app }}" dist
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: print-${{ matrix.os }}
+          path: dist/cockpit-*.png
       - uses: actions/upload-artifact@v4
         with:
           name: cockpit-${{ matrix.os }}
@@ -50,4 +59,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "Cockpit $GITHUB_REF_NAME" --notes "Instaladores do Mac (Apple Silicon) e do Windows (64 bits). Como instalar: ver o README."
-          gh release upload "$GITHUB_REF_NAME" $(echo ${{ matrix.arquivos }}) --clobber
+          shopt -s nullglob
+          gh release upload "$GITHUB_REF_NAME" dist/*.dmg dist/*.zip dist/*.exe --clobber

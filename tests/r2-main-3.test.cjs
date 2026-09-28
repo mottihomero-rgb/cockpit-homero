@@ -65,7 +65,7 @@ test('R2-013: pane:send embute a foto em base64 quando o painel é da VPS', asyn
 test('R2-013: pane:send no Mac continua mandando texto com o caminho (regressão)', async () => {
   const h = loadMain();
   h.evaluate(`
-    claudeCwd.set('p1', ${JSON.stringify(path.join('/Users', 'homero', 'projeto'))});
+    claudeCwd.set('p1', ${JSON.stringify(path.posix.join('/Users', 'homero', 'projeto'))});
     globalThis.__capturado = null;
     escreverClaude = (paneId, obj) => { globalThis.__capturado = obj; return true; };
   `);
@@ -169,7 +169,7 @@ test('R2-034: before-quit segura o quit ate o SIGKILL de garantia, e so entao ch
 
 test('R2-038: web:ligar não apaga config gravado durante a espera do Tailscale/servidor', async () => {
   const h = loadMain();
-  const cfgPath = path.join(h.HOME, 'app-data', 'config.json');
+  const cfgPath = path.posix.join(h.HOME, 'app-data', 'config.json');
   const abasIniciais = [
     { cwd: '/a', chats: [{ sessao: 's1' }] },
     { cwd: '/b', chats: [] },
@@ -224,9 +224,9 @@ test('R2-038: web:ligar não apaga config gravado durante a espera do Tailscale/
 
 test('R2-040: pasta sumida do disco HÁ DIAS é podada de cfg.porPasta; pasta que existe fica', () => {
   const h = loadMain();
-  const cfgPath = path.join(h.HOME, 'app-data', 'config.json');
-  const pastaViva = path.join(h.HOME, 'projeto-vivo');
-  const pastaSumida = path.join(h.HOME, 'projeto-sumido');
+  const cfgPath = path.posix.join(h.HOME, 'app-data', 'config.json');
+  const pastaViva = path.posix.join(h.HOME, 'projeto-vivo');
+  const pastaSumida = path.posix.join(h.HOME, 'projeto-sumido');
   const quatroDiasAtras = Date.now() - 4 * 24 * 60 * 60 * 1000;
   h.put(pastaViva, 'marca de pasta existente');   // fs.existsSync(pastaViva) -> true no harness
   const cfgInicial = {
@@ -248,8 +248,8 @@ test('R2-040: pasta sumida do disco HÁ DIAS é podada de cfg.porPasta; pasta qu
 
 test('R2-040: pasta sumida pela PRIMEIRA vez não é podada na hora (HD externo, Drive ainda não montado)', () => {
   const h = loadMain();
-  const cfgPath = path.join(h.HOME, 'app-data', 'config.json');
-  const pastaSumida = path.join(h.HOME, 'projeto-novo-sumido');
+  const cfgPath = path.posix.join(h.HOME, 'app-data', 'config.json');
+  const pastaSumida = path.posix.join(h.HOME, 'projeto-novo-sumido');
   const cfgInicial = { abas: [], porPasta: { [pastaSumida + '|claude']: { model: 'opus', effort: 'alto' } } };
   h.put(cfgPath, JSON.stringify(cfgInicial));
   const N = h.evaluate('PODA_A_CADA');
@@ -264,7 +264,7 @@ test('R2-040: pasta sumida pela PRIMEIRA vez não é podada na hora (HD externo,
 
 test('R2-040: pasta remota (vps:/...) nunca conta como "sumida" — fs.existsSync não enxerga a VPS', () => {
   const h = loadMain();
-  const cfgPath = path.join(h.HOME, 'app-data', 'config.json');
+  const cfgPath = path.posix.join(h.HOME, 'app-data', 'config.json');
   const cfgInicial = { abas: [], porPasta: { 'vps:/home/homero/projeto|codex': { model: 'gpt-6', effort: 'alto' } } };
   h.put(cfgPath, JSON.stringify(cfgInicial));
   const N = h.evaluate('PODA_A_CADA');

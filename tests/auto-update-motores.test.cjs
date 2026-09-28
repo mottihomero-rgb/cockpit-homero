@@ -9,7 +9,7 @@ assert.ok(ini > 0 && fim > ini, 'bloco novo encontrado');
 function montar(cenario) {
   const log = [];
   const ctx = {
-    EH_WIN: false, HOME: '/casa', fs: { existsSync: (p) => p === '/casa/.local/bin/claude' }, path,
+    EH_WIN: false, HOME: '/casa', fs: { existsSync: (p) => p === '/casa/.local/bin/claude' }, path: path.posix,
     NPM_DOS_MOTORES: { claude: '@anthropic-ai/claude-code', codex: '@openai/codex' },
     CLAUDE_BIN: '/casa/.cockpit/bin/claude',
     loadConfig: () => cenario.config || {},

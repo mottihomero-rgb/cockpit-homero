@@ -1136,7 +1136,8 @@ function claudeStart(paneId, opts) {
   } else {
     proc = spawnBin(CLAUDE_BIN, args, { cwd: opts.cwd || HOME, env: buildEnv(), stdio: ['pipe', 'pipe', 'pipe'], detached: !EH_WIN });
   }
-  const st = { proc, buf: '', geracao: ++claudeGeracao };
+  // modo guardado no motor: o pedido de aceite que chega no "sem pedir permissão" é aprovado aqui
+  const st = { proc, buf: '', geracao: ++claudeGeracao, modo };
   const decoder = new StringDecoder('utf8');
   claudePanes.set(paneId, st);
 
@@ -1309,6 +1310,15 @@ function claudeMessage(paneId, m) {
       const dados = { key, plano: String(inp.plan || ''), arquivo: String(inp.planFilePath || '') };
       pendingApprovals.set(key, { kind: 'claude-plano', paneId, processo: claudePanes.get(paneId), reqId: m.request_id, input: inp, evento: { tipo: 'plano-pronto', dados } });
       emit(paneId, 'plano-pronto', dados);
+      return;
+    }
+    /* 29/09: no "sem pedir permissão" o Claude principal não pergunta, mas os AJUDANTES em segundo
+       plano (Agent e Workflow do ULTRACODE) ainda pedem aceite para apagar pasta (rm -rf com curinga
+       ou variável). Antes de 26/09 isso era negado calado; com o canal aberto em todo modo virou
+       cartão que ficava a noite inteira esperando. Neste modo o Cockpit aprova sozinho. */
+    if (atual && atual.modo === 'bypass') {
+      anota('aceite automatico (sem pedir permissao):', paneId, m.request.tool_name || '', claudeToolArg(m.request.tool_name, m.request.input));
+      escreverClaude(paneId, { type: 'control_response', response: { request_id: m.request_id, subtype: 'success', response: { behavior: 'allow', updatedInput: m.request.input || {} } } });
       return;
     }
     /* tool + mudanca: o cartão de autorização do redesenho mostra o antes/depois do que ele vai
@@ -6365,6 +6375,9 @@ handle('pane:plano', (_e, { key, paneId, aprovar, modo, texto } = {}) => {
     resposta = { behavior: 'allow', updatedInput: a.input };
     const alvo = CLAUDE_MODE[modo] || 'bypassPermissions';
     if (alvo !== 'plan') resposta.updatedPermissions = [{ type: 'setMode', mode: alvo, destination: 'session' }];
+    // o motor nasceu em Plano: a partir daqui vale o modo de volta (o aceite automático depende disso)
+    const motor = claudePanes.get(a.paneId);
+    if (motor && alvo !== 'plan') motor.modo = Object.keys(CLAUDE_MODE).find(k => CLAUDE_MODE[k] === alvo) || 'bypass';
   } else {
     const t = String(texto || '').trim().slice(0, 4000);
     resposta = { behavior: 'deny', message: t ? 'O usuário quer ajustar o plano antes de executar: ' + t : 'O usuário ainda não aprovou. Continue planejando e apresente o plano de novo.' };

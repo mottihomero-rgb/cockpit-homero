@@ -540,6 +540,20 @@ html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inse
 .aj-cartao .aj-conta:first-child{border-radius:10px 10px 0 0}
 .aj-cartao .aj-conta:last-child{border-radius:0 0 10px 10px}
 .aj-cartao .aj-conta:only-child{border-radius:10px}
+.aj.aj-conta-add{flex-direction:column;flex-wrap:nowrap;align-items:stretch}
+.aj-conta-add .ajc-add{display:flex;align-items:center;gap:7px;height:22px;padding:0;border:0;background:none;
+  color:var(--accent);font:500 12px/15px var(--font-sans);cursor:pointer;text-align:left}
+.aj-conta-add .ajc-add:hover{opacity:.8}
+.aj-conta-add .ajc-add:focus-visible{outline:none;box-shadow:var(--anel-foco);border-radius:6px}
+.aj-conta-add .ajc-add-ic{display:inline-flex;width:18px;height:18px;align-items:center;justify-content:center;
+  border-radius:50%;background:color-mix(in srgb,var(--accent) 16%,transparent)}
+.aj-conta-add .ajc-add-ic svg{width:11px;height:11px}
+.aj-conta-add .ajc-ias{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));grid-auto-rows:30px;align-content:start;gap:6px;padding:4px 0 8px}
+.aj-conta-add .ajc-ia{display:flex;align-items:center;gap:7px;height:30px;padding:0 9px;border:1px solid var(--separator);
+  border-radius:8px;background:var(--fill-3);color:var(--label-1);font:400 12px/15px var(--font-sans);cursor:pointer;
+  transition:background-color var(--dur-fast) ease-out,border-color var(--dur-fast) ease-out}
+.aj-conta-add .ajc-ia:hover{background:var(--fill-2);border-color:var(--accent)}
+.aj-conta-add .ajc-ia:focus-visible{outline:none;box-shadow:var(--anel-foco)}
 
 /* ---- lateral do Mac (26/09): "+ Inicie um novo chat" em cima e, embaixo, só dois ícones ----
    A lupa abre o campo de busca no lugar dela (a linha ganha .buscando); a pasta abre a lista

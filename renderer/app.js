@@ -8653,14 +8653,73 @@ const contaCache = { claude: null, codex: null, acp: null, gemini: null, grok: n
 /* 26/09: "Vincular conta do X" (Ajustes, lateral, janela da Conta) passa por aqui. O motor do
    login é sempre o pedido; o chat só empresta a janelinha, então sem chat daquela IA serve o
    que estiver em foco. outra = já tem conta e quer entrar em outra (sai e entra de novo). */
-function entrarNaConta(engine, outra) {
+function entrarNaConta(engine, outra, extra) {
   let P = (focusPane && focusPane.engine === engine)
     ? focusPane
     : [...panes.values()].find((q) => q.engine === engine);
   if (!P) P = focusPane || panes.values().next().value;
   // nenhum chat aberto: abre um da própria IA para a janelinha ter onde nascer
   if (!P) P = novoChatNaAba(engine);
-  if (P) { setFocus(P); contaAcao(P, outra ? 'trocar' : 'login', engine); return; }
+  if (P) { setFocus(P); contaAcao(P, outra ? 'trocar' : 'login', engine, extra); return; }
+}
+
+/* ---- "+ Adicionar conta" (29/09) ----
+   Pedido dele: um botão só em Ajustes › Contas → escolhe a IA → conecta. Adicionar não pode
+   PERDER a conta de antes: a conta em uso é guardada sozinha (apelido = e-mail) antes do login
+   novo, e a nova também, quando o login termina. Assim as duas ficam na janela da Conta para
+   alternar sem navegador. Gemini e Grok não têm arquivo de credencial para guardar: lá
+   adicionar é trocar, como o "Vincular outra". */
+async function guardarContaSozinha(eng) {
+  try {
+    const d = await window.api.contasDisponivel(eng);
+    if (!d || !d.ok) return;
+    const c = await window.api.contaLer(eng);
+    const apelido = String((c && (c.email || c.nome)) || '').trim();
+    if (!apelido) return;
+    const ja = await window.api.contasListar(eng);
+    if (Array.isArray(ja) && ja.some(g => g.atual)) return;
+    await window.api.contasSalvar({ engine: eng, apelido });
+  } catch { /* guardar é bônus: sem isso o login segue igual */ }
+}
+async function adicionarConta(eng) {
+  let c = contaCache[eng];
+  if (!c) { try { c = await window.api.contaLer(eng); } catch {} }
+  const entrou = !!(c && c.entrou);
+  if (entrou) await guardarContaSozinha(eng);
+  entrarNaConta(eng, entrou, { guardar: true });
+}
+function pintarAdicionarConta(cx, motores) {
+  let linha = $('.aj-conta-add', cx);
+  if (!linha) {
+    linha = document.createElement('section');
+    linha.className = 'aj aj-conta aj-conta-add';
+    cx.appendChild(linha);
+  }
+  const aberto = linha.classList.contains('aberto');
+  linha.innerHTML = '<button class="ajc-add" type="button" aria-expanded="' + aberto + '">'
+    + '<span class="ajc-add-ic">' + ico('plus') + '</span><span>Adicionar conta</span></button>'
+    + (aberto ? '<div class="ajc-ias" role="group" aria-label="Escolha a IA"></div>' : '');
+  $('.ajc-add', linha).onclick = (e) => {
+    e.stopPropagation();
+    linha.classList.toggle('aberto');
+    pintarAdicionarConta(cx, motores);
+  };
+  if (!aberto) return;
+  const ias = $('.ajc-ias', linha);
+  for (const m of motores) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ajc-ia';
+    b.innerHTML = '<span class="ajc-logo mo-logo" data-motor="' + m + '">' + svgMotor(m) + '</span><span class="ajc-ia-n"></span>';
+    $('.ajc-ia-n', b).textContent = nomeDoMotor(m);
+    b.onclick = (e) => {
+      e.stopPropagation();
+      linha.classList.remove('aberto');
+      pintarAdicionarConta(cx, motores);
+      adicionarConta(m);
+    };
+    ias.appendChild(b);
+  }
 }
 
 /* ---- Ajustes › Contas (26/09) ----
@@ -8677,7 +8736,8 @@ async function pintarContasAjustes(forcar) {
       linha = document.createElement('section');
       linha.className = 'aj aj-conta';
       linha.dataset.motor = m;
-      cx.appendChild(linha);
+      // o "+ Adicionar conta" fica sempre por último
+      cx.insertBefore(linha, $('.aj-conta-add', cx));
     }
     const c = contaCache[m];
     const pintar = (conta) => {
@@ -8704,7 +8764,8 @@ async function pintarContasAjustes(forcar) {
     }
   }
   // IA que sumiu deste Mac sai da lista
-  for (const l of [...cx.children]) if (!motores.includes(l.dataset.motor)) l.remove();
+  for (const l of [...cx.children]) if (l.dataset.motor && !motores.includes(l.dataset.motor)) l.remove();
+  pintarAdicionarConta(cx, motores);
 }
 
 /* ---- conta e uso do plano no topo da lista de conversas (25/09) ----
@@ -9364,6 +9425,7 @@ async function contaAcao(P, acao, motorPedido, destino) {
       }
     } catch {}
     estado(dentro ? 'ok' : 'falhou', quem);
+    if (dentro && destino && destino.guardar) await guardarContaSozinha(eng);
     if (dentro) pintarContasAjustes(true);
   };
 
@@ -9421,7 +9483,7 @@ async function contaAcao(P, acao, motorPedido, destino) {
     pintarContasAjustes(true);
   }, { abrirSozinho: !!r.esperaLink && !r.naVps, orientacao: r.orientacao,
        vincular, codigo: acao === 'trocarCodigo' || !!r.naVps, aoTerminar: vincular ? aoTerminar : null,
-       deNovo: () => contaAcao(P, acao, eng, { cwd }) });
+       deNovo: () => contaAcao(P, acao, eng, { cwd, guardar: !!(destino && destino.guardar) }) });
 }
 
 /* ehErro: quatro chamadas ja mandavam o terceiro valor ("isto e erro") e ele era jogado fora —

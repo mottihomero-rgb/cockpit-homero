@@ -1457,6 +1457,15 @@ body.arrastando-aba,body.arrastando-aba *{cursor:grabbing !important}
    os tres semaforos. 600/610 fica acima do #telaAtalhos
    (560) e abaixo do arraste de aba (900). */
 .modal.global{position:fixed;inset:var(--veu-topo,38px) 0 0 0;z-index:600}
+#modalModelosNovos.modal.global{z-index:700;display:grid;place-items:center;padding:0 16px}
+#modalModelosNovos .mn-caixa{width:min(430px,calc(100% - 32px));padding:22px}
+.mn-sinal{font-size:24px;color:var(--accent);margin-bottom:8px}
+.mn-caixa h2{font-size:17px;line-height:1.25;margin:0 0 8px;color:var(--fg-strong)}
+.mn-caixa p{font-size:12.5px;line-height:1.5;color:var(--fg-dim);margin:0 0 16px}
+.mn-lista{display:flex;flex-direction:column;gap:7px;margin-bottom:18px}
+.mn-item{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:9px;background:var(--hover2);font-size:13px;color:var(--fg-strong)}
+.mn-item .logo-motor{width:17px;height:17px;flex:none}
+.mn-caixa button{width:100%;padding:10px;border:0;border-radius:8px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer}
 .pop-global{position:fixed;z-index:610;min-width:200px;max-width:290px;padding:5px;
   background:var(--bg-flutua);border:1px solid var(--line2);border-radius:10px;
   box-shadow:0 14px 40px var(--sombra2)}

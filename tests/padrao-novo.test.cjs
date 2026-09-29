@@ -16,7 +16,8 @@ function trecho(inicio, fim) {
 }
 const ctx = {};
 vm.runInNewContext(trecho('const EF_NOVO', "PADRAO_NOVO[eng].effort) || EF_NOVO;")
-  + '\n' + trecho('const MODELOS_CLAUDE = [', '\n];')
+  + '\n' + trecho('let MODELOS_CLAUDE = [', '\n];')
+  + '\nlet MODELOS_CODEX = null;'
   + '\nthis.r = { PADRAO_NOVO, MODELOS_CLAUDE, modeloNovo, esforcoNovo };', ctx);
 const { PADRAO_NOVO, MODELOS_CLAUDE, modeloNovo, esforcoNovo } = ctx.r;
 
@@ -43,4 +44,3 @@ test('as novas conversas usam a regra nos 3 caminhos', () => {
 test('a escolha guardada por pasta nao passa por cima no Claude e no Codex', () => {
   assert.match(src, /function aplicarEscolhaDaPasta\(P\) \{[\s\S]{0,400}if \(PADRAO_NOVO\[P\.engine\]\) return false;/);
 });
-

@@ -160,7 +160,13 @@ const PADRAO_NOVO = {
   claude: { model: 'claude-opus-5-5', effort: 'high' },
   codex: { model: 'gpt-6-sol', effort: 'high' },
 };
-const modeloNovo = (eng) => (PADRAO_NOVO[eng] && PADRAO_NOVO[eng].model) || '';
+const modeloNovo = (eng) => {
+  const salvo = (PADRAO_NOVO[eng] && PADRAO_NOVO[eng].model) || '';
+  const lista = eng === 'claude' ? MODELOS_CLAUDE : eng === 'codex' ? MODELOS_CODEX : null;
+  if (!lista?.length || lista.some(m => m.id === salvo)) return salvo;
+  const familia = eng === 'claude' ? /^claude-opus-[\d-]+$/ : /^gpt-[\d.]+-sol$/;
+  return (lista.find(m => familia.test(m.id)) || lista[0]).id;
+};
 const esforcoNovo = (eng) => (PADRAO_NOVO[eng] && PADRAO_NOVO[eng].effort) || EF_NOVO;
 
 // no Máximo o painel do Claude vira "ultracode". Em --print o CLI proíbe workflow por padrão,
@@ -176,22 +182,14 @@ const ENTRA_MSG = 'ATENÇÃO: esta mensagem chegou enquanto você já estava tra
 
 const ULTRACODE_MSG = 'MODO ULTRACODE LIGADO PELO USUÁRIO: eu autorizo explicitamente, para esta e para todas as tarefas substantivas desta conversa, o uso da ferramenta Workflow (orquestração multi-agente) e de subagentes em paralelo. Busque a resposta mais completa e correta, não a mais rápida ou barata. Isso substitui qualquer regra em contrário sobre não usar workflows sem eu pedir. Continue pedindo meu aval apenas para gastar dinheiro, publicar/enviar para fora, ou apagar o que já funciona.\n\nMODELO POR TAREFA (ao delegar a subagentes ou workflow, passe sempre o parâmetro model conforme a tarefa, para economizar sem perder qualidade): use Haiku (model: "haiku") para triagem, classificação, roteamento e leituras/extrações curtas; Sonnet (model: "sonnet") para execução mecânica — escrever/editar código, produzir conteúdo, buscas amplas em arquivos; reserve Opus para o planejamento e as decisões difíceis (que você, o orquestrador, já faz). Nunca rode em Opus um subagente que só classifica ou lê.\n\n---\n\n';
 
-const MODELOS_CLAUDE = [
-  { id: 'claude-opus-5-5[1m]', nome: 'Opus 5.5 (1M)', desc: 'O mais forte de todos, com memória gigante',
-    efforts: ['low','medium','high','xhigh','max'], padraoEffort: 'xhigh', padrao: true },
+let MODELOS_CLAUDE = [
   { id: 'claude-opus-5-5', nome: 'Opus 5.5', desc: 'O mais forte de todos',
+    efforts: ['low','medium','high','xhigh','max'], padraoEffort: 'xhigh', padrao: true },
+  { id: 'claude-opus-5-5[1m]', nome: 'Opus 5.5 (1M)', desc: 'Memória de até 1 milhão de tokens',
     efforts: ['low','medium','high','xhigh','max'], padraoEffort: 'xhigh' },
-  { id: 'claude-opus-5[1m]', nome: 'Opus 5 (1M)', desc: 'A geração anterior, com memória gigante',
+  { id: 'claude-fable-5-1', nome: 'Fable 5.1', desc: 'Para tarefas mais exigentes',
     efforts: ['low','medium','high','xhigh','max'], padraoEffort: 'xhigh' },
-  // Fable 5.1 so existe do CLI 2.1.251 para cima. Com o CLI velho o modelo devolve erro 400
-  // pedindo 'claude update' — o app copia a versao nova para o caminho fixo no arranque.
-  { id: 'claude-fable-5-1[1m]', nome: 'Fable 5.1', desc: 'O mais novo, com memória gigante',
-    efforts: ['low','medium','high','xhigh','max'], padraoEffort: 'xhigh' },
-  { id: 'claude-fable-5', nome: 'Fable 5', desc: 'A geração anterior do Fable',
-    efforts: ['low','medium','high','xhigh','max'], padraoEffort: 'xhigh' },
-  { id: 'claude-opus-5', nome: 'Opus 5', desc: 'A geração anterior',
-    efforts: ['low','medium','high','xhigh','max'], padraoEffort: 'xhigh' },
-  { id: 'claude-sonnet-5', nome: 'Sonnet 5', desc: 'Rápido e bom para o dia a dia',
+  { id: 'claude-sonnet-5-5', nome: 'Sonnet 5.5', desc: 'Rápido e bom para o dia a dia',
     efforts: ['low','medium','high','xhigh','max'], padraoEffort: 'xhigh' },
   { id: 'claude-haiku-4-5-20251001', nome: 'Haiku 4.5', desc: 'O mais barato e veloz',
     efforts: ['low','medium','high'], padraoEffort: 'high' },
@@ -205,12 +203,16 @@ const CODEX_PT = {
   'gpt-6-sol':   { nome: 'Sol 6',   desc: 'O cavalo de batalha: código e dia a dia' },
   'gpt-6-luna':  { nome: 'Luna 6',  desc: 'Rápido e barato, para tarefas mais fáceis' },
   'gpt-5.6-sol':   { nome: 'Sol 5.6',   desc: 'A geração anterior para trabalho complexo' },
-  'gpt-5.6-terra': { nome: 'Terra 5.6', desc: 'A geração anterior, equilibrada' },
+  'gpt-5.6-terra': { nome: 'Terra 5.6', desc: 'Versão atual da linha Terra' },
   'gpt-5.6-luna':  { nome: 'Luna 5.6',  desc: 'A geração anterior, rápida e econômica' },
-  'gpt-5.5':       { nome: 'GPT-5.5',   desc: 'Modelo antigo de código' },
+  'gpt-5.5':       { nome: 'GPT-5.5',   desc: 'Modelo GPT de uso geral' },
 };
 const traduzCodex = (ms) => (ms || []).map((m) => {
-  const pt = CODEX_PT[m.id];
+  const partes = String(m.id || '').match(/^gpt-(\d+(?:\.\d+)?)-([a-z]+)$/);
+  const pt = CODEX_PT[m.id] || (partes ? {
+    nome: partes[2][0].toUpperCase() + partes[2].slice(1) + ' ' + partes[1],
+    desc: 'Versão atual do ' + partes[2],
+  } : null);
   return pt ? { ...m, nome: pt.nome, desc: pt.desc } : m;
 });
 /* O "Astra por créditos" (chave da API da OpenAI) saiu da tela em 11/09/2026. Ninguém mais
@@ -258,6 +260,14 @@ function modelosDe(P) {
 }
 function modeloAtual(P) {
   const ms = modelosDe(P);
+  if (P.model && !ms.some(m => m.id === P.model) && (P.hist?.length || P.sessaoId || P.resumeId)) {
+    const claude = String(P.model).match(/^claude-(opus|fable|sonnet|haiku)-(\d+)(?:-(\d+))?/);
+    const nome = CODEX_PT[P.model]?.nome || (claude
+      ? claude[1][0].toUpperCase() + claude[1].slice(1) + ' ' + claude[2]
+        + (claude[3] ? '.' + claude[3] : '') + (P.model.includes('[1m]') ? ' (1M)' : '')
+      : P.model);
+    return { id: P.model, nome, efforts: [], padraoEffort: P.effort || 'medium' };
+  }
   return ms.find(m => m.id === P.model) || ms.find(m => m.padrao) || ms[0];
 }
 function esforcosDe(P) {
@@ -1653,9 +1663,11 @@ function fillModels(P) {
   // chega, so pinta; nao decide nada. Quando ela chega, fillModels roda de novo (linha do
   // codexModels().then) e a escolha certa aparece.
   const listaReal = P.engine !== 'codex' || !!(MODELOS_CODEX && MODELOS_CODEX.length);
-  if (listaReal && !ms.find(m => m.id === P.model)) P.model = (ms.find(m => m.id === modeloNovo(P.engine)) || ms.find(m => m.padrao) || ms[0]).id;
+  const conversaExistente = !!(P.hist?.length || P.sessaoId || P.resumeId || P.busy);
+  const manterAntigo = conversaExistente && !!P.model && !ms.some(m => m.id === P.model);
+  if (listaReal && !ms.find(m => m.id === P.model) && !manterAntigo) P.model = (ms.find(m => m.id === modeloNovo(P.engine)) || ms.find(m => m.padrao) || ms[0]).id;
   const ef = esforcosDe(P);
-  if (listaReal && ef.length && !ef.find(e => e.id === P.effort)) P.effort = modeloAtual(P).padraoEffort || ef[Math.min(2, ef.length - 1)].id;
+  if (listaReal && !manterAntigo && ef.length && !ef.find(e => e.id === P.effort)) P.effort = modeloAtual(P).padraoEffort || ef[Math.min(2, ef.length - 1)].id;
   /* pop-up de modelo do redesenho: "Opus 5.5 ⇅" (nome + setinhas). O cérebro continua no
      começo só para o celular, que mostra o botão sem o nome (lá o caixa.css esconde as setinhas;
      no Mac esconde o cérebro). */
@@ -4368,6 +4380,49 @@ if (window.api.onMotorAtualizado) {
   });
 }
 
+let pendentesModelos = [];
+function fecharAvisoModelos() {
+  const modal = $('#modalModelosNovos');
+  if (!modal || modal.classList.contains('hidden')) return;
+  modal.classList.add('hidden');
+  const ids = pendentesModelos.map(m => m.engine + ':' + m.id);
+  pendentesModelos = [];
+  if (ids.length && window.api.catalogoVisto) window.api.catalogoVisto(ids).catch(() => {});
+}
+function mostrarAvisoModelos(lista) {
+  if (window.SEM_ELECTRON || !Array.isArray(lista) || !lista.length) return;
+  const modal = $('#modalModelosNovos'), caixa = $('#mnLista');
+  if (!modal || !caixa) return;
+  pendentesModelos = lista;
+  caixa.replaceChildren();
+  for (const m of lista) {
+    const item = document.createElement('div');
+    item.className = 'mn-item';
+    item.innerHTML = svgMotor(m.engine);
+    const nome = document.createElement('span');
+    nome.textContent = (m.engine === 'claude' ? 'Claude' : 'Codex') + ' · ' + m.nome;
+    item.appendChild(nome);
+    caixa.appendChild(item);
+  }
+  modal.classList.remove('hidden');
+  $('#mnFechar').onclick = fecharAvisoModelos;
+  $('#mnFechar').focus();
+}
+function aplicarCatalogoModelos(estado) {
+  if (!estado || !estado.modelos) return;
+  if (Array.isArray(estado.modelos.claude) && estado.modelos.claude.length) MODELOS_CLAUDE = estado.modelos.claude;
+  if (Array.isArray(estado.modelos.codex) && estado.modelos.codex.length) MODELOS_CODEX = traduzCodex(estado.modelos.codex);
+  for (const P of panes.values()) if (P.engine === 'claude' || P.engine === 'codex') fillModels(P);
+  if (estado.pendentes?.length) mostrarAvisoModelos(estado.pendentes);
+}
+if (!window.SEM_ELECTRON && window.api.onCatalogoAtualizado) {
+  window.api.onCatalogoAtualizado(aplicarCatalogoModelos);
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || $('#modalModelosNovos')?.classList.contains('hidden')) return;
+    e.preventDefault(); e.stopImmediatePropagation(); fecharAvisoModelos();
+  }, true);
+}
+
 let ultimoAvisoMain = 0;
 if (window.api.onErroApp) {
   window.api.onErroApp((p) => {
@@ -6524,7 +6579,7 @@ document.addEventListener('keydown', (e) => {
    painel dono: só contam os da aba da frente (a mesma conta do anel da caixa, caixa.css). O visor
    esquecido numa aba de fundo está em display:none e não pode travar o ↩ da aba da frente. */
 const CAMADA_POR_CIMA = '#telaAtalhos:not(.hidden), #novaAba:not(.hidden), #qdPainel:not(.hidden), #agPainel:not(.hidden),'
-  + ' #modalGrupo:not(.hidden), #popGrupo:not(.hidden), .espaco:not(.oculta) .pane .p-modal:not(.hidden),'
+  + ' #modalGrupo:not(.hidden), #modalModelosNovos:not(.hidden), #popGrupo:not(.hidden), .espaco:not(.oculta) .pane .p-modal:not(.hidden),'
   + ' .espaco:not(.oculta) .pane .p-visor:not(.hidden)';
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' || e.defaultPrevented || !focusPane) return;
@@ -12982,6 +13037,7 @@ document.addEventListener('keydown', (e) => {
     for (const P of panes.values()) paintEngine(P);
     naPintar();
   }).catch(() => {});
+  if (!noTelefone && window.api.catalogoEstado) window.api.catalogoEstado().then(aplicarCatalogoModelos).catch(() => {});
   if (!noTelefone) window.api.codexModels().then(ms => {
     if (ms && ms.length) { MODELOS_CODEX = traduzCodex(ms); for (const P of panes.values()) if (P.engine === 'codex') fillModels(P); }
   });

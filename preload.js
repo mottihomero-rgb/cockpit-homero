@@ -32,6 +32,9 @@ contextBridge.exposeInMainWorld('api', {
   // so leitura: o celular usa isso pra saber se perdeu evento enquanto estava dormindo (R2-012)
   paneEstado: (o) => ipcRenderer.invoke('pane:estado', o),
   codexModels: () => ipcRenderer.invoke('codex:models'),
+  catalogoEstado: () => ipcRenderer.invoke('catalogo:estado'),
+  catalogoVisto: (ids) => ipcRenderer.invoke('catalogo:visto', ids),
+  onCatalogoAtualizado: (cb) => ipcRenderer.on('catalogo:atualizado', (_e, estado) => cb(estado)),
   codexApiStatus: () => ipcRenderer.invoke('codex:api-status'),
   codexApiKey: (chave) => ipcRenderer.invoke('codex:api-key:set', chave),
   codexApiTest: () => ipcRenderer.invoke('codex:api-test'),

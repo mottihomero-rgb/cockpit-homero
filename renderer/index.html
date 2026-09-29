@@ -269,6 +269,15 @@
 <!-- janelinha e menu que NAO pertencem a nenhum chat: a lista de conversas é da tela inteira,
      e a janelinha de dentro do painel ficaria presa dentro de um chat -->
 <div class="modal global hidden" id="modalGrupo"><div class="modal-cx"></div></div>
+<div class="modal global hidden" id="modalModelosNovos" role="dialog" aria-modal="true" aria-labelledby="mnTitulo">
+  <div class="modal-cx mn-caixa">
+    <div class="mn-sinal" aria-hidden="true">✦</div>
+    <h2 id="mnTitulo">Novos modelos disponíveis</h2>
+    <p>O Cockpit encontrou versões novas nas IAs conectadas. Elas já aparecem no menu do cérebro.</p>
+    <div id="mnLista" class="mn-lista"></div>
+    <button id="mnFechar" type="button">Entendi</button>
+  </div>
+</div>
 <div class="pop-global hidden" id="popGrupo"></div>
 
 <template id="tplEspaco">

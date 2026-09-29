@@ -30,10 +30,10 @@ test('Astra 6, Sol 6 e Luna 6 aparecem em português', () => {
   for (const m of pt) assert.doesNotMatch(m.desc, /model|work|task/i);
 });
 
-test('modelo que o mapa não conhece continua na lista, com o nome do Codex', () => {
+test('modelo novo que o mapa não conhece continua na lista em português', () => {
   const pt = traduzCodex([{ id: 'gpt-7-novo', nome: 'GPT-7-Novo', desc: 'x' }]);
   assert.equal(pt.length, 1);
-  assert.equal(pt[0].nome, 'GPT-7-Novo');
+  assert.equal(pt[0].nome, 'Novo 7');
 });
 
 test('o padrão do Codex (gpt-5.6-sol) tem tradução', () => {

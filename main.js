@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, dialog, Menu, shell, clipboard, powerSaveBlocker, Notification, nativeTheme } = require('electron');
+const catalogoModelos = require('./catalogo-modelos');
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
@@ -6416,7 +6417,7 @@ handle('pane:respond', async (_e, data) => {
   } catch (e) { return { error: String(e && e.message || e) }; }
 });
 
-handle('codex:models', async () => {
+async function buscarModelosCodex() {
   try {
     await codexStart();
     const r = await codexReq('local', 'model/list', {});
@@ -6434,7 +6435,98 @@ handle('codex:models', async () => {
       multiAgentVersion: m.multiAgentVersion || null,
     }));
   } catch { return []; }
+}
+handle('codex:models', async () => catalogoModelos.ultimosModelosCodex(await buscarModelosCodex()));
+
+/* O catálogo fica fora do config.json: o renderizador grava as abas com frequência e um
+   retrato antigo da tela poderia apagar a data e os avisos novos. Um check por dia; a
+   verificação também roda com o app aberto, sem iniciar conversa nem gastar créditos. */
+const CAMINHO_CATALOGO = () => path.join(app.getPath('userData'), 'catalogo-modelos.json');
+const UM_DIA = 24 * 60 * 60 * 1000;
+let verificandoCatalogo = false;
+function lerCatalogo() {
+  try { return JSON.parse(fs.readFileSync(CAMINHO_CATALOGO(), 'utf8')); }
+  catch { return { modelos: {}, checadoEm: {}, pendentes: [] }; }
+}
+function salvarCatalogo(estado) { gravarSeguro(CAMINHO_CATALOGO(), JSON.stringify(estado, null, 2)); }
+function avisarCatalogo(estado) {
+  if (win && !win.isDestroyed() && !win.webContents.isLoading()) {
+    win.webContents.send('catalogo:atualizado', estado);
+  }
+}
+handle('catalogo:estado', () => lerCatalogo());
+handle('catalogo:visto', (_e, ids) => {
+  const estado = lerCatalogo();
+  const vistos = new Set(Array.isArray(ids) ? ids.filter(x => typeof x === 'string') : []);
+  estado.pendentes = (estado.pendentes || []).filter(x => !vistos.has(x.engine + ':' + x.id));
+  salvarCatalogo(estado);
+  return { ok: true };
 });
+async function verificarCatalogo() {
+  if (verificandoCatalogo) return;
+  verificandoCatalogo = true;
+  try {
+    let estado = lerCatalogo();
+    const agora = Date.now();
+    const faltam = ['claude', 'codex'].filter(e => agora - (estado.checadoEm?.[e] || 0) >= UM_DIA);
+    if (!faltam.length) return;
+    const resultados = await Promise.allSettled(faltam.map(async (engine) => {
+      if (engine === 'claude') {
+        const auth = await rodar(CLAUDE_BIN, ['auth', 'status'], 25000);
+        let conta = {}; try { conta = JSON.parse(auth.out || '{}'); } catch {}
+        if (!conta.loggedIn) return null;
+        const resposta = await fetch('https://platform.claude.com/docs/en/models/overview.md',
+          { signal: AbortSignal.timeout(20000) });
+        if (!resposta.ok) throw new Error('Anthropic respondeu HTTP ' + resposta.status);
+        const markdown = await resposta.text();
+        if (markdown.length > 500000) throw new Error('Tabela da Anthropic grande demais');
+        return catalogoModelos.modelosClaudeDoMarkdown(markdown);
+      }
+      const modelos = catalogoModelos.ultimosModelosCodex(await buscarModelosCodex());
+      return modelos.length ? modelos : null;
+    }));
+    // O usuário pode ter fechado um aviso enquanto a rede respondia. Releia antes
+    // de gravar para não trazer de volta um aviso que ele já dispensou.
+    estado = lerCatalogo();
+    let mudou = false;
+    estado.diario ||= [];
+    estado.mudancas ||= [];
+    for (let i = 0; i < faltam.length; i++) {
+      const engine = faltam[i], r = resultados[i];
+      if (r.status !== 'fulfilled' || !r.value) {
+        if (r.status === 'rejected') anota('catálogo de modelos indisponível:', engine, String(r.reason));
+        estado.diario.push({ em: agora, engine, resultado: 'Sem lista válida; mantive os modelos anteriores.' });
+        mudou = true;
+        continue;
+      }
+      // Duas versões competem: a última validada e a lista nova da fonte oficial.
+      // Só a lista completa e ligada à conta entra no menu; o revisor roda diariamente.
+      const antes = estado.modelos?.[engine] || (engine === 'claude'
+        ? catalogoModelos.VERSOES_ANTIGAS_CLAUDE : catalogoModelos.VERSOES_ANTIGAS_CODEX);
+      const novos = catalogoModelos.novidades(antes, r.value);
+      estado.modelos ||= {};
+      estado.checadoEm ||= {};
+      estado.pendentes ||= [];
+      estado.modelos[engine] = r.value;
+      estado.checadoEm[engine] = agora;
+      for (const m of novos) if (!estado.pendentes.some(x => x.engine === engine && x.id === m.id)) {
+        estado.pendentes.push({ engine, id: m.id, nome: m.nome });
+        estado.mudancas.push({ em: agora, engine,
+          texto: 'Incluí ' + m.nome + ' porque apareceu na lista oficial da conta ou do fornecedor.' });
+      }
+      estado.diario.push({ em: agora, engine,
+        resultado: novos.length ? novos.length + ' modelo(s) novo(s); lista atualizada.' : 'Sem modelo novo; lista confirmada.' });
+      mudou = true;
+      if (novos.length) anota('modelos novos:', engine, novos.map(m => m.id).join(', '));
+    }
+    if (mudou) {
+      estado.diario = estado.diario.slice(-180);
+      estado.mudancas = estado.mudancas.slice(-120);
+      salvarCatalogo(estado); avisarCatalogo(estado);
+    }
+  } catch (e) { anota('falha no radar de modelos:', e && e.message); }
+  finally { verificandoCatalogo = false; }
+}
 
 /* Apps do ChatGPT (os conectores da CONTA, nao os MCP daqui do Mac).
    Duas chamadas: app/list diz o que existe na conta e app/installed diz o que ja esta ligado
@@ -7387,6 +7479,8 @@ app.whenReady().then(() => { anota('app iniciou'); usarClaudeDeCaminhoFixo(); me
      6 em 6 horas, para quem deixa o Cockpit aberto a semana inteira. */
   setTimeout(() => atualizarMotoresSozinho('abriu o app'), 60000);
   setInterval(() => atualizarMotoresSozinho('a cada 6h'), 6 * 60 * 60 * 1000);
+  setTimeout(verificarCatalogo, 5000);
+  setInterval(verificarCatalogo, 60 * 60 * 1000);
   ligarInbox();   // leva 6: a caixa de entrada passa a ser varrida (a pasta nasce aqui)
   // atalho global de ditar, se ele tiver ligado nos Ajustes (desligado por padrao)
   try { ligarAtalhosGlobais(!!loadConfig().atalhosGlobais); } catch { ligarAtalhosGlobais(false); }

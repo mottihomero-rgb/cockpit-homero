@@ -34,6 +34,7 @@
     },
     "files": [
       "main.js",
+      "catalogo-modelos.js",
       "acp.js",
       "cli-motors.js",
       "contas-cli.js",

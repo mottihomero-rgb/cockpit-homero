@@ -28,13 +28,15 @@ function el() {
 }
 function contexto() {
   const topo = { itens: [], insertBefore(b, ref) { const i = ref ? this.itens.indexOf(ref) : -1; if (i < 0) this.itens.push(b); else this.itens.splice(i, 0, b); } };
+  const chamadas = { cartao: [], conta: [] };
   const ctx = { Math, MOTORES_VISIVEIS: ['claude', 'codex', 'gemini', 'grok'], MOTORES_OK: null,
     document: { createElement: () => el() }, svgMotor: (m) => '<svg data-m="' + m + '"></svg>',
-    nomeDoMotor: (m) => m[0].toUpperCase() + m.slice(1), abrirCartaoUso() {}, fecharCartaoUso() {}, abrirContaDaLateral() {},
+    nomeDoMotor: (m) => m[0].toUpperCase() + m.slice(1), abrirCartaoUso: (_, m) => chamadas.cartao.push(m),
+    fecharCartaoUso() {}, abrirContaDaLateral: (m) => chamadas.conta.push(m),
     $: (sel, root) => { const m = /data-motor="(\w+)"/.exec(sel); if (m && root === topo) return topo.itens.find(b => b.dataset.motor === m[1] && !b.removido) || null; return null; } };
   vm.createContext(ctx);
   vm.runInContext(app.match(/^const nivelDeUso = .*;$/m)[0] + '\n' + ['pctDeUso', 'pintarAnelTopo', 'textoRenova'].map(pegar).join('\n'), ctx);
-  return { ctx, topo };
+  return { ctx, topo, chamadas };
 }
 
 test('o anel mostra a sessão (sem sessão, a semana) e fica vermelho a partir de 90%', () => {
@@ -48,11 +50,39 @@ test('o anel mostra a sessão (sem sessão, a semana) e fica vermelho a partir d
   assert.equal(cx.dataset.nivel, 'alto');
 });
 
-test('IA sem conta ou sem número de limite não aparece no topo', () => {
-  const { ctx, topo } = contexto();
+test('as quatro IAs ficam no topo; sem conta não abrem cartão nem conta', () => {
+  const { ctx, topo, chamadas } = contexto();
   ctx.pintarAnelTopo(topo, 'grok', { entrou: true, email: 'k@x.com' });
   ctx.pintarAnelTopo(topo, 'gemini', { entrou: false });
-  assert.equal(topo.itens.length, 0);
+  ctx.pintarAnelTopo(topo, 'codex', null);
+  ctx.pintarAnelTopo(topo, 'claude', { entrou: false });
+  assert.deepEqual(topo.itens.map(b => b.dataset.motor), ['claude', 'codex', 'gemini', 'grok']);
+  for (const b of topo.itens.slice(0, 3)) {
+    assert.equal(b.disabled, true);
+    assert.match(b.innerHTML, /ut-pct">—/);
+    b.ouvintes.mouseenter(); b.ouvintes.focus(); b.ouvintes.click();
+  }
+  assert.deepEqual(chamadas, { cartao: [], conta: [] });
+  assert.equal(topo.itens[3].disabled, false, 'conta sem número continua ativa');
+  topo.itens[3].ouvintes.mouseenter();
+  assert.deepEqual(chamadas.cartao, ['grok']);
+});
+
+test('o mesmo ícone ativa após login e congela após sair', () => {
+  const { ctx, topo, chamadas } = contexto();
+  ctx.pintarAnelTopo(topo, 'claude', { entrou: false });
+  const b = topo.itens[0];
+  ctx.pintarAnelTopo(topo, 'claude', { entrou: true, sessao: { pct: 42 } });
+  assert.equal(topo.itens[0], b);
+  assert.equal(b.disabled, false);
+  assert.match(b.innerHTML, /42%/);
+  b.ouvintes.click();
+  assert.deepEqual(chamadas.conta, ['claude']);
+  ctx.pintarAnelTopo(topo, 'claude', { entrou: false });
+  assert.equal(b.disabled, true);
+  assert.match(b.innerHTML, /ut-pct">—/);
+  b.ouvintes.click();
+  assert.deepEqual(chamadas.conta, ['claude']);
 });
 
 test('a ordem dos anéis é a dos motores, chegue quem chegar primeiro', () => {

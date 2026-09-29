@@ -8729,7 +8729,7 @@ function pintarAdicionarConta(cx, motores) {
 async function pintarContasAjustes(forcar) {
   const cx = $('#ajContas');
   if (!cx) return;
-  const motores = MOTORES_VISIVEIS.filter(m => !(MOTORES_OK && MOTORES_OK[m] === false));
+  const motores = MOTORES_VISIVEIS;
   for (const m of motores) {
     let linha = $('.aj-conta[data-motor="' + m + '"]', cx);
     if (!linha) {
@@ -8749,7 +8749,7 @@ async function pintarContasAjustes(forcar) {
       $('.ajc-n', linha).textContent = motor;
       $('.ajc-e', linha).textContent = !conta ? '…' : entrou ? (conta.email || conta.nome || conta.plano || 'Vinculada') : 'Não vinculada';
       const bt = $('.ajc-bt', linha);
-      bt.textContent = entrou ? 'Vincular outra' : 'Vincular conta do ' + motor;
+      bt.textContent = entrou ? 'Vincular outra' : 'Vincular uma conta';
       bt.title = entrou ? 'Entrar em outra conta do ' + motor : '';
       bt.onclick = (e) => { e.stopPropagation(); entrarNaConta(m, entrou); };
       linha.title = entrou ? [conta.email, conta.plano].filter(Boolean).join(' · ') : '';
@@ -8798,16 +8798,12 @@ async function pintarContaLateral(engine, forcar) {
    e virou um anel por IA ao lado dos botões da janela: o logo no meio, o anel é quanto já usou
    da sessão (sem sessão, da semana) e o número ao lado. Passar o mouse abre o cartão daquela IA
    com Sessão e Semana: quando renova, a barra e "x% usado · y% restante". Nada além disso.
-   IA sem conta neste Mac, ou sem número de limite (o Grok), não aparece: vincular mora em
-   Ajustes › Contas, e o resto da conta na janela da Conta. */
+   As quatro IAs ficam no topo. Sem conta o botão fica desativado; com conta e sem número,
+   o cartão informa que o limite está indisponível. */
 const nivelDeUso = (pct) => pct >= 90 ? 'alto' : pct >= 75 ? 'medio' : '';
 function pctDeUso(j) { return Math.min(100, Math.max(0, Math.round((j && j.pct) || 0))); }
 function pintarAnelTopo(topo, engine, c) {
   let el = $('.ut-ia[data-motor="' + engine + '"]', topo);
-  if (!c || !c.entrou || !(c.sessao || c.semana) || (MOTORES_OK && MOTORES_OK[engine] === false)) {
-    if (el) el.remove();
-    return;
-  }
   if (!el) {
     el = document.createElement('button');
     el.className = 'ut-ia';
@@ -8815,14 +8811,17 @@ function pintarAnelTopo(topo, engine, c) {
     const depois = MOTORES_VISIVEIS.slice(MOTORES_VISIVEIS.indexOf(engine) + 1)
       .map(m => $('.ut-ia[data-motor="' + m + '"]', topo)).find(Boolean);
     topo.insertBefore(el, depois || null);
-    el.addEventListener('mouseenter', () => abrirCartaoUso(el, engine));
+    el.addEventListener('mouseenter', () => { if (!el.disabled) abrirCartaoUso(el, engine); });
     el.addEventListener('mouseleave', () => fecharCartaoUso(false));
-    el.addEventListener('focus', () => abrirCartaoUso(el, engine));
+    el.addEventListener('focus', () => { if (!el.disabled) abrirCartaoUso(el, engine); });
     el.addEventListener('blur', () => fecharCartaoUso(false));
     // clicar abre a janela da conta (sair, trocar, contas guardadas), como o bloco antigo
-    el.addEventListener('click', () => { fecharCartaoUso(true); abrirContaDaLateral(engine); });
+    el.addEventListener('click', () => { if (el.disabled) return; fecharCartaoUso(true); abrirContaDaLateral(engine); });
   }
-  const j = c.sessao || c.semana;
+  const entrou = !!(c && c.entrou);
+  el.disabled = !entrou;
+  if (!entrou && $('#usoCartao')?.dataset.motor === engine) fecharCartaoUso(true);
+  const j = entrou && (c.sessao || c.semana);
   const pct = j ? pctDeUso(j) : 0;
   const R = 11, volta = 2 * Math.PI * R;
   el.dataset.nivel = j ? nivelDeUso(pct) : '';
@@ -8831,7 +8830,9 @@ function pintarAnelTopo(topo, engine, c) {
     + (j ? '<circle class="ut-feito" cx="14" cy="14" r="' + R + '" stroke-dasharray="' + (volta * pct / 100).toFixed(2) + ' ' + volta.toFixed(2) + '"></circle>' : '')
     + '</svg><span class="ut-logo mo-logo" data-motor="' + engine + '">' + svgMotor(engine) + '</span></span>'
     + '<span class="ut-pct">' + (j ? pct + '%' : '—') + '</span>';
-  el.setAttribute('aria-label', 'Uso do ' + nomeDoMotor(engine) + (j ? ': ' + pct + '%' : ''));
+  el.setAttribute('aria-label', entrou
+    ? 'Uso do ' + nomeDoMotor(engine) + (j ? ': ' + pct + '%' : ', limite indisponível')
+    : nomeDoMotor(engine) + ': sem conta vinculada');
   // cartão aberto desta IA: repinta junto, com os números novos
   const cartao = $('#usoCartao');
   if (cartao && !cartao.classList.contains('hidden') && cartao.dataset.motor === engine) abrirCartaoUso(el, engine);
@@ -8851,7 +8852,7 @@ let cartaoUsoTimer = 0;
 function abrirCartaoUso(el, engine) {
   clearTimeout(cartaoUsoTimer);
   const c = contaCache[engine];
-  if (!c) return;
+  if (!c || !c.entrou || el.disabled) return;
   let cartao = $('#usoCartao');
   if (!cartao) {
     cartao = document.createElement('div');
@@ -12967,6 +12968,11 @@ document.addEventListener('keydown', (e) => {
   $('#verLine').textContent = '1.1.0';   // a linha dos Ajustes já se chama "Versão"
   repintarAvatares();
   const noTelefone = !!window.SEM_ELECTRON;
+  // Mostra os quatro lugares imediatamente; a leitura das contas atualiza cada um depois.
+  if ($('#usoTopo')) {
+    for (const eng of MOTORES_VISIVEIS) pintarAnelTopo($('#usoTopo'), eng, contaCache[eng]);
+    pintarUsoLateral();
+  }
   // leva 12.5: o radar de motores instalados, sem segurar o boot e sem derrubar nada se falhar
   if (window.api.motoresDisponiveis) window.api.motoresDisponiveis().then(m => {
     MOTORES_OK = m || null;
@@ -12975,8 +12981,6 @@ document.addEventListener('keydown', (e) => {
        até ele abrir outro chat. */
     for (const P of panes.values()) paintEngine(P);
     naPintar();
-    // o uso no topo da janela (Mac) aparece logo ao abrir, sem esperar a coluna de Conversas
-    if ($('#usoTopo')) pintarUsoLateral();
   }).catch(() => {});
   if (!noTelefone) window.api.codexModels().then(ms => {
     if (ms && ms.length) { MODELOS_CODEX = traduzCodex(ms); for (const P of panes.values()) if (P.engine === 'codex') fillModels(P); }

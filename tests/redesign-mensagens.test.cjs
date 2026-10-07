@@ -212,3 +212,10 @@ test('resposta que abre com título (o relatório): sem logo e nome, o copiar no
   assert.match(css, new RegExp(esc(sel + ' .msg-acoes') + '\\{margin:0\\}'));
   assert.doesNotMatch(role[1], /display:none/, 'esconder o rótulo inteiro levaria junto o copiar da resposta');
 });
+
+test('lista numerada: o "10." não parte em duas linhas e ganha coluna mais larga', () => {
+  const regra = css.match(/\.msg-body ol > li::before\{[^}]*\}/);
+  assert.ok(regra, 'sumiu a regra do número da lista');
+  assert.match(regra[0], /white-space:nowrap/, 'sem nowrap o overflow-wrap:anywhere quebra "10." em "1" e "0"');
+  assert.match(css, /\.msg-body ol:has\(> li:nth-child\(10\)\) > li\{padding-left:34px\}/);
+});

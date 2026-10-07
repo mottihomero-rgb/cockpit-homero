@@ -3038,7 +3038,7 @@ handle('sessions:claude', (_e, incluirRobos) => claudeSessions(5000, incluirRobo
 const CODEX_SESS = path.join(HOME, '.codex/sessions');
 const ORIGENS_DE_GENTE = ['cockpit', 'codex-tui', 'codex_tui', 'codex_vscode', 'codex-vscode', 'codex_app', 'codex-app', 'vscode'];
 
-const TECNICO = /<recommended_plugins>|<environment_context>|<user_instructions>|<system-reminder>|<available_tools>|<plugins>|<task-notification>|<command-name>|<local-command-stdout>|<bash-input>|<function_results>|^Caveat:|^\[Request interrupted|^\[Image: original|^<[a-z_-]+>/i;
+const TECNICO = /<recommended_plugins>|<environment_context>|<user_instructions>|<system-reminder>|<available_tools>|<plugins>|<task-notification>|<command-name>|<local-command-stdout>|<bash-input>|<function_results>|^Caveat:|^# AGENTS\.md instructions|^\[Request interrupted|^\[Image: original|^<[a-z_-]+>/i;
 const ehTecnico = (t) => !t || TECNICO.test(t.trim().slice(0, 400));
 
 /* O que o Claude Code injeta na conversa NAO e fala do usuário, mas fica gravado no mesmo lugar
@@ -3094,10 +3094,10 @@ function semResumoDaSessao(t) {
 function fichaCodex(it) {
   const ind = lerIndice();
   const salvo = ind[it.f];
-  if (salvo && salvo.mtime === it.mtime && salvo.size === it.size && salvo.ultima !== undefined) return salvo;
+  if (salvo && salvo.mtime === it.mtime && salvo.size === it.size && salvo.ultima !== undefined && salvo.sub !== undefined) return salvo;
 
   let head = headRead(it.f, 96 * 1024);
-  let id = '', cwd = '', origem = '', title = '', doAssistente = '';
+  let id = '', cwd = '', origem = '', title = '', doAssistente = '', sub = false;
   const varrer = (texto) => {
   for (const linha of texto.split('\n')) {
     if (!linha.startsWith('{')) continue;
@@ -3107,6 +3107,8 @@ function fichaCodex(it) {
       id = p2.id || p2.session_id || '';
       cwd = p2.cwd || '';
       origem = p2.originator || p2.source || '';
+      // ajudante (subagente) que o Codex abre sozinho: nao e conversa dele, nao entra na lista
+      sub = p2.thread_source === 'subagent' || !!(p2.source && typeof p2.source === 'object' && p2.source.subagent);
       continue;
     }
     if (!title && d.type === 'response_item') {
@@ -3124,7 +3126,7 @@ function fichaCodex(it) {
   if (!varrer(head) && it.size > 96 * 1024) varrer(fs.readFileSync(it.f, 'utf8'));   // arquivo grande: le tudo
   if (!title) title = doAssistente;                       // ao menos a primeira resposta
   if (!title) title = 'Conversa de ' + new Date(it.mtime).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-  const ficha = { mtime: it.mtime, size: it.size, title, cwd, entrada: origem, sid: id, ultima: horaDaUltimaFala(it.f, it.mtime) };
+  const ficha = { mtime: it.mtime, size: it.size, title, cwd, entrada: origem, sid: id, sub, ultima: horaDaUltimaFala(it.f, it.mtime) };
   ind[it.f] = ficha;
   return ficha;
 }
@@ -3141,6 +3143,7 @@ function codexSessions(incluirRobos, nomesDoApp) {
     lidos++;
     if (!incluirRobos && fi.entrada && !ORIGENS_DE_GENTE.includes(fi.entrada)) continue;
     if (!incluirRobos && PASTA_DE_ROBO.test(fi.cwd || '')) continue;
+    if (!incluirRobos && fi.sub) continue;
     const id = fi.sid || it.id;
     const title = meus[id] || (nomesDoApp && nomesDoApp[id]) || fi.title;
     if (!title) continue;

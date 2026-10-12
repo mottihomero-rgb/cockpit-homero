@@ -88,7 +88,7 @@ test('Se o Mac trocou a mesma preferencia depois, quem manda e o Mac', async () 
 });
 
 test('Mac regravou o tema com o nome novo (redesenho): a escolha do telefone continua', async () => {
-  /* O app novo, no Mac, troca 'escuro' por 'escura' (e 'claro'/'jornal' por 'clara') e grava
+  /* O app novo, no Mac, troca 'escuro' por 'escura' (e 'claro' por 'clara') e grava
      sozinho. Ninguem mexeu no tema do Mac: o telefone nao pode achar que o Mac trocou e jogar
      fora a escolha dele. Gaveta como a versao antiga deixava: base com o nome antigo. */
   const gaveta = gavetaDeMentira();
@@ -97,10 +97,14 @@ test('Mac regravou o tema com o nome novo (redesenho): a escolha do telefone con
   assert.equal((await t.api.getConfig()).tema, 'claro', 'o celular voltou para Escura sozinho');
   assert.deepEqual(guardado(gaveta), { tema: { meu: 'claro', base: 'escuro' } });
 
-  // o Jornal virou Clara: mesma coisa
+  // 09/10: o Jornal voltou a ser um tema próprio. Mac ainda no Jornal: a escolha do telefone continua;
+  // Mac saiu do Jornal para a Clara: trocou de verdade, manda o Mac
   const g2 = gavetaDeMentira();
   g2.setItem('cockpit:ajustes-do-telefone', JSON.stringify({ tema: { meu: 'auto', base: 'jornal' } }));
-  assert.equal((await telefone(g2, { tema: 'clara', abas: [] }).api.getConfig()).tema, 'auto');
+  assert.equal((await telefone(g2, { tema: 'jornal', abas: [] }).api.getConfig()).tema, 'auto');
+  const g2b = gavetaDeMentira();
+  g2b.setItem('cockpit:ajustes-do-telefone', JSON.stringify({ tema: { meu: 'auto', base: 'jornal' } }));
+  assert.equal((await telefone(g2b, { tema: 'clara', abas: [] }).api.getConfig()).tema, 'clara');
 
   // mas se o Mac trocou DE VERDADE (escuro -> Clara), quem manda continua sendo o Mac
   const g3 = gavetaDeMentira();

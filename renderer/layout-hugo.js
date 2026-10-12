@@ -11,6 +11,44 @@ function colunasDaAba(A) {
   return [...grupos.values()];
 }
 
+function mostrarMetadeDoProximoChat(A) {
+  const area = A.corpoEl;
+  const estilo = getComputedStyle(area);
+  const folgaEsquerda = parseFloat(estilo.paddingLeft) || 0;
+  const folgaDireita = parseFloat(estilo.paddingRight) || 0;
+  const largura = Math.max(0, area.clientWidth - folgaEsquerda - folgaDireita);
+  const colunas = area.querySelectorAll(':scope > .coluna');
+  const minimo = 330;
+  const intervalo = 5; // 2 px de cada lado do divisor de 1 px
+  const cabeTudo = !largura || colunas.length * minimo + Math.max(0, colunas.length - 1) * intervalo <= largura;
+  area.classList.toggle('mostra-proximo', !cabeTudo);
+  if (cabeTudo) {
+    area.style.removeProperty('--largura-chat-preview');
+    return;
+  }
+  const completos = Math.max(1, Math.floor((largura - minimo / 2) / (minimo + intervalo)));
+  const larguraChat = Math.max(minimo, (largura - completos * intervalo) / (completos + 0.5));
+  area.style.setProperty('--largura-chat-preview', larguraChat + 'px');
+}
+
+function enquadrarChatComProximo(P) {
+  const A = abaDe(P);
+  const area = A?.corpoEl;
+  if (!area?.classList.contains('mostra-proximo') || !area.clientWidth || matchMedia('(max-width: 820px), (pointer: coarse) and (max-width: 1100px)').matches) {
+    P.el.scrollIntoView({ behavior: window.SEM_ELECTRON ? 'instant' : 'smooth', inline: 'nearest', block: 'nearest' });
+    return;
+  }
+  const colunas = [...area.querySelectorAll(':scope > .coluna')];
+  const atual = colunas.indexOf(P.el.closest('.coluna'));
+  if (atual < 0) return;
+  const larguraChat = colunas[0].getBoundingClientRect().width;
+  const folgaEsquerda = parseFloat(getComputedStyle(area).paddingLeft) || 0;
+  const completos = Math.max(1, Math.floor((area.clientWidth - 2 * folgaEsquerda) / larguraChat));
+  const primeiro = Math.max(0, atual - completos + 1);
+  const esquerda = colunas[primeiro].getBoundingClientRect().left - area.getBoundingClientRect().left + area.scrollLeft - folgaEsquerda;
+  area.scrollTo({ left: esquerda, behavior: window.SEM_ELECTRON ? 'instant' : 'smooth' });
+}
+
 function montarColunasDaAba(A) {
   const foco = document.activeElement;
   const selecao = foco && typeof foco.selectionStart === 'number'
@@ -36,6 +74,11 @@ function montarColunasDaAba(A) {
       fragmento.appendChild(col);
     });
     A.corpoEl.replaceChildren(fragmento);
+    mostrarMetadeDoProximoChat(A);
+    if (!A.observadorLargura) {
+      A.observadorLargura = new ResizeObserver(() => mostrarMetadeDoProximoChat(A));
+      A.observadorLargura.observe(A.corpoEl);
+    }
     pintarMulti();
     if (foco?.isConnected && typeof foco.focus === 'function') {
       foco.focus({ preventScroll: true });

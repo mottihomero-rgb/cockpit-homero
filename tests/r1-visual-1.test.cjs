@@ -18,9 +18,11 @@ test('R1-044: index.html da raiz nao existe mais (cópia morta que ninguem carre
 });
 
 test('R1-044: a janela principal so carrega renderer/index.html', () => {
-  const m = mainJs.match(/win\.loadFile\(path\.join\(__dirname,\s*'([^']+)'\)\)/);
-  assert.ok(m, 'nao achei o loadFile da janela principal em main.js');
-  assert.equal(m[1], 'renderer/index.html', 'a janela principal deveria carregar sempre renderer/index.html');
+  // 09/10 (tela viva): a pasta da tela vem do pastaDaTela(), que sem copia viva e a renderer/ do pacote
+  assert.match(mainJs, /win\.loadFile\(path\.join\(pastaDaTela\(\),\s*'index\.html'\)\)/,
+    'nao achei o loadFile da janela principal em main.js');
+  assert.match(mainJs, /const pastaDaTela = \(\) => telaVivaPasta \|\| path\.join\(__dirname,\s*'renderer'\);/,
+    'a janela principal deveria carregar sempre renderer/index.html');
 });
 
 test('R1-043: formula antiga de largura (5 paineis lado a lado) nao esta mais em .pane', () => {

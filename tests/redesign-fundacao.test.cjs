@@ -24,11 +24,13 @@ function aparencia({ escuro = false, contraste = false, semVidro = false } = {})
   return { A: window.Aparencia, attrs };
 }
 
-test('o que estava salvo antes do redesenho vira a Aparência mais próxima (o Jornal era claro)', () => {
-  const { A } = aparencia();
+test('o que estava salvo antes do redesenho vira a Aparência mais próxima (o Jornal voltou em 09/10)', () => {
+  const { A, attrs } = aparencia();
   assert.equal(A.normalizar('escuro'), 'escura');
   assert.equal(A.normalizar('claro'), 'clara');
-  assert.equal(A.normalizar('jornal'), 'clara');
+  assert.equal(A.normalizar('jornal'), 'jornal');
+  A.aplicar('jornal');
+  assert.equal(attrs['data-theme'], 'light-paper', 'o Jornal tem cor própria, entre o claro e o escuro');
   assert.equal(A.normalizar(undefined), 'auto');
   assert.equal(A.normalizar('escura'), 'escura');
 });
@@ -57,7 +59,8 @@ test('as duas páginas carregam tokens antes do style.css e as áreas depois, na
     assert.match(html, /<html lang="pt-BR" data-theme="dark">/, pagina + ': sem data-theme a janela nasce sem cor');
     assert.ok(html.indexOf('src="icones.js"') > 0 && html.indexOf('src="icones.js"') < html.indexOf('src="quadro.js"'),
       pagina + ': o icones.js tem de vir antes do quadro.js e do app.js');
-    assert.doesNotMatch(html, /data-tema=|Jornal/, pagina + ': o seletor antigo de tema voltou');
+    // o Jornal voltou em 09/10 como opção da Aparência (data-aparencia); o seletor antigo era data-tema
+    assert.doesNotMatch(html, /data-tema=/, pagina + ': o seletor antigo de tema voltou');
   }
 });
 

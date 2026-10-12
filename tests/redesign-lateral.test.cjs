@@ -85,7 +85,8 @@ test('Ajustes em cartões sem perder nenhum controle que o app.js liga', () => {
   const grupos = (html) => [...html.matchAll(/<div class="aj-gtit">([^<]+)<\/div>/g)].map((m) => m[1]);
   const mac = ler('renderer/index.html'), web = ler('renderer/index-web.html');
   assert.deepEqual(grupos(mac), ['Contas', 'Geral', 'Entrada', 'Avançado'], 'Contas no topo: vincular conta num botão só (26/09)');
-  assert.deepEqual(grupos(web), ['Geral', 'Avançado'], 'no celular não há Celular nem Voz');
+  assert.deepEqual(grupos(web), ['Neste aparelho', 'Geral', 'Avançado'], 'login salvo e Sair ficam no topo dos ajustes do celular');
+  assert.match(web, /<form action="\/sair" method="post" id="formSairCelular">/);
   const ids = (html) => ['fotoPrev', 'btnFoto', 'btnFotoTirar', 'btnDefCwd', 'defCwd', 'inboxBloco', 'inboxPasta',
     'btnInboxAbrir', 'chkRobos', 'verLine'].filter((id) => !html.includes('id="' + id + '"'));
   assert.deepEqual(ids(mac), [], 'Mac: sumiu controle');
@@ -155,7 +156,7 @@ test('torre enxuta no topo das Conversas, num cartão que some sem nada pendente
   const lt = pegar('linhaDaTorre');
   assert.match(lt, /' rd-nova'/, 'resposta nova = ponto azul');
   assert.doesNotMatch(lt, /ti-acoes/, 'sem os botões das sessões de fora');
-  assert.match(css, /\.torre-bloco\{flex:none;margin:10px 8px 0;padding:6px 0;border-radius:10px;background:var\(--fill-3\);/);
+  assert.match(css, /\.torre-bloco\{flex:none;margin:10px 8px 0;padding:6px 0;border-radius:var\(--r-panel\);background:var\(--fill-2\);/);
   for (const f of ['renderer/index.html', 'renderer/index-web.html']) {
     const h = ler(f);
     assert.ok(!h.includes('data-view="torre"'), f + ': a torre não tem mais ícone nem vista própria');

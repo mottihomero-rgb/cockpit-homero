@@ -23,12 +23,15 @@
   // o que estava salvo antes do redesenho vira a opcao nova mais proxima: o Jornal era claro
   function normalizar(t) {
     if (t === 'escura' || t === 'escuro') return 'escura';
-    if (t === 'clara' || t === 'claro' || t === 'jornal') return 'clara';
+    if (t === 'jornal') return 'jornal';
+    if (t === 'clara' || t === 'claro') return 'clara';
     return 'auto';
   }
   function efetivo(a) {
     var e = a === 'escura' || (a === 'auto' && casou(escuro));
-    return (e ? 'dark' : 'light') + (casou(contraste) || casou(semVidro) ? '-hc' : '');
+    var hc = casou(contraste) || casou(semVidro) ? '-hc' : '';
+    if (a === 'jornal') return 'light-paper' + hc;   // 09/10: Jornal voltou, papel amarelado entre o claro e o escuro
+    return (e ? 'dark' : 'light') + hc;
   }
   function aplicar(t) {
     escolha = normalizar(t);

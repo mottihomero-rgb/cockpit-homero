@@ -13,6 +13,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+require('./provedores-no-vm.cjs');
 const { loadMain } = require(path.join(__dirname, 'main-harness.cjs'));
 
 const raiz = path.join(__dirname, '..');

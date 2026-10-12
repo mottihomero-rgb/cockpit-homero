@@ -19,13 +19,13 @@
    a coluna fica AO LADO do conteúdo, nunca por cima: o desfoque não teria o que borrar, então por
    baixo vai o --bg-window e a cor sai igual à da referência (sobre o fundo da conversa ficava mais
    escura). No celular, onde a coluna é gaveta por cima do chat, o vidro é de verdade (lá embaixo).
-   A borda esquerda é de 1pt e fica FORA dos 280 (281 no total, como no desenho: sem isso os botões
-   "Copiar comando" e "Abrir pasta" da torre não cabiam lado a lado). A direita é a alça #dragbar. */
-#sidebar{width:281px;color:var(--label-1);
-  background:linear-gradient(var(--bg-sidebar),var(--bg-sidebar)),var(--bg-window);
+   Os 281px preservam a largura dos controles. A alça #dragbar segue arrastável, sem fio cinza. */
+#sidebar{width:281px;margin:6px 0 6px 6px;border-radius:var(--r-panel);color:var(--label-1);
+  background:linear-gradient(var(--fill-2),var(--fill-2)),
+    linear-gradient(var(--bg-sidebar),var(--bg-sidebar)),var(--bg-window);
   -webkit-backdrop-filter:var(--blur-glass);backdrop-filter:var(--blur-glass);
-  border-left:1px solid var(--separator)}
-#dragbar::before{background:var(--separator)}
+  border-left:1px solid transparent}
+#dragbar::before{background:transparent}
 /* sem azul no fio: borda colorida é só do foco. O cursor de alargar já diz que dá para puxar. */
 #dragbar:hover::before{background:var(--separator-strong)}
 .side-view{min-height:0}
@@ -173,8 +173,8 @@ html[data-theme$="-hc"] .side-pastas{box-shadow:var(--shadow-float),inset 0 0 0 
 .cv-erro{height:22px;padding:0 8px;border-radius:6px;background:var(--fill-2);color:var(--label-2);font:400 12px/15px var(--font-sans)}
 .cv-erro:hover{color:var(--label-1)}
 
-/* a lista: fio de 1pt em cima, grupos Hoje/Ontem/... (11, 600, label-2) e itens de 28 */
-.hist{flex:1;min-height:0;overflow:auto;padding:10px 0 12px 8px;border-top:1px solid var(--separator)}
+/* O respiro acima da lista separa as ferramentas dos grupos Hoje/Ontem/... sem fio cinza. */
+.hist{flex:1;min-height:0;overflow:auto;padding:10px 0 12px 8px;border-top:1px solid transparent}
 /* 26/09 (pedido dele): a lista não "vaza" pela borda de baixo da janela. Ela termina 14 acima,
    na mesma linha do fim da caixa de escrever, e as últimas linhas somem num degradê de 28 (a
    conversa de baixo não aparece cortada ao meio). O respiro de 28 dentro deixa a última da lista
@@ -188,7 +188,8 @@ body:not(:has(#btnGaveta)) .hist{margin-bottom:14px;padding-bottom:28px;
    subia aparecia cortado por cima dele. */
 .hist-cab{position:sticky;top:-10px;z-index:2;margin-top:10px;margin-bottom:1px;padding:4px 8px 4px;font:600 11px/14px var(--font-sans);
   color:var(--label-2);text-transform:none;letter-spacing:0;
-  background:linear-gradient(var(--bg-sidebar),var(--bg-sidebar)),var(--bg-window)}
+  background:linear-gradient(var(--fill-2),var(--fill-2)),
+    linear-gradient(var(--bg-sidebar),var(--bg-sidebar)),var(--bg-window)}
 .hist-cab:first-child{margin-top:-4px}
 /* "no nome", "dentro da conversa", "setembro": o grupo começa com maiúscula, como "Hoje" */
 .hist-cab::first-letter{text-transform:uppercase}
@@ -292,9 +293,9 @@ body:not(:has(#btnGaveta)) .hist{margin-bottom:14px;padding-bottom:28px;
    separação da lista de baixo é o próprio cartão (fundo fill-3) + o título "Conversas" logo embaixo.
    Grupo = 11/600 label-2 com a contagem em label-3. Linha = 26 de altura: logo 14, título 13 e, à
    direita, o tempo (se trabalhando) e o sinal. Sem nada pendente o cartão some (hidden). */
-.torre-bloco{flex:none;margin:10px 8px 0;padding:6px 0;border-radius:10px;background:var(--fill-3);
+.torre-bloco{flex:none;margin:10px 8px 0;padding:6px 0;border-radius:var(--r-panel);background:var(--fill-2);
   max-height:40%;display:flex;flex-direction:column;min-height:0}
-.torre{padding:0 4px;gap:0;font:var(--f-body);flex:1}
+.torre{padding:0 4px;gap:2px;font:var(--f-body);flex:1}
 .torre-aba{margin-top:6px;padding:0 8px 2px;gap:6px;font:600 11px/14px var(--font-sans);color:var(--label-2);
   text-transform:none;letter-spacing:0}
 .torre-aba:first-child{margin-top:0}
@@ -310,6 +311,9 @@ body:not(:has(#btnGaveta)) .hist{margin-bottom:14px;padding-bottom:28px;
 .ti-logo[data-motor="codex"]{color:var(--logo-codex)}
 .ti-logo[data-motor="gemini"]{color:var(--logo-gemini)}
 .ti-logo[data-motor="grok"]{color:var(--logo-grok)}
+.ti-logo[data-motor="deepseek"]{color:var(--logo-deepseek)}
+.ti-logo[data-motor="mimo"]{color:var(--logo-mimo)}
+.ti-logo[data-motor="muse"]{color:var(--logo-muse)}
 .ti-logo[data-motor="acp"]{color:var(--acp)}
 .ti-tit{flex:1;min-width:0;font:var(--f-body);color:var(--label-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ti-est{flex:none;display:flex;align-items:center;gap:6px;font:var(--f-sub);color:var(--label-3);font-variant-numeric:tabular-nums}
@@ -461,7 +465,7 @@ html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inse
    16px (o Safari dá zoom sozinho em campo com letra menor). Numa janela estreita do Mac nada disto
    vale: a coluna continua ao lado do chat, opaca, com os itens de 28. */
 @media (max-width: 820px), (pointer: coarse) and (max-width: 1100px) {
-  body:has(#btnGaveta) #sidebar{background:var(--bg-sidebar);box-shadow:var(--shadow-float)}
+  body:has(#btnGaveta) #sidebar{margin:0;border-radius:0;background:var(--bg-sidebar);box-shadow:var(--shadow-float)}
   body.gaveta::before{background:var(--scrim)}
   /* na gaveta translúcida um fundo no cabeçalho virava uma faixa mais clara: lá ele não gruda */
   body:has(#btnGaveta) .hist-cab{position:static;background:none}
@@ -600,6 +604,11 @@ html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inse
 .mini-escuro{background:
   radial-gradient(120% 90% at 85% 10%,rgba(120,150,255,.35),transparent 55%),
   linear-gradient(135deg,#27317A 0%,#1A2266 45%,#0E1440 70%,#2E48A8 100%)}
+.mini-jornal{background:
+  radial-gradient(120% 90% at 85% 10%,rgba(255,248,225,.6),transparent 55%),
+  linear-gradient(135deg,#E6D6AC 0%,#CDB27A 50%,#B99A5C 75%,#E2CE9C 100%)}
+.mini-jornal .mini-barra{background:rgba(250,242,220,.8)}
+.mini-jornal .mini-jan{background:#F4ECD8}
 .mini-auto{display:flex}
 .mini-lado{position:relative;flex:1;overflow:hidden}
 .mini-lado .mini-jan{left:10px}
@@ -619,6 +628,10 @@ html[data-theme$="-hc"] .chave input:not(:checked):focus-visible{box-shadow:inse
 
 /* o vidro Tonalizado: as camadas de vidro ficam quase opacas nos dois tons */
 html.vidro-tonalizado[data-theme="dark"]{--glass-regular:rgba(46,46,50,.97);--bg-sidebar:rgba(40,40,43,.98)}
+/* Jornal (09/10): a coluna das conversas tem a MESMA cor do fundo do chat (pedido dele). Sem isto
+   o --fill-2 por cima escurecia a coluna. */
+html[data-theme^="light-paper"] #sidebar,html[data-theme^="light-paper"] .hist-cab{background:var(--bg-content)}
+html.vidro-tonalizado[data-theme="light-paper"]{--glass-regular:rgba(246,238,218,.98);--bg-sidebar:#F4ECD8}
 html.vidro-tonalizado[data-theme="light"]{--glass-regular:rgba(252,252,253,.98);--bg-sidebar:rgba(238,238,241,.98)}
 
 /* ---- Torre como central de avisos (26/09, pedido do Hugo) ----

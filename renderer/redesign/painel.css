@@ -18,15 +18,17 @@
    .coluna com container-type; aqui vale também para painel fora de coluna. No celular o
    celular.css desliga o container de propósito, e o bloco do telefone no fim repete as regras. */
 .pane{container-type:inline-size;background:var(--bg-content)}
-/* painel em foco: sem borda e sem fundo diferente. Quem diz o foco é o nome em --label-1. */
-.pane.focus{background:var(--bg-content)}
+/* O contorno fica acima do cabeçalho e do nome, sem falhas nas laterais. */
+.pane.focus{background:var(--bg-content);outline:none;z-index:1}
+.pane.focus::after{content:"";position:absolute;inset:0;border:3px solid color-mix(in srgb,var(--accent) 45%,transparent);
+  border-radius:inherit;pointer-events:none;z-index:10}
+[data-theme="dark"] .pane.focus::after,[data-theme="dark-hc"] .pane.focus::after{border-width:2px}
 
-/* divisor de 1pt entre painéis. A alça de arrastar continua com 7px (3 de cada lado da linha),
-   só que invisível: antes eram 5px de faixa com uma linha no meio. */
-.pane-split{width:1px;border:0;position:relative;z-index:3;background:var(--separator)}
+/* Alça invisível de arrastar entre os chats; o espaço visual vem do gap do layout. */
+.pane-split{width:1px;border:0;position:relative;z-index:3;background:transparent}
 .pane-split::after{content:"";position:absolute;top:0;bottom:0;left:-3px;right:-3px}
 .pane-split:hover{background:var(--accent)}
-.pane-split-h{height:1px;position:relative;z-index:3;background:var(--separator)}
+.pane-split-h{height:1px;position:relative;z-index:3;background:transparent}
 .pane-split-h::after{content:"";position:absolute;left:0;right:0;top:-3px;bottom:-3px}
 
 /* ---------- linha 1 do cabeçalho: 36pt ----------
@@ -64,6 +66,9 @@
 .ch-lado[aria-pressed="true"][data-motor="codex"] > span:first-child{color:var(--logo-codex)}
 .ch-lado[aria-pressed="true"][data-motor="gemini"] > span:first-child{color:var(--logo-gemini)}
 .ch-lado[aria-pressed="true"][data-motor="grok"] > span:first-child{color:var(--logo-grok)}
+.ch-lado[aria-pressed="true"][data-motor="deepseek"] > span:first-child{color:var(--logo-deepseek)}
+.ch-lado[aria-pressed="true"][data-motor="mimo"] > span:first-child{color:var(--logo-mimo)}
+.ch-lado[aria-pressed="true"][data-motor="muse"] > span:first-child{color:var(--logo-muse)}
 /* o apagado (motor que não existe nesta máquina) continua no style.css; aqui só o foco de teclado,
    por último para ganhar também do item ativo (que tem sombra própria) */
 .ch-lado:focus-visible{outline:none;box-shadow:var(--anel-foco)}

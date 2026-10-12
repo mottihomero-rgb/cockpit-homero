@@ -23,6 +23,8 @@ function montar(cenario) {
       return cenario.falha ? { err: new Error('deu ruim'), errout: 'sem rede' } : { err: null, out: '', errout: '' };
     },
     win: { isDestroyed: () => false, webContents: { send: (canal, p) => log.push('AVISOU ' + canal + ' ' + JSON.stringify(p)) } },
+    // 09/10 (várias janelas): o aviso sai para todas as janelas; aqui só existe a principal
+    enviarATodas: (canal, p) => ctx.win.webContents.send(canal, p),
   };
   const nomes = Object.keys(ctx);
   const f = new Function(...nomes, bloco + '\n; return atualizarMotoresSozinho;');

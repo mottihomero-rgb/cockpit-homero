@@ -35,6 +35,10 @@ const PESSOAL = (() => {
 const listaPessoal = (k) => (Array.isArray(PESSOAL[k]) ? PESSOAL[k].filter((x) => typeof x === 'string' && x) : []);
 const contasCli = require('./contas-cli').criarContasCli({ HOME, pastaDados: () => app.getPath('userData'), acharBin, temBin,
   buildEnv: () => plataforma.buildEnv(), ehWindows: EH_WIN });
+/* DeepSeek, MiMo e Muse Spark: chave de API, motor é o Claude Code apontado para outro endereço */
+const provedoresMod = require('./provedores');
+const provedores = provedoresMod.criarProvedores({ HOME, buildEnv: () => plataforma.buildEnv() });
+const ehProvedor = provedoresMod.ehProvedor;
 // no Mac o Claude mora sempre no mesmo lugar; no Windows a gente procura
 let CLAUDE_BIN = EH_WIN ? acharBin('claude') : path.join(HOME, '.local/bin/claude');
 
@@ -112,7 +116,7 @@ process.on('uncaughtException', (e) => {
   try { anota('ERRO NAO TRATADO no main:', e); } catch {}
   try {
     if (win && !win.isDestroyed()) {
-      win.webContents.send('app:erro', { texto: 'Um erro interno aconteceu, mas o Cockpit continua aberto: ' + (e && e.message || e) });
+      enviarATodas('app:erro', { texto: 'Um erro interno aconteceu, mas o Cockpit continua aberto: ' + (e && e.message || e) });
     }
   } catch {}
 });
@@ -121,8 +125,52 @@ process.on('unhandledRejection', (e) => {
 });
 
 let win = null;
+/* ======================= varias janelas (09/10) =======================
+   Janela principal = `win` (a de sempre, dona do config.json e do que roda sozinho). Janelas extras
+   (Dock > Nova janela, ou arrastar um chat/aba para fora) nascem com ?j=N: la os ids de chat e
+   terminal ganham o prefixo "jN_" (j2_p1, j2_t1), e e por esse prefixo que o main sabe QUAL janela
+   recebe cada evento. Extra NAO grava o config (so guarda o proprio estado na memoria, para o
+   ⌘R devolver as abas dela): quem manda no config.json continua sendo so a principal. */
+const janelasExtras = new Map();        // n -> BrowserWindow
+const estadoDaJanela = new Map();       // webContents.id -> { abas, abaAberta }
+let proximaJanela = 2;
+const janelaViva = (w) => !!(w && !w.isDestroyed());
+function todasAsJanelas() { return [win, ...janelasExtras.values()].filter(janelaViva); }
+function janelaDoId(id) {
+  const m = /^j(\d+)_/.exec(String(id || ''));
+  if (m) { const w = janelasExtras.get(Number(m[1])); return janelaViva(w) ? w : null; }
+  return janelaViva(win) ? win : null;
+}
+function enviarAoDono(id, canal, payload) { const w = janelaDoId(id); if (w) w.webContents.send(canal, payload); }
+function enviarATodas(canal, payload) { for (const w of todasAsJanelas()) w.webContents.send(canal, payload); }
+// atalho do menu vale para a janela em foco (e na principal se nenhuma estiver)
+function enviarMenu(acao) {
+  const f = BrowserWindow.getFocusedWindow();
+  const alvo = (f && todasAsJanelas().includes(f)) ? f : win;
+  if (janelaViva(alvo)) alvo.webContents.send('menu', acao);
+}
+function mostrarJanelaDoChat(paneId, acao) {
+  const w = janelaDoId(paneId) || win;
+  if (!janelaViva(w)) return;
+  if (w.isMinimized()) w.restore();
+  w.show(); w.focus();
+  w.webContents.send('menu', acao);
+}
+const ehJanelaExtra = (e) => !!(e && e.sender && janelaViva(win) && e.sender !== win.webContents);
 const HANDLERS = {};                    // os mesmos comandos, tambem servidos pelo Wi-Fi
-function handle(nome, fn) { HANDLERS[nome] = fn; ipcMain.handle(nome, fn); }
+/* A tela chama o DeepSeek/MiMo/Muse de "engine" próprio (logo, conta, limite), mas por baixo é o
+   Claude Code: aqui, na porta de entrada, o pedido vira engine 'claude' + provedor. Só os canais
+   de chat e de histórico passam por isso; conta e limite recebem o id e resolvem sozinhos. */
+const CANAIS_DE_PROVEDOR = /^(pane:|sessions:(history|titulo|tempo|buscar)|sessao:|mcp:|skills:)/;
+function comProvedor(nome, fn) {
+  if (!CANAIS_DE_PROVEDOR.test(nome)) return fn;
+  return (e, data, ...resto) => {
+    if (data && typeof data === 'object' && ehProvedor(data.engine)) data = { ...data, provedor: data.engine, engine: 'claude' };
+    else if (typeof data === 'string' && ehProvedor(data)) data = 'claude';
+    return fn(e, data, ...resto);
+  };
+}
+function handle(nome, fn) { const f = comProvedor(nome, fn); HANDLERS[nome] = f; ipcMain.handle(nome, f); }
 
 /* ======================= util ======================= */
 /* Gravar direto no arquivo final e perigoso: o config tem 2,3 MB (a foto em base64 sozinha
@@ -247,6 +295,37 @@ function saveConfig(cfg, origem) {
   abasNoDisco = listaDeAbas(aGravar).length;
   return devolvidas;
 }
+/* 04/10: fechar no X e encerrar o app nao sao a mesma coisa. No X o app segue no Dock e a
+   janela volta com as abas e os chats de antes. Encerrar de vez (botao direito no Dock, ⌘Q,
+   menu) deixa esta marca, e a proxima abertura comeca sem aba nenhuma. So as abas abertas
+   saem: historico das conversas, login, contas e ajustes ficam onde estao.
+   A marca e um arquivo a parte, e nao uma chave do config, de proposito: a tela ainda grava o
+   config durante a saida e levaria a chave embora. O esvaziamento fica para o boot pelo mesmo
+   motivo. Quem NAO marca: app que caiu, Mac desligando ou reiniciando, e a 2a copia barrada
+   pela trava la em cima (essa nunca abriu janela) — nesses casos tudo volta como estava. */
+const MARCA_ABRIR_LIMPO = () => path.join(app.getPath('userData'), 'abrir-limpo');
+let janelaJaAbriu = false;
+let macDesligando = false;
+function marcarAbrirLimpo() {
+  if (!janelaJaAbriu || macDesligando) return;
+  try { fs.writeFileSync(MARCA_ABRIR_LIMPO(), new Date().toISOString()); }
+  catch (e) { anota('nao consegui marcar a abertura limpa:', e && e.message); }
+}
+function abrirLimpoSeEncerrou() {
+  try {
+    if (!fs.existsSync(MARCA_ABRIR_LIMPO())) return false;
+    fs.unlinkSync(MARCA_ABRIR_LIMPO());
+    const cfg = loadConfig();
+    const tinha = listaDeAbas(cfg).length;
+    if (!tinha) return false;
+    cfg.abas = []; cfg.abaAberta = 0;
+    // `fechou`: foi ele quem mandou encerrar, entao esta gravacao pode diminuir a lista de abas
+    // (e o retrato de antes fica em config.json.anterior, como em qualquer aba fechada)
+    if (saveConfig(cfg, { fechou: true }) < 0) return false;
+    anota('app tinha sido encerrado de vez: abri limpo, sem as ' + tinha + ' abas de antes');
+    return true;
+  } catch (e) { anota('nao consegui abrir limpo:', e && e.message); return false; }
+}
 
 // app GUI nao herda o PATH do shell: monta um PATH completo (ver plataforma.js)
 const buildEnv = plataforma.buildEnv;
@@ -273,7 +352,7 @@ function emit(paneId, kind, data) {
   }
   somConclusao.evento(paneId, kind, data);
   const msg = { paneId, kind, ...data };
-  if (win && !win.isDestroyed()) win.webContents.send('pane:event', msg);
+  enviarAoDono(paneId, 'pane:event', msg);
   /* PRINT NAO TRAFEGA PELO WI-FI. O send acima ja serializou a mensagem inteira (com as
      imagens) para a janela do Mac; daqui pra baixo elas saem do objeto. Sem isto, cada print
      que o agente tira (ate 3 MB de base64, ate 4 por passo) seria empurrado para o iPhone a
@@ -584,7 +663,7 @@ function codexGlobal(destino, kind, data) {
   // Eventos de conta/conectores não carregam threadId. Distribuir só ao destino
   // correto e também pelo canal global para quando nenhum chat estiver aberto.
   const payload = { destino, kind, ...data };
-  if (win && !win.isDestroyed()) win.webContents.send('codex:event', payload);
+  enviarATodas('codex:event', payload);
   avisarWeb('codex:event', payload);
   for (const [paneId, d] of codexPaneDest) if (d === destino) emit(paneId, kind, { ...data, globalEvent: true });
 }
@@ -892,7 +971,7 @@ function codexNotification(method, params, destino = 'local') {
 
 function codexGlobalProcess(destino, data) {
   const payload = { destino, kind: 'process-output', ...data };
-  if (win && !win.isDestroyed()) win.webContents.send('codex:event', payload);
+  enviarATodas('codex:event', payload);
   avisarWeb('codex:event', payload);
 }
 function mcpName(it) { return (it.server ? it.server + ' · ' : '') + (it.tool || 'MCP'); }
@@ -1095,11 +1174,13 @@ function claudeStart(paneId, opts) {
     const sf = claudeSettingsSemBypass();
     if (sf) { args.push('--setting-sources', 'project,local'); args.push('--settings', sf); }
   }
-  if (opts.effort) args.push('--effort', opts.effort);
+  const provedor = opts.provedor && ehProvedor(opts.provedor) ? opts.provedor : '';
+  // modelo de fora não conhece "esforço" nem o modo ultracode da Anthropic
+  if (opts.effort && !provedor) args.push('--effort', opts.effort);
   // no esforco Maximo o painel vira "ultracode": ele passa a usar workflows (varios agentes
   // em paralelo) por conta propria. Em --print o CLI nasce com a regra contraria, entao alem
   // deste texto o renderer ainda manda a autorizacao junto da primeira mensagem.
-  if (opts.effort === 'max') args.push('--append-system-prompt', ULTRACODE_SP);
+  if (opts.effort === 'max' && !provedor) args.push('--append-system-prompt', ULTRACODE_SP);
   if (opts.model) args.push('--model', opts.model);
   if (opts.resumeId) args.push('--resume', opts.resumeId);
   /* RAMIFICAR de verdade: --resume + --fork-session abre uma conversa NOVA levando o historico
@@ -1121,7 +1202,23 @@ function claudeStart(paneId, opts) {
      A trava do args.includes e obrigatoria: nome recusado pelo git nao vira pasta nenhuma. */
   if (nomeWt && args.includes('-w')) claudeCwd.set(paneId, path.join(opts.cwd || HOME, '.claude', 'worktrees', nomeDeWorktree(nomeWt)));
 
+  /* IA de chave = modelo pequeno ou barato. Medido em 07/10 com o Muse Glimmer: o pedido saía com 84 mil
+     tokens (conectores MCP, lista de skills, hooks pessoais) e o 1º "oi" levou 8 minutos; sem isso são
+     17 mil e 1,5 s. Então: sem MCP, sem skills, sem hooks/ajustes pessoais (o CLAUDE.md fica) e sem as
+     sugestões automáticas, que gastam mais um pedido por resposta. */
+  if (provedor) {
+    const i = args.indexOf('--prompt-suggestions');
+    if (i >= 0) args.splice(i, 1);
+    if (!args.includes('--strict-mcp-config')) args.push('--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}');
+    if (!args.includes('--disable-slash-commands')) args.push('--disable-slash-commands');
+    if (!args.includes('--setting-sources')) args.push('--setting-sources', 'project,local');
+  }
   let proc;
+  if (ehRemoto(opts.cwd) && opts.provedor && ehProvedor(opts.provedor)) {
+    emit(paneId, 'note', { text: 'O ' + provedoresMod.PROVEDORES[opts.provedor].nome + ' roda numa pasta do Mac, não na VPS. Escolha uma pasta do Mac neste chat.', error: true });
+    claudePanes.delete(paneId);
+    return false;
+  }
   if (ehRemoto(opts.cwd)) {
     // roda o Claude DENTRO da VPS: o mesmo fluxo de stream-json vem pelo SSH
     const r = partesRemoto(opts.cwd);
@@ -1135,10 +1232,15 @@ function claudeStart(paneId, opts) {
     // quando o painel fecha, porque o kill so' atinge o processo principal (ver matarGrupoExtra)
     proc = spawn('ssh', argsSsh(r, comando), { env: buildEnv(), stdio: ['pipe', 'pipe', 'pipe'], detached: !EH_WIN });
   } else {
-    proc = spawnBin(CLAUDE_BIN, args, { cwd: opts.cwd || HOME, env: buildEnv(), stdio: ['pipe', 'pipe', 'pipe'], detached: !EH_WIN });
+    let env = buildEnv();
+    if (provedor) {
+      try { env = provedores.ambiente(provedor, opts.model, env); }
+      catch (e) { emit(paneId, 'note', { text: String(e && e.message || e), error: true }); return false; }
+    }
+    proc = spawnBin(CLAUDE_BIN, args, { cwd: opts.cwd || HOME, env, stdio: ['pipe', 'pipe', 'pipe'], detached: !EH_WIN });
   }
   // modo guardado no motor: o pedido de aceite que chega no "sem pedir permissão" é aprovado aqui
-  const st = { proc, buf: '', geracao: ++claudeGeracao, modo };
+  const st = { proc, buf: '', geracao: ++claudeGeracao, modo, provedor };
   const decoder = new StringDecoder('utf8');
   claudePanes.set(paneId, st);
 
@@ -1434,6 +1536,7 @@ function claudeMessage(paneId, m) {
   if (m.type === 'system' && m.subtype === 'init' && m.session_id) {
     // o numero REAL da conversa so aparece aqui (ao ramificar ele nasce diferente do pedido)
     marcarDonoDoFio(paneId, m.session_id, 'claude');
+    { const st0 = claudePanes.get(paneId); if (st0 && st0.provedor) lembrarProvedorDaConversa(m.session_id, st0.provedor); }
     emit(paneId, 'sessao', { id: m.session_id, file: path.join(CLAUDE_PROJ, encodeCwd(claudeCwd.get(paneId) || HOME), m.session_id + '.jsonl') });
     return;
   }
@@ -2058,6 +2161,10 @@ const NOMES_PATH = () => path.join(app.getPath('userData'), 'nomes.json');
 function lerNomes() { try { return JSON.parse(fs.readFileSync(NOMES_PATH(), 'utf8')); } catch { return {}; } }
 function salvarNomes(o) { return gravarSeguro(NOMES_PATH(), JSON.stringify(o)); }
 
+function pastasDasConversas(lista) {
+  return require('./pastas-conversas').organizarPastas(lista, { home: HOME, dados: app.getPath('userData') });
+}
+
 /* ======================= ligacoes entre conversas (troca de IA) =======================
    Trocar de IA no meio de um chat faz o motor novo abrir OUTRA conversa, no armazenamento
    DELE (o Claude em ~/.claude/projects, o Codex em ~/.codex/sessions...). Sem nada ligando os
@@ -2128,6 +2235,10 @@ handle('ligacoes:ler', () => {
   const nomes = lerNomes(), deles = {};
   for (const l of Object.values(ligacoes)) {
     for (const p of [l, l.anterior]) if (nomes[p.id]) deles[p.id] = nomes[p.id];
+  }
+  for (const l of Object.values(ligacoes)) {
+    l.cwd = pastasDasConversas([l])[0].cwd;
+    l.anterior.cwd = pastasDasConversas([l.anterior])[0].cwd;
   }
   return { ligacoes, nomes: deles };
 });
@@ -2880,7 +2991,7 @@ function claudeSessions(limit, incluirRobos) {
   }
   if (lidos) gravarIndice();
   out.sort((a, b) => b.when - a.when);
-  return out;
+  return pastasDasConversas(out);
 }
 
 /* ---- quanto da conversa volta para a tela ----
@@ -3034,11 +3145,32 @@ async function codexOfficialHistory(id, destino) {
   return codexHistoryMessages(items.reverse());
 }
 
-handle('sessions:claude', (_e, incluirRobos) => claudeSessions(5000, incluirRobos));
+/* Conversa do DeepSeek/MiMo/Muse mora na mesma pasta do Claude Code (~/.claude/projects). Quem diz de
+   qual IA ela é: este arquivo, gravado quando o motor anuncia o número da conversa. */
+const PROV_CONVERSAS = () => path.join(HOME, '.cockpit', 'provedores-conversas.json');
+let provConversasCache = null;
+function provConversas() {
+  if (provConversasCache) return provConversasCache;
+  try { provConversasCache = JSON.parse(fs.readFileSync(PROV_CONVERSAS(), 'utf8')) || {}; } catch { provConversasCache = {}; }
+  return provConversasCache;
+}
+function lembrarProvedorDaConversa(id, provedor) {
+  if (!id || !provedor) return;
+  const mapa = provConversas();
+  if (mapa[id] === provedor) return;
+  mapa[id] = provedor;
+  try { gravarSeguro(PROV_CONVERSAS(), JSON.stringify(mapa)); } catch {}
+}
+function rotularProvedores(lista) {
+  const mapa = provConversas();
+  if (!Array.isArray(lista) || !Object.keys(mapa).length) return lista;
+  return lista.map((s) => (s && s.engine === 'claude' && mapa[s.id] && ehProvedor(mapa[s.id]) ? { ...s, engine: mapa[s.id] } : s));
+}
+handle('sessions:claude', (_e, incluirRobos) => rotularProvedores(claudeSessions(5000, incluirRobos)));
 const CODEX_SESS = path.join(HOME, '.codex/sessions');
 const ORIGENS_DE_GENTE = ['cockpit', 'codex-tui', 'codex_tui', 'codex_vscode', 'codex-vscode', 'codex_app', 'codex-app', 'vscode'];
 
-const TECNICO = /<recommended_plugins>|<environment_context>|<user_instructions>|<system-reminder>|<available_tools>|<plugins>|<task-notification>|<command-name>|<local-command-stdout>|<bash-input>|<function_results>|^Caveat:|^# AGENTS\.md instructions|^\[Request interrupted|^\[Image: original|^<[a-z_-]+>/i;
+const TECNICO = /<recommended_plugins>|<environment_context>|<user_instructions>|<system-reminder>|<available_tools>|<plugins>|<task-notification>|<command-name>|<local-command-stdout>|<bash-input>|<function_results>|^Caveat:|^\[Request interrupted|^\[Image: original|^<[a-z_-]+>/i;
 const ehTecnico = (t) => !t || TECNICO.test(t.trim().slice(0, 400));
 
 /* O que o Claude Code injeta na conversa NAO e fala do usuário, mas fica gravado no mesmo lugar
@@ -3094,7 +3226,7 @@ function semResumoDaSessao(t) {
 function fichaCodex(it) {
   const ind = lerIndice();
   const salvo = ind[it.f];
-  if (salvo && salvo.mtime === it.mtime && salvo.size === it.size && salvo.ultima !== undefined && salvo.sub !== undefined) return salvo;
+  if (salvo && salvo.mtime === it.mtime && salvo.size === it.size && salvo.v === 2 && salvo.ultima !== undefined) return salvo;
 
   let head = headRead(it.f, 96 * 1024);
   let id = '', cwd = '', origem = '', title = '', doAssistente = '', sub = false;
@@ -3126,7 +3258,7 @@ function fichaCodex(it) {
   if (!varrer(head) && it.size > 96 * 1024) varrer(fs.readFileSync(it.f, 'utf8'));   // arquivo grande: le tudo
   if (!title) title = doAssistente;                       // ao menos a primeira resposta
   if (!title) title = 'Conversa de ' + new Date(it.mtime).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-  const ficha = { mtime: it.mtime, size: it.size, title, cwd, entrada: origem, sid: id, sub, ultima: horaDaUltimaFala(it.f, it.mtime) };
+  const ficha = { mtime: it.mtime, size: it.size, title, cwd, entrada: origem, sid: id, sub, v: 2, ultima: horaDaUltimaFala(it.f, it.mtime) };
   ind[it.f] = ficha;
   return ficha;
 }
@@ -3142,8 +3274,8 @@ function codexSessions(incluirRobos, nomesDoApp) {
     const fi = fichaCodex(it);
     lidos++;
     if (!incluirRobos && fi.entrada && !ORIGENS_DE_GENTE.includes(fi.entrada)) continue;
-    if (!incluirRobos && PASTA_DE_ROBO.test(fi.cwd || '')) continue;
     if (!incluirRobos && fi.sub) continue;
+    if (!incluirRobos && PASTA_DE_ROBO.test(fi.cwd || '')) continue;
     const id = fi.sid || it.id;
     const title = meus[id] || (nomesDoApp && nomesDoApp[id]) || fi.title;
     if (!title) continue;
@@ -3151,7 +3283,7 @@ function codexSessions(incluirRobos, nomesDoApp) {
   }
   if (lidos) gravarIndice();
   out.sort((a, b) => b.when - a.when);
-  return out;
+  return pastasDasConversas(out);
 }
 
 handle('sessions:codex', async (_e, incluirRobos) => {
@@ -3796,7 +3928,7 @@ const PTY_BRIDGE = app.isPackaged
   : path.join(__dirname, 'ptybridge.py');
 
 function termEnviar(id, kind, data) {
-  if (win && !win.isDestroyed()) win.webContents.send('term:event', { id, kind, ...data }); avisarWeb('term:event', { id, kind, ...data });
+  enviarAoDono(id, 'term:event', { id, kind, ...data }); avisarWeb('term:event', { id, kind, ...data });
 }
 
 function termRodar({ id, linha, cols, rows }) {
@@ -4244,7 +4376,91 @@ async function buscarUsoDoGemini() {
   } catch { return ultimoBomGemini(); }
 }
 
+/* ---- IAs de chave (DeepSeek, MiMo, Muse Spark): conta = chave guardada; "limite" = saldo ---- */
+const usoProv = {};   // id -> { dados, quando }
+async function saldoDoProvedor(id, forcar) {
+  const u = usoProv[id] || (usoProv[id] = { dados: null, quando: 0, voando: null });
+  if (!forcar && u.dados && Date.now() - u.quando < 90000) return u.dados;
+  if (!u.voando) u.voando = provedores.saldo(id).then((d) => { if (d && !d.erro) { u.dados = d; u.quando = Date.now(); } return u.dados; }).finally(() => { u.voando = null; });
+  return u.voando;
+}
+/* Rota grátis (NVIDIA pelo OmniRoute): não existe saldo nem teto de tokens, só o limite de ritmo da NVIDIA,
+   40 pedidos por minuto. O número vem do diário do próprio OmniRoute (~/.omniroute/call_logs/<dia UTC>/),
+   um arquivinho por pedido; "hoje" conta os pedidos e os tokens do dia. */
+const RPM_NVIDIA = 40;
+const diarioOmni = new Map();   // nome do arquivo -> { provedor, tokens } (cada arquivo só é lido uma vez)
+function usoDaRotaGratis() {
+  const agora = Date.now();
+  let min = 0, hoje = 0, tokens = 0;
+  const dias = [new Date(agora).toISOString().slice(0, 10)];
+  if (new Date(agora).getUTCHours() === 0) dias.push(new Date(agora - 86400000).toISOString().slice(0, 10));
+  for (const dia of dias) {
+    const dir = path.join(HOME, '.omniroute', 'call_logs', dia);
+    let nomes = [];
+    try { nomes = fs.readdirSync(dir); } catch { continue; }
+    for (const nome of nomes.slice(-4000)) {
+      const t = Number((nome.match(/_(\d{13})-/) || [])[1]);
+      if (!t) continue;
+      let ficha = diarioOmni.get(nome);
+      if (!ficha) {
+        try {
+          const sm = JSON.parse(fs.readFileSync(path.join(dir, nome), 'utf8')).summary || {};
+          ficha = { provedor: sm.provider || '', ok: Number(sm.status) < 400, tokens: ((sm.tokens && sm.tokens.in) || 0) + ((sm.tokens && sm.tokens.out) || 0) };
+        } catch { ficha = { provedor: '', ok: false, tokens: 0 }; }
+        diarioOmni.set(nome, ficha);
+        if (diarioOmni.size > 20000) diarioOmni.delete(diarioOmni.keys().next().value);
+      }
+      if (ficha.provedor !== 'nvidia') continue;
+      if (t >= agora - 86400000 && dia === dias[0]) { hoje++; tokens += ficha.tokens; }
+      if (t >= agora - 60000) min++;
+    }
+  }
+  return { min, hoje, tokens };
+}
+const mil = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1).replace('.', ',') + ' mi' : n >= 1000 ? Math.round(n / 1000) + ' mil' : String(n));
+function janelasDoProvedor(s) {
+  // rota grátis: o anel é o ritmo (pedidos no último minuto / 40 da NVIDIA)
+  if (s && s.rota === 'gratis') return { sessao: { pct: Math.min(100, Math.round(s.min / RPM_NVIDIA * 100)), reseta: 0 }, semana: null, semSessao: false };
+  // sem teto (DeepSeek) não há porcentagem para o anel: só o saldo em texto
+  if (!s || s.pct == null) return { sessao: null, semana: null, semSessao: true };
+  // reseta = quando o período do plano vence (MiMo); 0 = a IA não disse
+  return { sessao: null, semana: { pct: Math.round(s.pct), reseta: s.reseta || 0 }, semSessao: true };
+}
+async function contaDoProvedor(id, forcar) {
+  const conta = provedores.ler(id);
+  if (!conta.entrou) return conta;
+  const s = await saldoDoProvedor(id, forcar);
+  // sem chave e só com a rota grátis: o "limite" é o ritmo da NVIDIA e o "saldo" é o gasto de hoje
+  const soGratis = !conta.comChave && conta.gratis;
+  if (soGratis) {
+    const u = { rota: 'gratis', ...usoDaRotaGratis() };
+    return { ...conta, ...janelasDoProvedor(u), limitado: false, voltaEm: 0, velho: 0,
+      saldoTexto: 'Hoje: ' + u.hoje + ' pedidos · ' + mil(u.tokens) + ' tokens', saldoCurto: '', semSaldo: false };
+  }
+  return { ...conta, ...janelasDoProvedor(s), limitado: !!(s && s.semSaldo), voltaEm: 0, velho: 0,
+    saldoTexto: s ? s.texto : '', saldoCurto: s ? s.curto : '', semSaldo: !!(s && s.semSaldo),
+    plano: (s && s.plano) || conta.plano || '' };
+}
+handle('provedor:salvar', async (_e, { engine, chave, base } = {}) => {
+  if (souRemoto(_e)) return { error: 'Colar a chave só funciona no Mac.' };
+  if (!ehProvedor(engine)) return { error: 'IA desconhecida.' };
+  const c = String(chave || '').trim();
+  try { provedores.validar(engine, { chave: c, base }); } catch (e) { return { error: String(e && e.message || e) }; }
+  const t = await provedores.testar(engine, { chave: c, base });
+  if (t.ok === false) return { error: t.erro || 'A chave não funcionou.' };
+  try { provedores.salvar(engine, { chave: c, base }); } catch (e) { return { error: String(e && e.message || e) }; }
+  delete usoProv[engine];
+  return { ok: true, aviso: t.aviso || (t.ok === null ? t.erro + ' A chave ficou salva; confira ao conversar.' : ''), conta: await contaDoProvedor(engine, true) };
+});
+handle('provedor:remover', (_e, engine) => {
+  if (souRemoto(_e)) return { error: 'Remover a chave só funciona no Mac.' };
+  if (!ehProvedor(engine)) return { error: 'IA desconhecida.' };
+  provedores.remover(engine);
+  delete usoProv[engine];
+  return { ok: true };
+});
 handle('conta:ler', async (_e, engine) => {
+  if (ehProvedor(engine)) return contaDoProvedor(engine);
   if (engine === 'gemini') {
     const conta = contasCli.ler('gemini');
     const u = await usoDoGemini();
@@ -4347,6 +4563,14 @@ handle('conta:ler', async (_e, engine) => {
 /* so os percentuais do plano, para a faixa em cima da caixa de texto.
    Diferente do conta:ler, nao chama o CLI: e leve o bastante para repetir de minuto em minuto. */
 handle('uso:ler', async (_e, engine) => {
+  if (ehProvedor(engine)) {
+    if (!provedores.chaveDe(engine)) {
+      const c = provedores.ler(engine);
+      return c.gratis ? { ...janelasDoProvedor({ rota: 'gratis', ...usoDaRotaGratis() }), velho: 0 } : null;
+    }
+    const sd = await saldoDoProvedor(engine);
+    return sd && sd.pct != null ? { ...janelasDoProvedor(sd), velho: 0 } : null;
+  }
   if (engine === 'gemini') {
     const u = await usoDoGemini();
     if (!u) return null;
@@ -4379,6 +4603,12 @@ handle('uso:ler', async (_e, engine) => {
 });
 
 handle('auth:acao', async (_e, { engine, acao, cwd }) => {
+  if (ehProvedor(engine)) {
+    // chave não tem "entrar" por terminal: a tela abre a janelinha de colar. Aqui só sair/conferir.
+    if (acao === 'logout') { if (souRemoto(_e)) return SO_NO_MAC; provedores.remover(engine); delete usoProv[engine]; return { ok: true }; }
+    if (acao === 'status') return { ok: true, saida: provedores.ler(engine).entrou ? 'Chave guardada.' : 'Sem chave.' };
+    return { error: 'Para usar o ' + provedoresMod.PROVEDORES[engine].nome + ', cole a chave em Ajustes › Contas.' };
+  }
   if (engine === 'gemini' || engine === 'grok') {
     esquecerUso(engine);
     return contasCli.acao({ engine, acao, cwd });
@@ -4684,6 +4914,11 @@ function arquivosColados() {
 }
 
 const EXT_VIS_IMG = ['png','jpg','jpeg','gif','webp','bmp','svg'];
+const revisaoArquivos = require('./revisao-arquivos').criar();
+handle('arquivo:revisar', (_e, file) => revisaoArquivos.abrir(file));
+handle('arquivo:revisaoConferir', (_e, o) => revisaoArquivos.conferir(o));
+// Canal interno do servidor HTTP; nao e um comando disponivel pelo WebSocket.
+handle('arquivo:revisaoConteudo', (_e, o) => revisaoArquivos.conteudo(o));
 handle('arquivo:ver', (_e, file) => {
   try {
     const st = fs.statSync(file);
@@ -5041,13 +5276,16 @@ handle('ocr:ler', async (_e, { arquivo } = {}) => {
    escolha — Escura forca escuro mesmo com o Mac claro, Automatica devolve para o Mac. */
 function aparenciaDe(t) {
   if (t === 'escura' || t === 'escuro') return 'escura';
-  if (t === 'clara' || t === 'claro' || t === 'jornal') return 'clara';
+  if (t === 'jornal') return 'jornal';
+  if (t === 'clara' || t === 'claro') return 'clara';
   return 'auto';
 }
-const FONTE_DO_TEMA = { auto: 'system', clara: 'light', escura: 'dark' };
+const FONTE_DO_TEMA = { auto: 'system', clara: 'light', escura: 'dark', jornal: 'light' };
+let temaDaJanela = 'auto';
 function aplicarAparenciaNativa(t) {
   try {
-    const fonte = FONTE_DO_TEMA[aparenciaDe(t)];
+    temaDaJanela = aparenciaDe(t);
+    const fonte = FONTE_DO_TEMA[temaDaJanela];
     if (nativeTheme && nativeTheme.themeSource !== fonte) nativeTheme.themeSource = fonte;
   } catch (e) { anota('nao consegui acertar a aparencia do Mac:', e && e.message); }
 }
@@ -5055,50 +5293,86 @@ function aplicarAparenciaNativa(t) {
    --bg-content dos tokens do tema que vai abrir. Com o #1e1e1e fixo de antes, quem usa claro via
    um clarao escuro a cada abertura. */
 function fundoDaJanela() {
-  try { return nativeTheme && !nativeTheme.shouldUseDarkColors ? '#FFFFFF' : '#161617'; } catch { return '#161617'; }
+  try { return nativeTheme && !nativeTheme.shouldUseDarkColors ? (temaDaJanela === 'jornal' ? '#F4ECD8' : '#FFFFFF') : '#161617'; } catch { return '#161617'; }
+}
+
+/* ======================= tela viva =======================
+   A tela (pasta renderer) deixou de ser lida de dentro do app.asar: o pacote so e relido quando
+   o app abre, entao qualquer ajuste de tela pedia fechar o Cockpit e derrubar as conversas.
+   Agora ela e lida de uma copia em <dados>/tela-viva/renderer. Trocar um arquivo ali e
+   recarregar a tela basta. O motor (este arquivo) e o preload continuam no pacote: mexeu neles,
+   reinicia.
+
+   O pacote continua sendo a UNICA verdade. A copia guarda o carimbo (tamanho + data) do app.asar
+   de onde saiu; abriu o app com um pacote diferente (alguem publicou do jeito antigo), a copia
+   e jogada fora e refeita a partir dele. Por isso quem publica tela a quente grava nos DOIS
+   lugares (script publicar-tela.sh): so na copia, a mudanca sumiria no proximo build.
+
+   Qualquer tropeco (disco cheio, copia pela metade) cai para a tela do pacote, como era antes. */
+const TELA_VIVA_DIR = () => path.join(app.getPath('userData'), 'tela-viva');
+let telaVivaPasta = null;                 // null = usa a tela do pacote
+function carimboDoPacote() {
+  try {
+    const alvo = app.isPackaged ? path.join(process.resourcesPath, 'app.asar') : path.join(__dirname, 'renderer', 'app.js');
+    const st = require('original-fs').statSync(alvo);
+    return st.size + '-' + Math.round(st.mtimeMs);
+  } catch { return ''; }
+}
+function copiarPasta(de, para) {
+  fs.mkdirSync(para, { recursive: true });
+  for (const item of fs.readdirSync(de, { withFileTypes: true })) {
+    const a = path.join(de, item.name), b = path.join(para, item.name);
+    if (item.isDirectory()) copiarPasta(a, b); else fs.writeFileSync(b, fs.readFileSync(a));
+  }
+}
+function prepararTelaViva() {
+  telaVivaPasta = null;
+  if (!app.isPackaged && process.env.COCKPIT_TELA_VIVA !== '1') return;   // rodando da pasta do projeto: ja e a quente
+  try {
+    const raiz = TELA_VIVA_DIR(), pasta = path.join(raiz, 'renderer'), marca = path.join(raiz, 'carimbo');
+    const carimbo = carimboDoPacote();
+    if (!carimbo) return;
+    let atual = ''; try { atual = fs.readFileSync(marca, 'utf8').trim(); } catch {}
+    if (atual !== carimbo || !fs.existsSync(path.join(pasta, 'index.html'))) {
+      const nova = raiz + '.nova';
+      fs.rmSync(nova, { recursive: true, force: true });
+      copiarPasta(path.join(__dirname, 'renderer'), path.join(nova, 'renderer'));
+      fs.writeFileSync(path.join(nova, 'carimbo'), carimbo);
+      fs.rmSync(raiz, { recursive: true, force: true });
+      fs.renameSync(nova, raiz);
+      anota('tela viva: copia refeita a partir do pacote', carimbo);
+    }
+    if (fs.existsSync(path.join(pasta, 'index.html')) && fs.existsSync(path.join(pasta, 'app.js'))) telaVivaPasta = pasta;
+  } catch (e) { anota('tela viva: nao deu, uso a tela do pacote:', e); telaVivaPasta = null; }
+}
+const pastaDaTela = () => telaVivaPasta || path.join(__dirname, 'renderer');
+/* Pedido de recarregar vindo de fora (o script de publicar encosta neste arquivo). Quem esta
+   ditando ou com um terminal aberto nao e interrompido no meio de nada que se perca: a tela
+   guarda os rascunhos antes, e as abas e os chats voltam do config. */
+function vigiarPedidoDeRecarregar() {
+  if (!telaVivaPasta) return;
+  const pedido = path.join(TELA_VIVA_DIR(), 'recarregar');
+  try { if (!fs.existsSync(pedido)) fs.writeFileSync(pedido, ''); } catch {}
+  try {
+    fs.watchFile(pedido, { interval: 1000 }, (agora, antes) => {
+      if (agora.mtimeMs === antes.mtimeMs) return;
+      anota('tela viva: recarregando a pedido');
+      for (const w of BrowserWindow.getAllWindows()) {
+        try {
+          if (w.isDestroyed() || !/\/renderer\/index\.html/.test(w.webContents.getURL())) continue;
+          w.webContents.executeJavaScript("try{window.dispatchEvent(new Event('cockpit:salvar-rascunhos'))}catch(e){}", true)
+            .catch(() => {}).then(() => setTimeout(() => { try { if (!w.isDestroyed()) w.webContents.reloadIgnoringCache(); } catch {} }, 150));
+        } catch {}
+      }
+    });
+  } catch (e) { anota('tela viva: nao consegui vigiar o pedido de recarregar:', e); }
 }
 
 /* ======================= janela ======================= */
-function createWindow() {
-  if (!saindoDoApp) somConclusao.reabrir();
-  // antes da janela nascer: assim o prefers-color-scheme da pagina ja chega certo no 1o quadro
-  try { aplicarAparenciaNativa(loadConfig().tema); } catch {}
-  win = new BrowserWindow({
-    width: 1500, height: 900, minWidth: 900, minHeight: 560,
-    backgroundColor: fundoDaJanela(),
-    titleBarStyle: 'hiddenInset',
-    /* Os semaforos moram na barra do topo desde que a barra de titulo saiu (10/09). Redesenho
-       (25/09): barra de 52pt, bolinhas de 12 a x=20, centradas na barra. O Electron posiciona o
-       QUADRO do botao do Mac, nao a bolinha, e poe o topo dele em y. No macOS 26 o quadro mede
-       14x14 (medido numa NSWindow escondida em 26/09: 9,9 / 32,9 / 55,9, todos 14x14), com a
-       bolinha de 12 no meio: x=19 poe a bolinha em 20, e y=19 poe o centro em 19+7 = 26, o meio
-       dos 52. O passo entre os tres (23) e do sistema: o trafficLightPosition so move o primeiro. */
-    // 26/09: a barra do topo ficou com 40 (era 52): centro dos semáforos em 13 + 7 = 20
-    trafficLightPosition: { x: 19, y: 13 },
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, spellcheck: false },
-  });
-  win.loadFile(path.join(__dirname, 'renderer/index.html'));
-  // Automatica e o Mac trocou de claro para escuro (ou ele trocou nos Ajustes): o fundo de
-  // reserva da janela acompanha. Um ouvinte por janela, solto quando ela fecha.
-  if (nativeTheme && nativeTheme.on) {
-    const fundoAcompanha = () => { try { if (win && !win.isDestroyed()) win.setBackgroundColor(fundoDaJanela()); } catch {} };
-    nativeTheme.on('updated', fundoAcompanha);
-    win.on('closed', () => { try { nativeTheme.removeListener('updated', fundoAcompanha); } catch {} });
-  }
-  win.on('focus', zerarBadge);   // voltou para a janela: o numero no Dock nao serve mais
-  // o ditado precisa do microfone; a pagina e o proprio app, entao o pedido e liberado
-  win.webContents.session.setPermissionRequestHandler((_wc, _perm, cb) => cb(true));
-
-  /* leva 6 — caixa de entrada. Estes dois ficam AQUI, e nao dentro do ligarInbox(): no Mac o
-     app.on('activate') recria a janela quando ele clica no Dock com tudo fechado, e a janela
-     nova nasceria sem eles. A cada carga da tela (abertura e ⌘R) tudo que sobrou na caixa e
-     anunciado de novo. */
-  // ⌘R: a tela nova ainda nao ouve, e nao tem como fechar terminal que ja ficou pra tras (pty orfao)
-  win.webContents.on('did-start-loading', () => { inboxOuvinte = false; for (const id of [...terms.keys()]) termMatar(id); });
-  win.webContents.on('did-finish-load', () => { inboxVistos.clear(); });      // e o que sobrou volta a ser anunciado quando ela avisar
-
+/* menu do botao direito e links de uma janela (principal ou extra) */
+function ligarMenuELinks(w) {
   // menu do botao direito: copiar, colar, procurar, etc. — o do sistema mesmo
-  win.webContents.on('context-menu', (_ev, props) => {
+  w.webContents.on('context-menu', (_ev, props) => {
     const itens = [];
     const temSelecao = !!(props.selectionText && props.selectionText.trim());
     const podeEditar = props.isEditable;
@@ -5129,12 +5403,12 @@ function createWindow() {
       }
     }
     itens.push({ type: 'separator' });
-    itens.push({ label: 'Recarregar a tela', click: () => win.webContents.reload() });
-    itens.push({ label: 'Ferramentas de desenvolvedor', click: () => win.webContents.toggleDevTools() });
+    itens.push({ label: 'Recarregar a tela', click: () => w.webContents.reload() });
+    itens.push({ label: 'Ferramentas de desenvolvedor', click: () => w.webContents.toggleDevTools() });
 
-    Menu.buildFromTemplate(itens).popup({ window: win });
+    Menu.buildFromTemplate(itens).popup({ window: w });
   });
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  w.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
@@ -5142,13 +5416,56 @@ function createWindow() {
   // O file:// ficava LIBERADO aqui, e era por isso que arrastar um arquivo e soltar fora da
   // caixa de texto fazia o Cockpit "sumir": a janela navegava para o arquivo e a interface
   // inteira era trocada pelo conteudo dele. Agora nada navega; arquivo abre no Finder.
-  win.webContents.on('will-navigate', (e, url) => {
+  w.webContents.on('will-navigate', (e, url) => {
     e.preventDefault();
     if (/^https?:/i.test(url)) { shell.openExternal(url); return; }
     if (url.startsWith('file://')) {
       try { shell.showItemInFolder(decodeURIComponent(url.replace('file://', ''))); } catch {}
     }
   });
+}
+
+function createWindow() {
+  if (!saindoDoApp) somConclusao.reabrir();
+  janelaJaAbriu = true;
+  // antes da janela nascer: assim o prefers-color-scheme da pagina ja chega certo no 1o quadro
+  try { aplicarAparenciaNativa(loadConfig().tema); } catch {}
+  win = new BrowserWindow({
+    width: 1500, height: 900, minWidth: 900, minHeight: 560,
+    backgroundColor: fundoDaJanela(),
+    titleBarStyle: 'hiddenInset',
+    /* Os semaforos moram na barra do topo desde que a barra de titulo saiu (10/09). Redesenho
+       (25/09): barra de 52pt, bolinhas de 12 a x=20, centradas na barra. O Electron posiciona o
+       QUADRO do botao do Mac, nao a bolinha, e poe o topo dele em y. No macOS 26 o quadro mede
+       14x14 (medido numa NSWindow escondida em 26/09: 9,9 / 32,9 / 55,9, todos 14x14), com a
+       bolinha de 12 no meio: x=19 poe a bolinha em 20, e y=19 poe o centro em 19+7 = 26, o meio
+       dos 52. O passo entre os tres (23) e do sistema: o trafficLightPosition so move o primeiro. */
+    // 26/09: a barra do topo ficou com 40 (era 52): centro dos semáforos em 13 + 7 = 20
+    trafficLightPosition: { x: 19, y: 13 },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, spellcheck: false, webviewTag: true },
+  });
+  ligarNavegadorInterno(win);
+  win.loadFile(path.join(pastaDaTela(), 'index.html'));
+  // Automatica e o Mac trocou de claro para escuro (ou ele trocou nos Ajustes): o fundo de
+  // reserva da janela acompanha. Um ouvinte por janela, solto quando ela fecha.
+  if (nativeTheme && nativeTheme.on) {
+    const fundoAcompanha = () => { try { if (win && !win.isDestroyed()) win.setBackgroundColor(fundoDaJanela()); } catch {} };
+    nativeTheme.on('updated', fundoAcompanha);
+    win.on('closed', () => { try { nativeTheme.removeListener('updated', fundoAcompanha); } catch {} });
+  }
+  win.on('focus', zerarBadge);   // voltou para a janela: o numero no Dock nao serve mais
+  // o ditado precisa do microfone; a pagina e o proprio app, entao o pedido e liberado
+  win.webContents.session.setPermissionRequestHandler((_wc, _perm, cb) => cb(true));
+
+  /* leva 6 — caixa de entrada. Estes dois ficam AQUI, e nao dentro do ligarInbox(): no Mac o
+     app.on('activate') recria a janela quando ele clica no Dock com tudo fechado, e a janela
+     nova nasceria sem eles. A cada carga da tela (abertura e ⌘R) tudo que sobrou na caixa e
+     anunciado de novo. */
+  // ⌘R: a tela nova ainda nao ouve, e nao tem como fechar terminal que ja ficou pra tras (pty orfao)
+  win.webContents.on('did-start-loading', () => { inboxOuvinte = false; for (const id of [...terms.keys()]) if (janelaDoId(id) === win) termMatar(id); });
+  win.webContents.on('did-finish-load', () => { inboxVistos.clear(); });      // e o que sobrou volta a ser anunciado quando ela avisar
+
+  ligarMenuELinks(win);
   /* Fechar a janela mata na hora TODOS os agentes, sem perguntar: quem estava no meio de uma
      tarefa morre ali. E no Mac o app continua no Dock, entao reabrir traz a tela de volta com
      as conversas paradas e o trabalho perdido. Por isso o aviso: o 'close' ainda da para
@@ -5171,7 +5488,11 @@ function createWindow() {
       if (r !== 1) e.preventDefault();
     } catch {}
   });
-  win.on('closed', () => { win = null; shutdown(); });
+  win.on('closed', () => {
+    win = null;
+    for (const w of [...janelasExtras.values()]) { w._pronta = true; try { w.destroy(); } catch {} }
+    shutdown();
+  });
 }
 
 /* quem esta no meio de uma tarefa AGORA: turno do Codex em andamento e painel do Claude que
@@ -5186,6 +5507,69 @@ function agentesTrabalhando() {
   return n;
 }
 let saindoDoApp = false;
+
+// quantos agentes DESTA janela extra estao no meio de uma tarefa
+function agentesDaJanela(n) {
+  const pref = 'j' + n + '_';
+  let q = 0;
+  try { for (const [id, st] of claudePanes) if (String(id).startsWith(pref) && st && st.rodando) q++; } catch {}
+  try { for (const id of codex.paneTurn.keys()) if (String(id).startsWith(pref)) q++; } catch {}
+  return q;
+}
+function criarJanelaExtra(inicial) {
+  if (!janelaViva(win)) return null;
+  const n = proximaJanela++;
+  const ref = (BrowserWindow.getFocusedWindow() && todasAsJanelas().includes(BrowserWindow.getFocusedWindow())) ? BrowserWindow.getFocusedWindow() : win;
+  const b = ref.getBounds();
+  const w = new BrowserWindow({
+    width: Math.min(b.width, 1400), height: Math.min(b.height, 900), x: b.x + 36, y: b.y + 36,
+    minWidth: 900, minHeight: 560, backgroundColor: fundoDaJanela(),
+    titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 19, y: 13 },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, spellcheck: false, webviewTag: true },
+  });
+  const wcId = w.webContents.id;
+  janelasExtras.set(n, w);
+  estadoDaJanela.set(wcId, inicial && typeof inicial === 'object' ? { abas: inicial.abas || [], abaAberta: inicial.abaAberta || 0 } : { abas: [], abaAberta: 0 });
+  ligarNavegadorInterno(w);
+  ligarMenuELinks(w);
+  w.loadFile(path.join(pastaDaTela(), 'index.html'), { query: { j: String(n) } });
+  w.webContents.on('did-start-loading', () => { for (const id of [...terms.keys()]) if (janelaDoId(id) === w) termMatar(id); });
+  w.on('focus', zerarBadge);
+  /* Fechar uma janela extra: 1) pergunta se tem agente trabalhando nela; 2) pede a ela mesma para
+     parar os chats e terminais (ela sabe o motor de cada um); 3) se nao responder em 4 s, fecha. */
+  w.on('close', (e) => {
+    if (saindoDoApp || w._pronta) return;
+    e.preventDefault();
+    if (w._fechando) return;
+    const quantos = agentesDaJanela(n);
+    if (quantos) {
+      try {
+        const r = dialog.showMessageBoxSync(w, {
+          type: 'warning', buttons: ['Não fechar', 'Fechar mesmo assim'], defaultId: 0, cancelId: 0,
+          message: quantos === 1 ? '1 agente está trabalhando nesta janela' : quantos + ' agentes estão trabalhando nesta janela',
+          detail: 'Fechar agora interrompe o trabalho no meio, e o que estava rodando não volta.',
+        });
+        if (r !== 1) return;
+      } catch {}
+    }
+    w._fechando = true;
+    try { w.webContents.send('janela:encerrar'); } catch {}
+    setTimeout(() => { w._pronta = true; if (!w.isDestroyed()) w.close(); }, 4000);
+  });
+  w.on('closed', () => { janelasExtras.delete(n); estadoDaJanela.delete(wcId); });
+  return w;
+}
+handle('janela:nova', (e, payload) => {
+  if (souRemoto(e)) return { ok: false, error: 'Nova janela só abre no Mac.' };
+  const w = criarJanelaExtra(payload);
+  return { ok: !!w };
+});
+handle('janela:inicial', (e) => (e && e.sender && estadoDaJanela.get(e.sender.id)) || null);
+handle('janela:fecharAgora', (e) => {
+  const w = e && e.sender ? [...janelasExtras.values()].find(x => !x.isDestroyed() && x.webContents.id === e.sender.id) : null;
+  if (w) { w._pronta = true; w.close(); }
+  return { ok: !!w };
+});
 
 async function shutdown() {
   paneStarts.clear();
@@ -5267,6 +5651,10 @@ handle('config:set', (_e, c, origem) => {
      tem de estar AQUI: uma aba velha do Safari em cache continuava conseguindo gravar.
      Responde "ok" e nao grava nada. */
   if (souRemoto(_e)) return true;
+  if (ehJanelaExtra(_e)) {   // janela extra: guarda as abas dela na memoria, sem tocar no config.json
+    if (c && Array.isArray(c.abas)) estadoDaJanela.set(_e.sender.id, { abas: c.abas, abaAberta: c.abaAberta || 0 });
+    return true;
+  }
   const novo = (c && typeof c === 'object') ? { ...c } : {};
   const donas = lerChavesDoMain();
   for (const k of CHAVES_DO_MAIN) {
@@ -5551,12 +5939,7 @@ handle('aviso:pronto', (_e, { paneId, titulo, texto }) => {
       body: (texto || '').slice(0, 220),
       silent: process.platform === 'darwin',
     });
-    n.on('click', () => {
-      if (!win) return;
-      if (win.isMinimized()) win.restore();
-      win.show(); win.focus();
-      win.webContents.send('menu', 'ir:' + paneId);
-    });
+    n.on('click', () => mostrarJanelaDoChat(paneId, 'ir:' + paneId));
     n.show();
   }
   return { ok: true };
@@ -5577,12 +5960,7 @@ handle('aviso:agente', (_e, { paneId, titulo, texto }) => {
     body: String(texto || '').slice(0, 220),
     silent: false,
   });
-  n.on('click', () => {
-    if (!win) return;
-    if (win.isMinimized()) win.restore();
-    win.show(); win.focus();
-    win.webContents.send('menu', 'ir:' + paneId);
-  });
+  n.on('click', () => mostrarJanelaDoChat(paneId, 'ir:' + paneId));
   n.show();
   return { ok: true };
 });
@@ -5686,6 +6064,88 @@ handle('shell:openUrl', (_e, u) => {
   if (!/^https?:\/\//i.test(String(u || ''))) return { error: 'link inválido' };
   shell.openExternal(u); return { ok: true };
 });
+
+/* ======================= navegador interno (09/10) =======================
+   Link de site pode abrir DENTRO do Cockpit, numa <webview> do visor (renderer). A pagina de
+   fora roda isolada: sem Node, sem o preload do app, em uma sessao propria (login do site
+   fica salvo, mas nada do Cockpit enxerga). Quem fala com a pagina e o site-preload.js
+   (marcar texto/area e pedir alteracao). Tudo que nao for http(s) e negado. */
+const PARTICAO_SITE = 'persist:cockpit-site';
+function ligarNavegadorInterno(janela) {
+  try {
+    const sessaoSite = require('electron').session.fromPartition(PARTICAO_SITE);
+    sessaoSite.setPermissionRequestHandler((_wc, perm, cb) => cb(['clipboard-sanitized-write', 'fullscreen'].includes(perm)));
+  } catch {}
+  janela.webContents.on('will-attach-webview', (e, prefs, params) => {
+    const src = String(params.src || '');
+    if (!/^https?:\/\//i.test(src)) { e.preventDefault(); return; }
+    prefs.preload = path.join(__dirname, 'site-preload.js');
+    prefs.nodeIntegration = false; prefs.nodeIntegrationInSubFrames = false;
+    prefs.contextIsolation = true; prefs.sandbox = true; prefs.webSecurity = true;
+    delete prefs.preloadURL;
+    params.partition = PARTICAO_SITE;
+    params.allowpopups = 'false';
+  });
+}
+app.on('web-contents-created', (_e, wc) => {
+  if (wc.getType() !== 'webview') return;
+  // janela nova (target=_blank, window.open): abre na MESMA pagina, nunca solta uma janela
+  wc.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) setImmediate(() => { try { wc.loadURL(url); } catch {} });
+    return { action: 'deny' };
+  });
+  wc.on('will-navigate', (ev, url) => { if (!/^https?:\/\//i.test(url)) ev.preventDefault(); });
+});
+
+/* ======================= uso do computador no topo (09/10) =======================
+   CPU, memoria e disco em %, no mesmo desenho dos aneis de uso das IAs. CPU = diferenca dos
+   tempos entre duas leituras (a tela pergunta de 3 em 3 s). Memoria = a conta do Monitor de
+   Atividade (app + fixa + comprimida), nao o "livre" do os.freemem(), que no Mac conta o
+   cache de arquivos como usado e vive em 95%. */
+let cpuAnterior = null, cpuUltimo = 0;
+function cpuTempos() {
+  let idle = 0, total = 0;
+  for (const c of os.cpus()) { const t = c.times; idle += t.idle; total += t.user + t.nice + t.sys + t.idle + t.irq; }
+  return { idle, total };
+}
+function usoCpu() {
+  const agora = cpuTempos(), ant = cpuAnterior; cpuAnterior = agora;
+  if (!ant) return cpuUltimo;
+  const dt = agora.total - ant.total, di = agora.idle - ant.idle;
+  if (dt > 0) cpuUltimo = Math.max(0, Math.min(100, Math.round(100 * (1 - di / dt))));
+  return cpuUltimo;
+}
+cpuTempos(); cpuAnterior = cpuTempos();
+let ramCache = { em: 0, valor: null }, discoCache = { em: 0, valor: null };
+function usoRam() {
+  if (Date.now() - ramCache.em < 2500) return Promise.resolve(ramCache.valor);
+  const total = os.totalmem();
+  const por = (usado) => ({ pct: Math.max(0, Math.min(100, Math.round(100 * usado / total))), usado, total });
+  return new Promise((ok) => {
+    require('child_process').execFile('/usr/bin/vm_stat', { timeout: 2000 }, (err, out) => {
+      let v;
+      if (!err && out) {
+        const pg = Number((/page size of (\d+) bytes/.exec(out) || [])[1]) || 16384;
+        const n = (rot) => Number((new RegExp(rot + ':\\s+(\\d+)').exec(out) || [])[1]) || 0;
+        const app = Math.max(0, n('Anonymous pages') - n('Pages purgeable'));
+        v = por((app + n('Pages wired down') + n('Pages occupied by compressor')) * pg);
+      } else v = por(total - os.freemem());
+      ramCache = { em: Date.now(), valor: v }; ok(v);
+    });
+  });
+}
+function usoDisco() {
+  if (Date.now() - discoCache.em < 30000) return discoCache.valor;
+  let v = null;
+  for (const raiz of ['/System/Volumes/Data', '/']) {
+    try {
+      const st = fs.statfsSync(raiz), total = st.blocks * st.bsize, livre = st.bavail * st.bsize;
+      v = { pct: Math.round(100 * (total - livre) / total), usado: total - livre, total }; break;
+    } catch {}
+  }
+  discoCache = { em: Date.now(), valor: v }; return v;
+}
+handle('sistema:uso', async () => ({ cpu: { pct: usoCpu(), nucleos: os.cpus().length }, ram: await usoRam(), disco: usoDisco() }));
 
 function codexSettingsFor(paneId, changes = {}) {
   const base = codexProtocol.normalizeSettings(codexPaneSettings.get(paneId) || {}, codexPendingSettings.get(paneId) || {});
@@ -5814,8 +6274,8 @@ const ehSessaoGrok = (s) => /(?:^|[\\/])grok(?:\s|$)/.test(String((s && s.comand
 handle('sessions:cli', (_e, engine) => {
   const nomes = lerNomes();
   const titulo = (s) => (s && typeof nomes[s.id] === 'string' && nomes[s.id]) || tituloAcp(s);
-  return engine === 'gemini' ? cli.sessoes().map(s => ({ ...s, title: titulo(s) }))
-    : engine === 'grok' ? acp.sessoes().filter(ehSessaoGrok).map(s => ({ ...s, engine: 'grok', title: titulo(s) })) : [];
+  return pastasDasConversas(engine === 'gemini' ? cli.sessoes().map(s => ({ ...s, title: titulo(s) }))
+    : engine === 'grok' ? acp.sessoes().filter(ehSessaoGrok).map(s => ({ ...s, engine: 'grok', title: titulo(s) })) : []);
 });
 
 
@@ -5930,7 +6390,7 @@ handle('sessions:acp', () => {
   /* 25/09: a lista lateral virou uma so, e le o ACP junto com o Grok. As sessoes do Grok ja
      entram pela lista dele (engine 'grok'): aqui repetidas como 'acp', a mesma conversa
      aparecia duas vezes, uma com o logo errado. */
-  try { return (acp.sessoes() || []).filter((s) => !ehSessaoGrok(s)).map((s) => ({ ...s, title: tituloAcp(s) })); }
+  try { return pastasDasConversas((acp.sessoes() || []).filter((s) => !ehSessaoGrok(s)).map((s) => ({ ...s, title: tituloAcp(s) }))); }
   catch (e) { return { error: String(e && e.message || e) }; }
 });
 
@@ -6020,6 +6480,19 @@ handle('pane:start', async (_e, data) => {
   /* leva 10.5 — chat em worktree. Linha NOVA na FRENTE das duas de baixo, que ficaram intactas:
      sem data.worktree nada muda e o caminho continua sendo exatamente o de sempre. O fork vai
      junto porque um chat pode ser ramo E estar em worktree ao mesmo tempo. */
+  /* DeepSeek / MiMo / Muse Spark: o pedido chegou como engine 'claude' + provedor (ver comProvedor).
+     Sem worktree nem ramo: o endereço de fora só conversa; o resto é o Claude Code de sempre. */
+  if (engine === 'claude' && data.provedor && ehProvedor(data.provedor)) {
+    // modelo grátis = rota pelo OmniRoute: liga ele antes (se já estiver no ar, volta na hora)
+    if (provedores.ehGratis(data.provedor, model)) {
+      emit(paneId, 'note', { text: 'Ligando a rota grátis…' });
+      if (!(await provedores.garantirOmni())) {
+        emit(paneId, 'note', { text: 'Não consegui ligar o OmniRoute. Veja ~/.omniroute/server.log ou escolha o modelo com chave.', error: true });
+        return false;
+      }
+    }
+    return claudeStart(paneId, { cwd, model, approval, resumeId, effort, provedor: data.provedor, fork: data.fork ? true : undefined });
+  }
   if (engine === 'claude' && data.worktree) return claudeStart(paneId, { cwd, model, approval, resumeId, effort, fork: data.fork || undefined, worktree: data.worktree });
   /* ramo do Claude: mesma chamada de sempre, so com o aviso de fork junto. Linha NOVA antes da
      de baixo (que ficou intacta) — sem data.fork o caminho continua sendo exatamente o antigo. */
@@ -6454,7 +6927,7 @@ function lerCatalogo() {
 function salvarCatalogo(estado) { gravarSeguro(CAMINHO_CATALOGO(), JSON.stringify(estado, null, 2)); }
 function avisarCatalogo(estado) {
   if (win && !win.isDestroyed() && !win.webContents.isLoading()) {
-    win.webContents.send('catalogo:atualizado', estado);
+    enviarATodas('catalogo:atualizado', estado);
   }
 }
 handle('catalogo:estado', () => lerCatalogo());
@@ -6673,8 +7146,24 @@ handle('git:diff', async (_e, o) => {
    A tela usa isto pra nao oferecer um motor que nao esta instalado — e pra explicar como
    instalar, em vez de deixar o painel falhar depois que ele ja mandou a mensagem.
    R6: acharBin devolve o nome quando nao acha; quem responde "existe?" e o temBin. */
+/* Modelos do Gemini = os que o Antigravity oferece AGORA (`agy models`). Modelo novo do Google
+   (Gemini 4 Argon, quando sair) aparece no menu sozinho, sem atualizar o Cockpit. Só os "gemini-*":
+   o Antigravity também lista Claude e GPT-OSS, que têm botão próprio. Guardado por 10 minutos. */
+let modelosGeminiCache = { quando: 0, lista: null };
+handle('gemini:modelos', async () => {
+  if (modelosGeminiCache.lista && Date.now() - modelosGeminiCache.quando < 600000) return modelosGeminiCache.lista;
+  if (!temBin('agy')) return [];
+  const r = await rodar(acharBin('agy'), ['models'], 25000);
+  const lista = String(r.out || '').split('\n').map((l) => l.split('\t')).filter((x) => /^gemini-[\w.-]+$/.test((x[0] || '').trim()) && (x[1] || '').trim())
+    .map((x) => ({ id: x[0].trim(), nome: x[1].trim() }));
+  if (lista.length) modelosGeminiCache = { quando: Date.now(), lista };
+  return lista;
+});
 handle('motores:disponiveis', () => ({
   claude: fs.existsSync(CLAUDE_BIN) || temBin('claude'),
+  // as IAs de chave usam o Claude Code como motor: existem onde ele existe
+  deepseek: fs.existsSync(CLAUDE_BIN) || temBin('claude'), mimo: fs.existsSync(CLAUDE_BIN) || temBin('claude'),
+  muse: fs.existsSync(CLAUDE_BIN) || temBin('claude'),
   codex: temBin('codex'),
   gemini: temBin('agy') || temBin('gemini'), grok: temBin('grok'),
   // o comando do agente ACP e configuravel: "disponivel" = ha com que rodar o preset padrao
@@ -6782,7 +7271,7 @@ async function atualizarMotoresSozinho(motivo) {
       if (!agora || agora === v.instalada) { anota('rodei a atualizacao de ' + eng + ' mas a versao nao mudou', v.instalada, agora); continue; }
       anota('atualizei ' + eng, v.instalada, '->', agora);
       try {
-        if (win && !win.isDestroyed()) win.webContents.send('motores:atualizado', { engine: eng, de: v.instalada, para: agora });
+        if (win && !win.isDestroyed()) enviarATodas('motores:atualizado', { engine: eng, de: v.instalada, para: agora });
       } catch {}
     }
   } finally { atualizandoMotores = false; }
@@ -7136,21 +7625,22 @@ function menu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     { role: 'appMenu' },
     { label: 'Painel', submenu: [
-      { label: 'Inicie um novo chat', accelerator: 'CmdOrCtrl+T', click: () => win && win.webContents.send('menu', 'newPane') },
-      { label: 'Nova aba de projeto…', accelerator: 'CmdOrCtrl+Shift+T', click: () => win && win.webContents.send('menu', 'newTab') },
-      { label: 'Fechar chat', accelerator: 'CmdOrCtrl+W', click: () => win && win.webContents.send('menu', 'closePane') },
-      { label: 'Reabrir o último chat fechado', accelerator: 'CmdOrCtrl+Shift+W', click: () => win && win.webContents.send('menu', 'reabrirFechado') },
+      { label: 'Nova janela', accelerator: 'CmdOrCtrl+N', click: () => criarJanelaExtra(null) },
+      { label: 'Inicie um novo chat', accelerator: 'CmdOrCtrl+T', click: () => enviarMenu('newPane') },
+      { label: 'Nova aba de projeto…', accelerator: 'CmdOrCtrl+Shift+T', click: () => enviarMenu('newTab') },
+      { label: 'Fechar chat', accelerator: 'CmdOrCtrl+W', click: () => enviarMenu('closePane') },
+      { label: 'Reabrir o último chat fechado', accelerator: 'CmdOrCtrl+Shift+W', click: () => enviarMenu('reabrirFechado') },
       { type: 'separator' },
-      { label: 'Trocar a pasta deste chat…', accelerator: 'CmdOrCtrl+O', click: () => win && win.webContents.send('menu', 'pickFolder') },
-      { label: 'Limpar a tela (a conversa continua)', accelerator: 'CmdOrCtrl+K', click: () => win && win.webContents.send('menu', 'clearPane') },
+      { label: 'Trocar a pasta deste chat…', accelerator: 'CmdOrCtrl+O', click: () => enviarMenu('pickFolder') },
+      { label: 'Limpar a tela (a conversa continua)', accelerator: 'CmdOrCtrl+K', click: () => enviarMenu('clearPane') },
       { type: 'separator' },
-      { label: 'Buscar nesta conversa', accelerator: 'CmdOrCtrl+F', click: () => win && win.webContents.send('menu', 'buscarNaConversa') },
-      { label: 'Buscar conversa…', accelerator: 'CmdOrCtrl+P', click: () => win && win.webContents.send('menu', 'buscarConversa') },
-      { label: 'Perguntar aos outros motores', accelerator: 'CmdOrCtrl+D', click: () => win && win.webContents.send('menu', 'perguntarAosDois') },
-      { label: 'Ditar (segure para falar)', accelerator: 'CmdOrCtrl+Shift+D', click: () => win && win.webContents.send('menu', 'ditar') },
-      { label: 'Desenhar um fluxo (quadro branco)', accelerator: 'CmdOrCtrl+Shift+E', click: () => win && win.webContents.send('menu', 'quadro') },
+      { label: 'Buscar nesta conversa', accelerator: 'CmdOrCtrl+F', click: () => enviarMenu('buscarNaConversa') },
+      { label: 'Buscar conversa…', accelerator: 'CmdOrCtrl+P', click: () => enviarMenu('buscarConversa') },
+      { label: 'Perguntar aos outros motores', accelerator: 'CmdOrCtrl+D', click: () => enviarMenu('perguntarAosDois') },
+      { label: 'Ditar (segure para falar)', accelerator: 'CmdOrCtrl+Shift+D', click: () => enviarMenu('ditar') },
+      { label: 'Desenhar um fluxo (quadro branco)', accelerator: 'CmdOrCtrl+Shift+E', click: () => enviarMenu('quadro') },
       { type: 'separator' },
-      { label: 'Salvar conversa no Obsidian', accelerator: 'CmdOrCtrl+S', click: () => win && win.webContents.send('menu', 'salvarVault') },
+      { label: 'Salvar conversa no Obsidian', accelerator: 'CmdOrCtrl+S', click: () => enviarMenu('salvarVault') },
     ]},
     /* Menu Editar proprio, em portugues. Nao pode ser { role: 'editMenu' }: no macOS o menu do
        aplicativo fica com ⌘Z, ⌘⇧Z e ⌘A antes da pagina, e os papeis prontos so sabem desfazer
@@ -7158,8 +7648,8 @@ function menu() {
        usado de quem desenha. Aqui os tres avisam a tela, e o renderer decide o destino
        (quadro aberto -> pilha do quadro; senao -> o campo de texto em foco, como antes). */
     { label: 'Editar', submenu: [
-      { label: 'Desfazer', accelerator: 'CmdOrCtrl+Z', click: () => win && win.webContents.send('menu', 'desfazer') },
-      { label: 'Refazer', accelerator: 'Shift+CmdOrCtrl+Z', click: () => win && win.webContents.send('menu', 'refazer') },
+      { label: 'Desfazer', accelerator: 'CmdOrCtrl+Z', click: () => enviarMenu('desfazer') },
+      { label: 'Refazer', accelerator: 'Shift+CmdOrCtrl+Z', click: () => enviarMenu('refazer') },
       { type: 'separator' },
       { role: 'cut', label: 'Recortar' },
       { role: 'copy', label: 'Copiar' },
@@ -7167,7 +7657,7 @@ function menu() {
       { role: 'pasteAndMatchStyle', label: 'Colar sem formatacao' },
       { role: 'delete', label: 'Apagar' },
       { type: 'separator' },
-      { label: 'Selecionar tudo', accelerator: 'CmdOrCtrl+A', click: () => win && win.webContents.send('menu', 'selecionarTudo') },
+      { label: 'Selecionar tudo', accelerator: 'CmdOrCtrl+A', click: () => enviarMenu('selecionarTudo') },
       // o papel pronto trazia o "Falar" do macOS junto; sem isto ele sumiria da barra
       { type: 'separator' },
       { label: 'Falar', submenu: [
@@ -7176,12 +7666,12 @@ function menu() {
       ]},
     ]},
     { label: 'Ver', submenu: [
-      { label: 'Mostrar/ocultar a coluna de conversas', accelerator: 'CmdOrCtrl+B', click: () => win && win.webContents.send('menu', 'toggleSidebar') },
-      { label: 'Modo foco (só pergunta e resposta)', accelerator: 'CmdOrCtrl+Shift+F', click: () => win && win.webContents.send('menu', 'foco') },
+      { label: 'Mostrar/ocultar a coluna de conversas', accelerator: 'CmdOrCtrl+B', click: () => enviarMenu('toggleSidebar') },
+      { label: 'Modo foco (só pergunta e resposta)', accelerator: 'CmdOrCtrl+Shift+F', click: () => enviarMenu('foco') },
       { type: 'separator' },
       // ele nao lembra atalho de cor: sem esta lista, metade do "o app travou" e atalho que
       // existe e ele nao sabe. Fica no menu tambem, para achar sem saber a tecla.
-      { label: 'Atalhos do teclado', accelerator: 'CmdOrCtrl+/', click: () => win && win.webContents.send('menu', 'atalhos') },
+      { label: 'Atalhos do teclado', accelerator: 'CmdOrCtrl+/', click: () => enviarMenu('atalhos') },
       { type: 'separator' },
       { role: 'resetZoom', label: 'Zoom normal' }, { role: 'zoomIn', label: 'Aumentar' }, { role: 'zoomOut', label: 'Diminuir' },
       { type: 'separator' },
@@ -7290,7 +7780,7 @@ async function reconciliarWeb() {
       if (!webDesejado) break;
       geracao = webGeracao;
       tentativa = require('./servidor-web.js').criar({
-        pastaRenderer: path.join(__dirname, 'renderer'), handlers: HANDLERS, ouvintes: ouvintesWeb,
+        pastaRenderer: pastaDaTela(), handlers: HANDLERS, ouvintes: ouvintesWeb,
         porta: 7788, senha: senhaDoTelefone(), somenteTailscale: true, endereco,
       });
       webPendente = tentativa;
@@ -7476,7 +7966,12 @@ ipcMain.handle('inbox:consumir', (_e, { arquivo, apagar } = {}) => {
 });
 ipcMain.handle('inbox:pasta', () => PASTA_INBOX());
 
-app.whenReady().then(() => { anota('app iniciou'); usarClaudeDeCaminhoFixo(); menu(); createWindow(); vigiarPedidoDoQuadro(); montarIndiceDeFundo();
+app.whenReady().then(() => { anota('app iniciou'); usarClaudeDeCaminhoFixo(); menu();
+  // clique direito no ícone do Dock: Nova janela (09/10)
+  try { if (app.dock) app.dock.setMenu(Menu.buildFromTemplate([{ label: 'Nova janela', click: () => { if (janelaViva(win)) criarJanelaExtra(null); else createWindow(); } }])); } catch {}
+  abrirLimpoSeEncerrou();   // antes da janela: a tela le o config uma vez so, no boot
+  try { require('electron').powerMonitor.on('shutdown', () => { macDesligando = true; }); } catch {}
+  prepararTelaViva(); createWindow(); vigiarPedidoDeRecarregar(); vigiarPedidoDoQuadro(); montarIndiceDeFundo();
   limparColadosAntigos();
   /* Atualiza os motores sozinho: 60s depois de abrir (para nao brigar com o arranque) e de
      6 em 6 horas, para quem deixa o Cockpit aberto a semana inteira. */
@@ -7513,6 +8008,7 @@ app.on('before-quit', (event) => {
   if (saindoDoApp) return;   // ja' estamos no meio da saida (app.exit chamando de novo)
   saindoDoApp = true;
   webDesejado = false;
+  marcarAbrirLimpo();
   event.preventDefault();
   shutdown().finally(() => {
     fecharWeb(webPendente); fecharWeb(web);

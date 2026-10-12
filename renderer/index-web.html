@@ -2,12 +2,12 @@
 <html lang="pt-BR" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-CWfdx/lhtmqaa7a1bcOkZ/0PMhPkxWNCDHgrui0+H4Q='; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-8KLw7v3tIclts0srRHD7ucqvglGFHnVAZLyGUz3c9O0='; style-src 'self' 'unsafe-inline' https: http:; img-src 'self' data: blob: https: http:; font-src 'self' data: blob: https:; worker-src 'self' blob:; connect-src 'self' ws: wss: file:;">
 <title>Cockpit</title>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Cockpit">
 <meta name="theme-color" content="#161617">
 <link rel="manifest" href="manifest.json">
@@ -30,6 +30,7 @@
 <link rel="stylesheet" href="redesign/lateral.css">
 <link rel="stylesheet" href="redesign/menus.css">
 <link rel="stylesheet" href="redesign/sheets.css">
+<link rel="stylesheet" href="revisar-arquivo.css">
 <!-- Capa de abertura: a caixa #abrindo, a primeira coisa do corpo da pagina. Este estilo vem
      DEPOIS dos .css de proposito, para nenhuma regra de fora mexer nela. Cor so por variavel. -->
 <style>
@@ -72,9 +73,10 @@
       (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') + (hc ? '-hc' : ''));
   } catch (e) {}
   corDaBarra();   // o CSS ja carregou (vem antes no <head>): a barra do Safari nasce na cor certa
-  // a cor da barra do Safari segue o fundo da aparencia escolhida (automatica, clara ou escura)
+  // a cor da barra do Safari (e da barra do relogio no app) segue a barra de cima do Cockpit:
+  // desde que a barra do relogio deixou de ser transparente (iOS 26 borrava o topo), ela aparece
   function corDaBarra() {
-    var bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+    var bg = getComputedStyle(document.documentElement).getPropertyValue('--bg-window').trim();
     if (meta && bg) meta.setAttribute('content', bg);
   }
   function tirarCapa() {
@@ -169,6 +171,15 @@
            celular, ao tocar). O texto de cada interruptor fica só para o leitor de tela. -->
       <div class="settings">
         <div class="aj-grupo">
+          <div class="aj-gtit">Neste aparelho</div>
+          <div class="aj-cartao">
+            <section class="aj">
+              <div class="aj-tit">Login salvo<button class="info" type="button" aria-label="Como funciona" data-dica="Você continua conectado neste aparelho. Para pedir a senha novamente, toque em Sair."></button></div>
+              <form action="/sair" method="post" id="formSairCelular"><button class="btn-wide" type="submit">Sair</button></form>
+            </section>
+          </div>
+        </div>
+        <div class="aj-grupo">
           <div class="aj-gtit">Geral</div>
           <div class="aj-cartao">
             <section class="aj aj-aparencia">
@@ -243,10 +254,6 @@
         <button class="na-motor" data-motor="gemini">
           <span class="na-ico" id="naIcGemini"></span>
           <span class="na-n">Gemini</span>
-        </button>
-        <button class="na-motor" data-motor="grok">
-          <span class="na-ico" id="naIcGrok"></span>
-          <span class="na-n">Grok</span>
         </button>
       </div>
     </div>
@@ -334,7 +341,6 @@
         <button class="ch-lado" data-motor="claude"><span></span><span class="ch-nome">Claude</span></button>
         <button class="ch-lado" data-motor="codex"><span></span><span class="ch-nome">Codex</span></button>
         <button class="ch-lado" data-motor="gemini"><span></span><span class="ch-nome">Gemini</span></button>
-        <button class="ch-lado" data-motor="grok"><span></span><span class="ch-nome">Grok</span></button>
       </div>
       <!-- redesenho 26/09: seletor à esquerda; à direita branch, medidor e fechar (README, "Painel de chat") -->
       <div class="hd-lado hd-dir">
@@ -417,6 +423,7 @@
 <script defer src="quadro-texto.js"></script>
 <script defer src="quadro.js"></script>
 <script defer src="layout-hugo.js"></script>
+<script defer src="revisar-arquivo.js"></script>
 <script defer src="app.js"></script>
 <script defer src="mobile.js"></script>
 </body>

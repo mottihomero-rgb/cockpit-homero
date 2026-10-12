@@ -140,11 +140,16 @@ function loadMain(options = {}) {
   function safeRequire(name) {
     if (name === 'electron') return electron;
     if (name === 'fs' || name === 'node:fs') return fakeFs;
-    if (name === 'os' || name === 'node:os') return { homedir: () => HOME, userInfo: () => ({ username: 'teste' }) };
+    // cpus/totalmem/freemem: o medidor do PC no topo (09/10) lê a CPU já ao carregar o main.
+    if (name === 'os' || name === 'node:os') return {
+      homedir: () => HOME, userInfo: () => ({ username: 'teste' }),
+      cpus: () => [{ times: { user: 0, nice: 0, sys: 0, idle: 0, irq: 0 } }],
+      totalmem: () => 16 * 1024 ** 3, freemem: () => 8 * 1024 ** 3,
+    };
     if (name === 'child_process' || name === 'node:child_process') return { spawn: fakeSpawn, execFileSync: forbidden('execFileSync') };
     if (name === './plataforma') return platform;
     if (name === 'path' || name === 'node:path') return path;
-    if (['crypto', 'node:crypto', 'string_decoder', 'node:string_decoder'].includes(name)) return require(name);
+    if (['crypto', 'node:crypto', 'string_decoder', 'node:string_decoder', 'url', 'node:url'].includes(name)) return require(name);
     if (name.startsWith('./') && !name.includes('servidor-web')) {
       const file = pathNativo.resolve(root, name.endsWith('.js') ? name : name + '.js');
       if (moduleCache.has(file)) return moduleCache.get(file).exports;

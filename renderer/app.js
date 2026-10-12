@@ -21,9 +21,13 @@ let paneSeq = 0, focusPane = null;
    No Mac o prefixo fica VAZIO de proposito: os ids continuam p1, p2, t1... como sempre foram,
    e por isso recarregar a janela reaproveita os mesmos ids e o processo principal nao fica com
    chat e terminal orfaos rodando escondidos. Quem ganha prefixo e o telefone. */
+/* 09/10: janela EXTRA do Mac (Dock > Nova janela, ou chat/aba arrastado para fora) abre com ?j=N e
+   ganha o prefixo "jN_" nos ids (j2_p1, j2_t1): é por ele que o main.js sabe a qual janela entregar
+   os eventos de cada chat. A janela principal continua sem prefixo, como sempre foi. */
+const JANELA_N = (() => { try { return Number(new URLSearchParams(location.search).get('j')) || 0; } catch { return 0; } })();
 const ESTA_TELA = (typeof window !== 'undefined' && window.SEM_ELECTRON)
   ? ('w' + Math.random().toString(36).slice(2, 7))
-  : '';
+  : (JANELA_N ? 'j' + JANELA_N + '_' : '');
 const panes = new Map();     // id -> objeto do painel
 const motoresTrocandoConta = new Set();
 // cada ABA e uma pasta de projeto; dentro dela ficam os chats lado a lado
@@ -41,6 +45,18 @@ LOGO.acp = 'M9 2h2v5h2V2h2v5h2a1 1 0 0 1 1 1v3a6 6 0 0 1-5 5.92V22h-2v-5.08A6 6 
 
 // Vetores oficiais, guardados em renderer/logos/. Sem buscar imagens pela rede.
 const LOGOS_MARCA = {
+  "deepseek": {
+    "viewBox": "0 0 24 24",
+    "conteudo": "<path fill-rule=\"evenodd\" d=\"M23.748 4.482c-.254-.124-.364.113-.512.234-.051.039-.094.09-.137.136-.372.397-.806.657-1.373.626-.829-.046-1.537.214-2.163.848-.133-.782-.575-1.248-1.247-1.548-.352-.156-.708-.311-.955-.65-.172-.241-.219-.51-.305-.774-.055-.16-.11-.323-.293-.35-.2-.031-.278.136-.356.276-.313.572-.434 1.202-.422 1.84.027 1.436.633 2.58 1.838 3.393.137.093.172.187.129.323-.082.28-.18.552-.266.833-.055.179-.137.217-.329.14a5.526 5.526 0 01-1.736-1.18c-.857-.828-1.631-1.742-2.597-2.458a11.365 11.365 0 00-.689-.471c-.985-.957.13-1.743.388-1.836.27-.098.093-.432-.779-.428-.872.004-1.67.295-2.687.684a3.055 3.055 0 01-.465.137 9.597 9.597 0 00-2.883-.102c-1.885.21-3.39 1.102-4.497 2.623C.082 8.606-.231 10.684.152 12.85c.403 2.284 1.569 4.175 3.36 5.653 1.858 1.533 3.997 2.284 6.438 2.14 1.482-.085 3.133-.284 4.994-1.86.47.234.962.327 1.78.397.63.059 1.236-.03 1.705-.128.735-.156.684-.837.419-.961-2.155-1.004-1.682-.595-2.113-.926 1.096-1.296 2.746-2.642 3.392-7.003.05-.347.007-.565 0-.845-.004-.17.035-.237.23-.256a4.173 4.173 0 001.545-.475c1.396-.763 1.96-2.015 2.093-3.517.02-.23-.004-.467-.247-.588zM11.581 18c-2.089-1.642-3.102-2.183-3.52-2.16-.392.024-.321.471-.235.763.09.288.207.486.371.739.114.167.192.416-.113.603-.673.416-1.842-.14-1.897-.167-1.361-.802-2.5-1.86-3.301-3.307-.774-1.393-1.224-2.887-1.298-4.482-.02-.386.093-.522.477-.592a4.696 4.696 0 011.529-.039c2.132.312 3.946 1.265 5.468 2.774.868.86 1.525 1.887 2.202 2.891.72 1.066 1.494 2.082 2.48 2.914.348.292.625.514.891.677-.802.09-2.14.11-3.054-.614zm1-6.44a.306.306 0 01.415-.287.302.302 0 01.2.288.306.306 0 01-.31.307.303.303 0 01-.304-.308zm3.11 1.596c-.2.081-.399.151-.59.16a1.245 1.245 0 01-.798-.254c-.274-.23-.47-.358-.552-.758a1.73 1.73 0 01.016-.588c.07-.327-.008-.537-.239-.727-.187-.156-.426-.199-.688-.199a.559.559 0 01-.254-.078c-.11-.054-.2-.19-.114-.358.028-.054.16-.186.192-.21.356-.202.767-.136 1.146.016.352.144.618.408 1.001.782.391.451.462.576.685.914.176.265.336.537.445.848.067.195-.019.354-.25.452z\"/>"
+  },
+  "mimo": {
+    "viewBox": "0 0 24 24",
+    "conteudo": "<path d=\"M12 0C8.016 0 4.756.255 2.493 2.516.23 4.776 0 8.033 0 12.012c0 3.98.23 7.235 2.494 9.497C4.757 23.77 8.017 24 12 24c3.983 0 7.243-.23 9.506-2.491C23.77 19.247 24 15.99 24 12.012c0-3.984-.233-7.243-2.502-9.504C19.234.252 15.978 0 12 0zM4.906 7.405h5.624c1.47 0 3.007.068 3.764.827.746.746.827 2.233.83 3.676v4.54a.15.15 0 0 1-.152.147h-1.947a.15.15 0 0 1-.152-.148V11.83c-.002-.806-.048-1.634-.464-2.051-.358-.36-1.026-.441-1.72-.458H7.158a.15.15 0 0 0-.151.147v6.98a.15.15 0 0 1-.152.148H4.906a.15.15 0 0 1-.15-.148V7.554a.15.15 0 0 1 .15-.149zm12.131 0h1.949a.15.15 0 0 1 .15.15v8.892a.15.15 0 0 1-.15.148h-1.949a.15.15 0 0 1-.151-.148V7.554a.15.15 0 0 1 .151-.149zM8.92 10.948h2.046c.083 0 .15.066.15.147v5.352a.15.15 0 0 1-.15.148H8.92a.15.15 0 0 1-.152-.148v-5.352a.15.15 0 0 1 .152-.147Z\"/>"
+  },
+  "muse": {
+    "viewBox": "0 0 24 24",
+    "conteudo": "<path fill-rule=\"evenodd\" d=\"M6.897 4c1.915 0 3.516.932 5.43 3.376l.282-.373c.19-.246.383-.484.58-.71l.313-.35C14.588 4.788 15.792 4 17.225 4c1.273 0 2.469.557 3.491 1.516l.218.213c1.73 1.765 2.917 4.71 3.053 8.026l.011.392.002.25c0 1.501-.28 2.759-.818 3.7l-.14.23-.108.153c-.301.42-.664.758-1.086 1.009l-.265.142-.087.04a3.493 3.493 0 01-.302.118 4.117 4.117 0 01-1.33.208c-.524 0-.996-.067-1.438-.215-.614-.204-1.163-.56-1.726-1.116l-.227-.235c-.753-.812-1.534-1.976-2.493-3.586l-1.43-2.41-.544-.895-1.766 3.13-.343.592C7.597 19.156 6.227 20 4.356 20c-1.21 0-2.205-.42-2.936-1.182l-.168-.184c-.484-.573-.837-1.311-1.043-2.189l-.067-.32a8.69 8.69 0 01-.136-1.288L0 14.468c.002-.745.06-1.49.174-2.23l.1-.573c.298-1.53.828-2.958 1.536-4.157l.209-.34c1.177-1.83 2.789-3.053 4.615-3.16L6.897 4zm-.033 2.615l-.201.01c-.83.083-1.606.673-2.252 1.577l-.138.199-.01.018c-.67 1.017-1.185 2.378-1.456 3.845l-.004.022a12.591 12.591 0 00-.207 2.254l.002.188c.004.18.017.36.04.54l.043.291c.092.503.257.908.486 1.208l.117.137c.303.323.698.492 1.17.492 1.1 0 1.796-.676 3.696-3.641l2.175-3.4.454-.701-.139-.198C9.11 7.3 8.084 6.616 6.864 6.616zm10.196-.552l-.176.007c-.635.048-1.223.359-1.82.933l-.196.198c-.439.462-.887 1.064-1.367 1.807l.266.398c.18.274.362.56.55.858l.293.475 1.396 2.335.695 1.114c.583.926 1.03 1.6 1.408 2.082l.213.262c.282.326.529.54.777.673l.102.05c.227.1.457.138.718.138.176.002.35-.023.518-.073.338-.104.61-.32.813-.637l.095-.163.077-.162c.194-.459.29-1.06.29-1.785l-.006-.449c-.08-2.871-.938-5.372-2.2-6.798l-.176-.189c-.67-.683-1.444-1.074-2.27-1.074z\"/>"
+  },
   "gemini": {
     "viewBox": "0 0 65 65",
     "conteudo": "<path d=\"M57.8647 29.0109C52.865 26.8587 48.4905 23.9061 44.7393 20.1567C40.99 16.4074 38.0373 12.031 35.8851 7.03132C35.0589 5.11516 34.395 3.14552 33.886 1.12608C33.72 0.465846 33.128 0.00109863 32.4475 0.00109863C31.7669 0.00109863 31.1749 0.465846 31.009 1.12608C30.4999 3.14552 29.836 5.11332 29.0098 7.03132C26.8576 12.031 23.905 16.4074 20.1556 20.1567C16.4063 23.9061 12.0299 26.8587 7.03022 29.0109C5.11406 29.8371 3.14442 30.501 1.12498 31.0101C0.464747 31.176 0 31.768 0 32.4486C0 33.1291 0.464747 33.7211 1.12498 33.8871C3.14442 34.3961 5.11222 35.06 7.03022 35.8862C12.0299 38.0384 16.4045 40.9911 20.1556 44.7404C23.9068 48.4897 26.8576 52.8661 29.0098 57.8658C29.836 59.782 30.4999 61.7516 31.009 63.771C31.1749 64.4313 31.7669 64.896 32.4475 64.896C33.128 64.896 33.72 64.4313 33.886 63.771C34.395 61.7516 35.0589 59.7838 35.8851 57.8658C38.0373 52.8661 40.99 48.4916 44.7393 44.7404C48.4886 40.9911 52.865 38.0384 57.8647 35.8862C59.7809 35.06 61.7505 34.3961 63.7699 33.8871C64.4302 33.7211 64.8949 33.1291 64.8949 32.4486C64.8949 31.768 64.4302 31.176 63.7699 31.0101C61.7505 30.501 59.7827 29.8371 57.8647 29.0109Z\" fill=\"white\" /><mask id=\"cockpit-gemini-mask0_10859_4895\" style=\"mask-type:alpha\" maskUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" width=\"65\" height=\"65\"><path d=\"M32.4473 0C33.1278 0 33.7197 0.464783 33.8857 1.125C34.3947 3.14441 35.0586 5.11414 35.8848 7.03027C38.0369 12.0299 40.99 16.406 44.7393 20.1553C48.4903 23.9045 52.8647 26.8576 57.8643 29.0098C59.7821 29.8359 61.7502 30.4998 63.7695 31.0088C64.4297 31.1748 64.8944 31.7668 64.8945 32.4473C64.8945 33.1278 64.4298 33.7198 63.7695 33.8857C61.7502 34.3947 59.7803 35.0586 57.8643 35.8848C52.8646 38.037 48.4885 40.99 44.7393 44.7393C40.99 48.4904 38.037 52.8646 35.8848 57.8643C35.0586 59.7822 34.3947 61.7502 33.8857 63.7695C33.7198 64.4298 33.1278 64.8945 32.4473 64.8945C31.7668 64.8944 31.1748 64.4297 31.0088 63.7695C30.4998 61.7502 29.8359 59.7803 29.0098 57.8643C26.8576 52.8647 23.9063 48.4885 20.1553 44.7393C16.4041 40.99 12.0299 38.0369 7.03027 35.8848C5.1123 35.0586 3.14441 34.3947 1.125 33.8857C0.464783 33.7197 0 33.1278 0 32.4473C8.67651e-05 31.7668 0.464826 31.1748 1.125 31.0088C3.14442 30.4998 5.11413 29.836 7.03027 29.0098C12.03 26.8575 16.406 23.9046 20.1553 20.1553C23.9046 16.406 26.8575 12.03 29.0098 7.03027C29.836 5.11229 30.4998 3.14442 31.0088 1.125C31.1748 0.464826 31.7668 8.67651e-05 32.4473 0Z\" fill=\"black\" /><path d=\"M32.4473 0C33.1278 0 33.7197 0.464783 33.8857 1.125C34.3947 3.14441 35.0586 5.11414 35.8848 7.03027C38.0369 12.0299 40.99 16.406 44.7393 20.1553C48.4903 23.9045 52.8647 26.8576 57.8643 29.0098C59.7821 29.8359 61.7502 30.4998 63.7695 31.0088C64.4297 31.1748 64.8944 31.7668 64.8945 32.4473C64.8945 33.1278 64.4298 33.7198 63.7695 33.8857C61.7502 34.3947 59.7803 35.0586 57.8643 35.8848C52.8646 38.037 48.4885 40.99 44.7393 44.7393C40.99 48.4904 38.037 52.8646 35.8848 57.8643C35.0586 59.7822 34.3947 61.7502 33.8857 63.7695C33.7198 64.4298 33.1278 64.8945 32.4473 64.8945C31.7668 64.8944 31.1748 64.4297 31.0088 63.7695C30.4998 61.7502 29.8359 59.7803 29.0098 57.8643C26.8576 52.8647 23.9063 48.4885 20.1553 44.7393C16.4041 40.99 12.0299 38.0369 7.03027 35.8848C5.1123 35.0586 3.14441 34.3947 1.125 33.8857C0.464783 33.7197 0 33.1278 0 32.4473C8.67651e-05 31.7668 0.464826 31.1748 1.125 31.0088C3.14442 30.4998 5.11413 29.836 7.03027 29.0098C12.03 26.8575 16.406 23.9046 20.1553 20.1553C23.9046 16.406 26.8575 12.03 29.0098 7.03027C29.836 5.11229 30.4998 3.14442 31.0088 1.125C31.1748 0.464826 31.7668 8.67651e-05 32.4473 0Z\" fill=\"url(#cockpit-gemini-paint0_linear_10859_4895)\" /></mask><g mask=\"url(#cockpit-gemini-mask0_10859_4895)\"><g filter=\"url(#cockpit-gemini-filter0_f_10859_4895)\"><ellipse cx=\"14.4072\" cy=\"16.9504\" rx=\"14.4072\" ry=\"16.9504\" transform=\"matrix(0.942341 0.334654 -0.334652 0.942342 -8.09058 13.9664)\" fill=\"#FFE432\" /></g><g filter=\"url(#cockpit-gemini-filter1_f_10859_4895)\"><ellipse cx=\"27.4329\" cy=\"2.5869\" rx=\"18.6516\" ry=\"19.0617\" fill=\"#FC413D\" /></g><g filter=\"url(#cockpit-gemini-filter2_f_10859_4895)\"><ellipse cx=\"18.9512\" cy=\"57.3856\" rx=\"19.4934\" ry=\"25.2529\" transform=\"rotate(-2.79865 18.9512 57.3856)\" fill=\"#00B95C\" /></g><g filter=\"url(#cockpit-gemini-filter3_f_10859_4895)\"><ellipse cx=\"18.9512\" cy=\"57.3856\" rx=\"19.4934\" ry=\"25.2529\" transform=\"rotate(-2.79865 18.9512 57.3856)\" fill=\"#00B95C\" /></g><g filter=\"url(#cockpit-gemini-filter4_f_10859_4895)\"><ellipse cx=\"20.0204\" cy=\"56.2114\" rx=\"19.1065\" ry=\"21.0345\" transform=\"rotate(-31.3178 20.0204 56.2114)\" fill=\"#00B95C\" /></g><g filter=\"url(#cockpit-gemini-filter5_f_10859_4895)\"><ellipse cx=\"67.391\" cy=\"25.3267\" rx=\"18.3463\" ry=\"17.6668\" fill=\"#3186FF\" /></g><g filter=\"url(#cockpit-gemini-filter6_f_10859_4895)\"><ellipse cx=\"21.222\" cy=\"22.3842\" rx=\"21.222\" ry=\"22.3842\" transform=\"matrix(0.795985 0.605316 -0.605314 0.795987 -2.85815 -7.53723)\" fill=\"#FBBC04\" /></g><g filter=\"url(#cockpit-gemini-filter7_f_10859_4895)\"><ellipse cx=\"24.4687\" cy=\"22.6039\" rx=\"24.4687\" ry=\"22.6039\" transform=\"matrix(0.824033 0.566542 -0.566539 0.824035 40.1882 0.315002)\" fill=\"#3186FF\" /></g><g filter=\"url(#cockpit-gemini-filter8_f_10859_4895)\"><path d=\"M54.9838 -2.33625C57.8168 1.51558 54.1765 9.00477 46.8529 14.3913C39.5293 19.7779 31.2957 21.022 28.4627 17.1702C25.6296 13.3184 29.27 5.82919 36.5935 0.442635C43.9171 -4.94392 52.1507 -6.18807 54.9838 -2.33625Z\" fill=\"#749BFF\" /></g><g filter=\"url(#cockpit-gemini-filter9_f_10859_4895)\"><ellipse cx=\"19.9023\" cy=\"3.35597\" rx=\"27.9712\" ry=\"17.3877\" transform=\"rotate(-42.848 19.9023 3.35597)\" fill=\"#FC413D\" /></g><g filter=\"url(#cockpit-gemini-filter10_f_10859_4895)\"><ellipse cx=\"13.5831\" cy=\"46.7501\" rx=\"14.9887\" ry=\"8.71667\" transform=\"rotate(35.592 13.5831 46.7501)\" fill=\"#FFEE48\" /></g></g><defs><filter id=\"cockpit-gemini-filter0_f_10859_4895\" x=\"-19.8236\" y=\"13.1523\" width=\"39.2739\" height=\"43.2171\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"2.45965\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter1_f_10859_4895\" x=\"-15.001\" y=\"-40.257\" width=\"84.8677\" height=\"85.6878\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"11.8911\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter2_f_10859_4895\" x=\"-20.7758\" y=\"11.9273\" width=\"79.454\" height=\"90.9166\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"10.1086\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter3_f_10859_4895\" x=\"-20.7758\" y=\"11.9273\" width=\"79.454\" height=\"90.9166\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"10.1086\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter4_f_10859_4895\" x=\"-19.8449\" y=\"15.459\" width=\"79.7306\" height=\"81.5048\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"10.1086\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter5_f_10859_4895\" x=\"29.8324\" y=\"-11.5524\" width=\"75.1172\" height=\"73.7582\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"9.60613\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter6_f_10859_4895\" x=\"-38.5827\" y=\"-16.2526\" width=\"78.1352\" height=\"78.7578\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"8.70591\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter7_f_10859_4895\" x=\"8.1068\" y=\"-5.96578\" width=\"78.877\" height=\"77.5394\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"7.77473\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter8_f_10859_4895\" x=\"13.5873\" y=\"-18.4881\" width=\"56.2718\" height=\"51.8102\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"6.95694\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter9_f_10859_4895\" x=\"-15.5259\" y=\"-31.297\" width=\"70.8565\" height=\"69.3059\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"5.87598\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter10_f_10859_4895\" x=\"-14.1676\" y=\"20.9644\" width=\"55.5015\" height=\"51.5714\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"7.27253\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><linearGradient id=\"cockpit-gemini-paint0_linear_10859_4895\" x1=\"18.4474\" y1=\"43.4202\" x2=\"52.1528\" y2=\"15.0035\" gradientUnits=\"userSpaceOnUse\"><stop stop-color=\"#4893FC\" /><stop offset=\"0.27\" stop-color=\"#4893FC\" /><stop offset=\"0.776981\" stop-color=\"#969DFF\" /><stop offset=\"1\" stop-color=\"#BD99FE\" /></linearGradient></defs>"
@@ -87,21 +103,46 @@ const svgMotor = (eng) => '<svg viewBox="' + (LOGOS_MARCA[eng]?.viewBox || '0 0 
 /* leva 12.4: um lugar só para o nome e para a caixa lateral de cada motor. Antes cada ponto
    escrevia à mão `engine === 'claude' ? '#histClaude' : '#histCodex'` — ou seja, QUALQUER motor
    que não fosse o Claude escrevia na coluna do Codex, e o ACP APAGARIA a lista do Codex. */
-const NOME_MOTOR = { claude: 'Claude', codex: 'Codex', acp: 'ACP', gemini: 'Gemini', grok: 'Grok' };
+/* 06/10: IAs de CHAVE (DeepSeek, MiMo, Muse Spark). O motor delas é o Claude Code apontado para o
+   endereço de cada uma (provedores.js no main); aqui só o nome, os modelos e onde pegar a chave.
+   Conversa, pasta e histórico são os do Claude Code: a conversa só leva o logo da IA que a escreveu. */
+const PROVEDORES_UI = {
+  deepseek: { nome: 'DeepSeek', painel: 'https://platform.deepseek.com/api_keys', dica: 'sk-…',
+    modelos: [
+      { id: 'deepseek-flash', nome: 'DeepSeek V4.1 Flash', desc: 'Rápido e muito barato', efforts: [], padrao: true },
+      { id: 'deepseek-v4-pro', nome: 'DeepSeek V4 Pro', desc: 'O mais forte da DeepSeek', efforts: [] },
+    ] },
+  mimo: { nome: 'MiMo', painel: 'https://platform.xiaomimimo.com', dica: 'sk-… ou tp-…',
+    modelos: [{ id: 'mimo-v2.6-pro', nome: 'MiMo V2.6 Pro', desc: 'O mais forte da Xiaomi', efforts: [], padrao: true }] },
+  muse: { nome: 'Muse Spark', painel: 'https://openrouter.ai/settings/keys', dica: 'sk-or-…',
+    modelos: [
+      { id: 'nvidia/meta/muse-glimmer-30b', nome: 'Muse Glimmer 30B (grátis)', desc: 'Muse aberto da Meta, pela NVIDIA, sem custo', efforts: [], padrao: true },
+      { id: 'meta/muse-spark-1.3', nome: 'Muse Spark 1.3', desc: 'Com a sua chave do OpenRouter, rápido e forte', efforts: [] },
+    ] },
+};
+const PROVEDORES_IDS = Object.keys(PROVEDORES_UI);
+// as conversas das IAs de chave moram na lista do Claude Code (só o logo muda)
+const motorDaLista = (e) => (Object.prototype.hasOwnProperty.call(PROVEDORES_UI, e) ? 'claude' : e);
+const EH_PROVEDOR = (e) => Object.prototype.hasOwnProperty.call(PROVEDORES_UI, e);
+const NOME_MOTOR = { claude: 'Claude', codex: 'Codex', acp: 'ACP', gemini: 'Gemini', grok: 'Grok',
+  deepseek: 'DeepSeek', mimo: 'MiMo', muse: 'Muse Spark' };
 const nomeDoMotor = (eng) => NOME_MOTOR[eng] || 'Claude';
 const MOTORES = ['claude', 'codex', 'acp', 'gemini', 'grok'];
 // ACP continua no histórico antigo; as escolhas novas são marcas, não protocolos.
-const MOTORES_VISIVEIS = ['claude', 'codex', 'gemini', 'grok'];
+/* 09/10: DeepSeek e Muse Spark saíram da vista (ficam só as 5: Claude, Codex, Gemini, Grok, MiMo). O código
+   deles continua aqui para as conversas antigas abrirem; só não aparecem mais para escolher. */
+const MOTORES_VISIVEIS = ['claude', 'codex', 'gemini'];
 // sem motor salvo (1º boot ou config resetado), o padrão é Claude, não Codex.
 const motorVisivel = (eng) => MOTORES_VISIVEIS.includes(eng) ? eng : 'claude';
-const CAIXA_MOTOR = { claude: 'Claude', codex: 'Codex', acp: 'Acp', gemini: 'Gemini', grok: 'Grok' };
+const CAIXA_MOTOR = { claude: 'Claude', codex: 'Codex', acp: 'Acp', gemini: 'Gemini', grok: 'Grok',
+  deepseek: 'Deepseek', mimo: 'Mimo', muse: 'Muse' };
 /* 25/09: a coluna de conversas e UMA so, com todas as IAs juntas. Qualquer motor escreve na
    mesma caixa — e a lista que ela mostra e montada por pintarConversas(), nunca por motor. */
 const VISTA_CONVERSAS = 'todas';
 const caixaHist = () => document.getElementById('histTodas');
 /* estado guardado por motor: nascendo com os três, um "++" numa chave que não existe deixa de
    virar NaN — que é o que faria a lista do ACP nunca pintar */
-const porMotor = (valor) => { const o = {}; for (const m of MOTORES) o[m] = valor; return o; };
+const porMotor = (valor) => { const o = {}; for (const m of [...MOTORES, ...PROVEDORES_IDS]) o[m] = valor; return o; };
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 // Resposta de IA e de conectores é conteúdo externo. HTML bruto nunca entra na janela.
 const markdownSeguro = new marked.Renderer();
@@ -153,18 +194,19 @@ const EF_DESC_PT = {
 // esforço com que TODA conversa nova nasce (não muda quando você mexe na barra de um painel)
 const EF_NOVO = 'xhigh';
 /* O que toda conversa NOVA do Claude e do Codex traz marcado (pedido do usuário, 15/09/2026):
-   Codex no Sol, Claude no Opus 5.5 SEM o 1M, os dois no Alto (22/09/2026). Vale para aba nova, "nova
+   Codex no Sol, Claude no Sonnet 5.5 (06/10/2026; antes Opus 5.5 sem o 1M), os dois no Alto. Vale para aba nova, "nova
    conversa" e troca de motor no mesmo chat; conversa restaurada mantém o que estava salvo.
    Se o modelo sumir da lista do motor, cai no padrão dele (fillModels). */
 const PADRAO_NOVO = {
-  claude: { model: 'claude-opus-5-5', effort: 'high' },
+  claude: { model: 'claude-sonnet-5-5', effort: 'high' },
   codex: { model: 'gpt-6-sol', effort: 'high' },
 };
 const modeloNovo = (eng) => {
+  if (EH_PROVEDOR(eng)) return (PROVEDORES_UI[eng].modelos.find(m => m.padrao) || PROVEDORES_UI[eng].modelos[0]).id;
   const salvo = (PADRAO_NOVO[eng] && PADRAO_NOVO[eng].model) || '';
   const lista = eng === 'claude' ? MODELOS_CLAUDE : eng === 'codex' ? MODELOS_CODEX : null;
   if (!lista?.length || lista.some(m => m.id === salvo)) return salvo;
-  const familia = eng === 'claude' ? /^claude-opus-[\d-]+$/ : /^gpt-[\d.]+-sol$/;
+  const familia = eng === 'claude' ? /^claude-sonnet-[\d-]+$/ : /^gpt-[\d.]+-sol$/;
   return (lista.find(m => familia.test(m.id)) || lista[0]).id;
 };
 const esforcoNovo = (eng) => (PADRAO_NOVO[eng] && PADRAO_NOVO[eng].effort) || EF_NOVO;
@@ -242,11 +284,19 @@ const AGENTES_ACP = [
 const agenteAcpTem = (m) => !m.bin || !MOTORES_OK || !MOTORES_OK.acpBins || !!MOTORES_OK.acpBins[m.bin];
 // (quem decide o agente ACP e' o dropdown de modelos, via agenteAcpTem acima)
 
-const MODELOS_GEMINI = [{ id: '', nome: 'Padrão do Gemini', desc: 'Usa o Gemini da sua conta Google', efforts: [], padrao: true }];
+const MODELOS_GEMINI_BASE = [{ id: '', nome: 'Padrão do Gemini', desc: 'Usa o Gemini da sua conta Google', efforts: [], padrao: true }];
+let MODELOS_GEMINI = MODELOS_GEMINI_BASE;
+// a lista real vem do Antigravity (`agy models`): modelo novo do Google entra no menu sozinho
+function aplicarModelosGemini(lista) {
+  if (!Array.isArray(lista) || !lista.length) return;
+  MODELOS_GEMINI = [...MODELOS_GEMINI_BASE, ...lista.map(m => ({ id: m.id, nome: m.nome, desc: m.id, efforts: [] }))];
+  for (const P of panes.values()) if (P.engine === 'gemini') fillModels(P);
+}
 const MODELOS_GROK = [{ id: '', nome: 'Padrão do Grok', desc: 'Usa o modelo configurado no Grok', efforts: [], padrao: true }];
 function modelosDe(P) {
   if (P.engine === 'gemini') return MODELOS_GEMINI;
   if (P.engine === 'grok') return MODELOS_GROK;
+  if (EH_PROVEDOR(P.engine)) return PROVEDORES_UI[P.engine].modelos;
   if (P.engine === 'acp') return P.model && !AGENTES_ACP.some(m => m.id === P.model)
     ? [...AGENTES_ACP, { id: P.model, nome: 'Agente personalizado', desc: P.model, efforts: ['medium'] }]
     : AGENTES_ACP;
@@ -487,6 +537,7 @@ async function fecharAba(A) {
   Promise.all(paraParar.map(x => window.api.paneStop({ paneId: x.pid, engine: x.engine }).catch(() => {})));
   const lista = [...abas.values()];
   const i = lista.indexOf(A);
+  A.observadorLargura?.disconnect();
   A.el.remove(); A.corpoEl.remove(); abas.delete(A.id);
   if (focusPane && !panes.has(focusPane.id)) focusPane = null;
   const resto = [...abas.values()];
@@ -1116,7 +1167,7 @@ function newPane(opts = {}) {
   setFocus(P);
   inp.focus();
   setTimeout(() => {
-    if (focusPane === P && abaDe(P) === abaAtiva) el.scrollIntoView({ behavior: window.SEM_ELECTRON ? 'instant' : 'smooth', inline: 'nearest', block: 'nearest' });
+    if (focusPane === P && abaDe(P) === abaAtiva) enquadrarChatComProximo(P);
   }, 60);
   setTimeout(savePanes, 30);
   return P;
@@ -1208,19 +1259,10 @@ let clienteQueEstavaAberto = '';
    main.js). E a trava contra o defeito que comeu 108 abas: uma gravacao com o retrato
    incompleto da tela — boot, restauracao que falhou no meio, foto velha — apagava do
    arquivo as abas que ainda nao estavam montadas. */
-function savePanes(fechou) {
-  // todo vai-e-vem de chat passa por aqui: e o lugar certo pra acender/apagar a borda
-  // das conversas que estao abertas na lista lateral
-  marcarAbertas();
-  if (restaurando) return;   // remontando a tela: nao gravar estado pela metade
-  delete cfg.panes; delete cfg.grupos;
-  const listaAbas = [...abas.values()];
-  cfg.abas = listaAbas.map(A => ({
-    cwd: A.cwd,
-    ativo: Math.max(0, A.ordem.indexOf(A.ativo)),
-    chats: A.ordem.map(pid => {
-      const P = panes.get(pid); if (!P) return null;
-      return {
+/* o chat de hoje em forma gravável (vai pro config.json e, quando arrastado, pra outra janela) */
+function serializarChat(P) {
+  if (!P) return null;
+  return {
         engine: P.engine, cwd: P.cwd, model: P.model, mode: P.mode, effort: P.effort,
         serviceTier: P.serviceTier, experimentalContext: P.experimentalContext,
         collaborationMode: P.collaborationMode,
@@ -1246,7 +1288,19 @@ function savePanes(fechou) {
            principal em silencio — e a proxima mensagem mexeria na branch de verdade. */
         worktree: P.worktree || undefined,
       };
-    }).filter(Boolean),
+}
+
+function savePanes(fechou) {
+  // todo vai-e-vem de chat passa por aqui: e o lugar certo pra acender/apagar a borda
+  // das conversas que estao abertas na lista lateral
+  marcarAbertas();
+  if (restaurando) return;   // remontando a tela: nao gravar estado pela metade
+  delete cfg.panes; delete cfg.grupos;
+  const listaAbas = [...abas.values()];
+  cfg.abas = listaAbas.map(A => ({
+    cwd: A.cwd,
+    ativo: Math.max(0, A.ordem.indexOf(A.ativo)),
+    chats: A.ordem.map(pid => serializarChat(panes.get(pid))).filter(Boolean),
   })).filter(a => a.chats.length).concat(abasQueNaoVoltaram);
   cfg.abaAberta = Math.max(0, listaAbas.indexOf(abaAtiva));
   // 'agrupou' e' fusao automatica no boot, nao clique dele: usa === pra nao confundir com fechou boolean
@@ -1473,6 +1527,12 @@ async function restaurarAbasCorpo(salvas) {
    trocar um aviso tardio por um app que não abre chat nenhum. É a mesma dupla que o
    avisarInstalacaoMotor já usa aqui embaixo. */
 function motorIndisponivelNaPasta(engine, cwd) {
+  if (EH_PROVEDOR(engine)) {
+    if (NA_VPS(cwd)) return nomeDoMotor(engine) + ' roda numa pasta do Mac. Escolha uma pasta do Mac para usar o ' + nomeDoMotor(engine) + '.';
+    if (MOTORES_OK?.[engine] === false) return 'O Claude Code não está instalado neste Mac.';
+    if (semChaveDoProvedor(engine)) return 'Cole a chave do ' + nomeDoMotor(engine) + ' em Ajustes › Contas.';
+    return '';
+  }
   // R2-016: o Grok roda pelo ACP, que o backend recusa na VPS igual ao Gemini — sem isto a
   // troca matava a conversa atual e so depois o backend recusava, na mensagem seguinte
   if ((engine === 'gemini' || engine === 'grok') && NA_VPS(cwd)) return nomeDoMotor(engine) + ' está disponível neste Mac. Escolha uma pasta do Mac para usar o ' + nomeDoMotor(engine) + '.';
@@ -1512,6 +1572,8 @@ async function trocarMotor(P, novo) {
   // clique ser engolido em silencio, e uma mensagem enviada nesse meio-tempo subia o motor errado.
   if (!MOTORES_VISIVEIS.includes(novo) || novo === P.engine || P.trocando) return;
   if (P.historicoIncompleto) { avisoTemp(P, 'Falta carregar uma parte da conversa. Use Tentar de novo no aviso do histórico antes de trocar de IA.', true); return; }
+  // IA de chave sem a chave colada: em vez de só avisar, abre a janela para colar
+  if (EH_PROVEDOR(novo) && !NA_VPS(P.cwd) && semChaveDoProvedor(novo)) { abrirChaveProvedor(novo); return; }
   if (motorIndisponivelNaPasta(novo, P.cwd)) {
     avisoTemp(P, motorIndisponivelNaPasta(novo, P.cwd), true);
     return;
@@ -1554,7 +1616,7 @@ async function trocarMotor(P, novo) {
   P.effectiveSettings = null; P.settingsPending = false;
   P.collaborationMode = estavaPlanejando ? 'plan' : 'default';
   if (novo === 'codex' && P.mode === 'plan') P.mode = 'manual';
-  if (novo === 'claude' && estavaPlanejando) P.mode = 'plan';
+  if ((novo === 'claude' || EH_PROVEDOR(novo)) && estavaPlanejando) P.mode = 'plan';
   P.sessaoId = null; P.resumeId = null; P.sessaoFile = '';
   zerarContexto(P);          // conversa nova, e a janela do motor novo nem e a mesma
   // leva 8.3: o fio mudou de conversa — a intenção de ramificar não pode ir junto, senão a
@@ -1696,7 +1758,7 @@ function paintEngine(P) {
   P.el.classList.toggle('eng-claude', P.engine === 'claude');
   // O protocolo ACP permanece apenas nas sessões antigas.
   P.el.classList.toggle('eng-acp', P.engine === 'acp');
-  for (const e of ['gemini', 'grok']) P.el.classList.toggle('eng-' + e, P.engine === e);
+  for (const e of ['gemini', 'grok', ...PROVEDORES_IDS]) P.el.classList.toggle('eng-' + e, P.engine === e);
   let etiqueta = $('.motor-extra', P.el);
   if (P.engine === 'acp') {
     if (!etiqueta) { etiqueta = document.createElement('span'); etiqueta.className = 'motor-extra'; $('.p-chave', P.el).after(etiqueta); }
@@ -1731,6 +1793,9 @@ function setFocus(P) {
   const pn = $('#projName'); if (pn) pn.textContent = nomePasta(P.cwd);
   pintarCorFoco();
   marcarAbertas();   // a conversa selecionada da lista é a do chat em foco: muda junto com ele
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => {
+    if (focusPane === P && abaDe(P) === abaAtiva) enquadrarChatComProximo(P);
+  });
 }
 /* A borda das abas do topo segue a cor da IA do chat em foco (laranja no Claude, azul no
    Codex, verde no Gemini). Le o --accent ja resolvido do chat, entao tema novo vale sozinho. */
@@ -2489,6 +2554,7 @@ async function ramificarInteiro(P) {
      ssh para o CLI de lá (que pode ser velho demais e derrubar o painel no start) e no Codex o
      motor local não enxerga a conversa de lá. Cai direto na reserva do resumo, que sempre vale. */
   if (NA_VPS(P.cwd)) return ramoDeReserva(origem, 'a conversa mora na VPS', aba);
+  if (EH_PROVEDOR(P.engine)) return ramoDeReserva(origem, 'este modelo não ramifica a conversa pelo motor', aba);
   if (P.engine === 'claude') return forkClaude(origem, id, aba);
   let r = null;
   try { r = await window.api.sessaoFork({ engine: P.engine, id }); }
@@ -2994,6 +3060,18 @@ function vozEvento(P, ev) {
     return;
   }
   if (ev.type !== 'status') return;
+  // qual microfone ouve e quem MAIS está nele: avisa na hora, não bloqueia o ditado
+  if (ev.msg === 'microfone') {
+    VIVO.dispositivo = ev.dispositivo || '';
+    VIVO.outros = Array.isArray(ev.outros) ? ev.outros : [];
+    if (VIVO.outros.length) {
+      const varios = VIVO.outros.length > 1;
+      avisoTemp(P, (varios ? 'Outros apps estão usando o microfone: ' : 'Outro app está usando o microfone: ')
+        + VIVO.outros.join(', ') + (VIVO.dispositivo ? ' (' + VIVO.dispositivo + ')' : '')
+        + '. Se o ditado falhar, feche ou silencie ' + (varios ? 'eles' : 'esse app') + '.', true);
+    }
+    return;
+  }
   if (ev.msg === 'ouvindo') { const bt = $('.p-mic', P.el); if (bt) bt.classList.add('gravando'); return; }
   if (ev.msg === 'silencio' || ev.msg === 'teto de tempo') {
     const bt = $('.p-mic', P.el); if (bt) { bt.classList.remove('gravando'); bt.classList.add('pensando'); }
@@ -3029,6 +3107,7 @@ async function alternarDitado(P) {
     // "digitou por fora" dispara logo na primeira legenda e come o primeiro pedaco da fala
     VIVO.ultimoEscrito = null;
     // ditado novo começa com o medidor no zero, senão o pico do anterior mentiria no diagnóstico
+    VIVO.dispositivo = ''; VIVO.outros = [];
     VIVO.ultimo = ''; VIVO.nivel = 0; VIVO.picoGeral = 0; VIVO.jaAvisou = false;
     vozTirarNivel(P);
     const r = await window.api.vozVivo({ paneId: P.id, silencio: 1.8, teto: 180 });
@@ -3143,7 +3222,8 @@ function vozDiagnostico(jaAvisou) {
   const p = VIVO.picoGeral || 0;
   // se a nota "Não ouvi nada" já apareceu, não repetir a acusação: só a parte que ajuda
   if (p < VOZ_MUDO) return (jaAvisou ? '' : 'Não chegou som nenhum. ')
-    + 'Se você falou, confira em Ajustes do Sistema › Som › Entrada qual microfone está escolhido.';
+    + (VIVO.outros && VIVO.outros.length ? VIVO.outros.join(', ') + (VIVO.outros.length > 1 ? ' estão' : ' está') + ' usando o microfone: feche ou silencie e tente de novo. ' : '')
+    + 'Se você falou, confira em Ajustes do Sistema › Som › Entrada qual microfone está escolhido' + (VIVO.dispositivo ? ' (agora: ' + VIVO.dispositivo + ')' : '') + '.';
   // captou, mas nunca no volume que o motor chama de fala: este ele CONSEGUE consertar
   if (p < VOZ_LIMIAR) return 'O microfone captou, mas muito baixo. Aumente o volume de entrada em Ajustes do Sistema › Som, ou fale mais perto.';
   return jaAvisou ? '' : 'Não entendi o que foi falado. Tente falar um pouco mais devagar.';
@@ -3478,7 +3558,7 @@ function linkarArquivos(P, el) {
           if (m.index > ult) frag.appendChild(document.createTextNode(txt.slice(ult, m.index)));
           const caminho = m[1];                       // guarda o valor: o m muda no proximo laço
           const a = document.createElement('a');
-          a.className = 'arquivo'; a.textContent = caminho; a.href = '#';
+          a.className = 'arquivo'; a.textContent = caminho; a.href = '#'; a.dataset.caminho = caminho;
           a.title = 'abre aqui dentro';
           a.onclick = (e) => { e.preventDefault(); e.stopPropagation(); verArquivo(P, caminhoDoPainel(P, caminho)); };
           frag.appendChild(a);
@@ -3490,6 +3570,17 @@ function linkarArquivos(P, el) {
     }
   };
   andar(el);
+  for (const a of el.querySelectorAll('a.arquivo[data-caminho]')) {
+    const caminho = caminhoDoPainel(P, a.dataset.caminho);
+    if (!/\.(pdf|docx?|html?)$/i.test(caminho) || NA_VPS(caminho) || a.dataset.revisaoVitrine || vitrine >= 6) continue;
+    a.dataset.revisaoVitrine = '1'; vitrine++;
+    const card = document.createElement('button'); card.type = 'button'; card.className = 'entrega-doc';
+    const tipo = document.createElement('span'); tipo.className = 'entrega-doc-tipo'; tipo.textContent = caminho.split('.').pop().toUpperCase();
+    const nome = document.createElement('span'); nome.className = 'entrega-doc-nome'; nome.textContent = caminho.split('/').pop();
+    const acao = document.createElement('span'); acao.className = 'entrega-doc-acao'; acao.textContent = 'Abrir e revisar';
+    card.append(tipo, nome, acao); card.onclick = e => { e.preventDefault(); e.stopPropagation(); verArquivo(P, caminho); };
+    const par = a.closest('p'); if (par) par.after(card); else a.after(card);
+  }
 }
 
 function textFinal(P, key, text) {
@@ -4058,11 +4149,11 @@ function reporAnexos(P, anexos) {
   for (const a of anexos) if (!P.anexos.some(x => x.path === a.path)) P.anexos.push(a);
   pintarAnexos(P);
 }
-function recuperarEnvio(P, bolha, text, anexos) {
+function recuperarEnvio(P, bolha, text, anexos, reporTexto = true) {
   if (P.queued) { const q = P.queued; P.queued = null; devolverFilaAoCampo(P, q); }
   tirarBolha(P, bolha);
   const campo = $('.p-input', P.el);
-  campo.value = [text, campo.value].filter(Boolean).join('\n\n');
+  if (reporTexto) campo.value = [text, campo.value].filter(Boolean).join('\n\n');
   campo.style.height = 'auto';
   reporAnexos(P, anexos);
   window.dispatchEvent(new Event('cockpit:salvar-rascunhos'));
@@ -4124,10 +4215,11 @@ function agendarFila(P) {
     }
   }, 150);
 }
-async function send(P, textoProgramatico) {
-  if (P.trocando || P.carregandoHistorico || motoresTrocandoConta.has(P.engine) || panes.get(P.id) !== P) return;
+async function send(P, textoProgramatico, opcoes = {}) {
+  const retorno = (ok, error, naFila = false) => opcoes.ajustes ? { ok, error, naFila } : undefined;
+  if (P.trocando || P.carregandoHistorico || motoresTrocandoConta.has(P.engine) || panes.get(P.id) !== P) return retorno(false, 'Aguarde a conversa terminar de abrir e tente novamente.');
   if (P.historicoIncompleto && (!(P.sessaoId || P.resumeId) || P.passarContexto)) {
-    avisoTemp(P, 'Falta carregar uma parte da conversa. Use Tentar de novo no aviso do histórico antes de continuar.', true); return;
+    avisoTemp(P, 'Falta carregar uma parte da conversa. Use Tentar de novo no aviso do histórico antes de continuar.', true); return retorno(false, 'Falta carregar uma parte da conversa.');
   }
   const revisao = P.revisaoConversa || 0;
   const programatico = typeof textoProgramatico === 'string';
@@ -4159,10 +4251,10 @@ async function send(P, textoProgramatico) {
      Enter e nao acontecia nada — a fichinha ficava presa no campo e ele achava que tinha
      mandado. Agora o anexo (ou o desenho do quadro) ja basta; so o campo totalmente vazio,
      sem nada anexado, e que nao envia. */
-  if (!text && !anexosDoEnvio.length && !quadroDoEnvio) return;
+  if (!text && !anexosDoEnvio.length && !quadroDoEnvio) return retorno(false, 'Nenhum ajuste para enviar.');
   /* 26/09: com o plano pronto esperando, o que ele escreve responde o plano ("ok" executa,
      o resto vira ajuste) — como no VS Code. Não vira mensagem nova nem vai para a fila. */
-  if (P.planoPendente && text && !anexosDoEnvio.length && !quadroDoEnvio) {
+  if (!opcoes.ajustes && P.planoPendente && text && !anexosDoEnvio.length && !quadroDoEnvio) {
     inp.value = ''; inp.style.height = 'auto';
     planoPelaCaixa(P, text);
     return;
@@ -4199,7 +4291,7 @@ async function send(P, textoProgramatico) {
       let r;
       try { r = await window.api.paneSteer({ paneId: P.id, engine: P.engine,
         text: ENTRA_MSG + pacote.text, attachments: anx }); } catch { r = { ok: false }; }
-      if (!painelAindaAtual(P, revisao)) return;
+      if (!painelAindaAtual(P, revisao)) return retorno(false, 'Esta conversa mudou. Reabra o arquivo.');
       if (nota) {
         nota.textContent = r && r.ok ? 'Entregue no meio do trabalho' : 'Ficou na fila';
         nota.title = r && r.ok ? 'Ele escolhe se atende agora ou ao terminar.' : 'Não deu para entrar agora. Começa assim que ele terminar.';
@@ -4211,7 +4303,7 @@ async function send(P, textoProgramatico) {
       avisoEnvio(P, 'Na fila', 'Começa assim que ele terminar.');
       if (!P.busy) agendarFila(P);
     }
-    return;
+    return retorno(true, '', true);
   }
   const escolhasDoEnvio = prepararEscolhasEnvio(P);
   const pedidoCodex = escolhasDoEnvio ? escolhasDoEnvio.desired : {};
@@ -4266,7 +4358,7 @@ async function send(P, textoProgramatico) {
         worktree: (P.engine === 'claude' && !NA_VPS(P.cwd) && P.worktree) || undefined,
         ...pedidoCodex,
       });
-      if (!painelAindaAtual(P, revisao)) return;
+      if (!painelAindaAtual(P, revisao)) return retorno(false, 'Esta conversa mudou. Reabra o arquivo.');
       if (inicio === false || inicio && (inicio.error || inicio.ok === false)) throw new Error(inicio && inicio.error || 'O motor não abriu.');
       /* Esta mesma conversa ja esta aberta em outra tela. O Mac recusou subir um segundo agente
          nela — seriam dois mexendo no mesmo historico e na mesma pasta ao mesmo tempo. A fala
@@ -4274,11 +4366,11 @@ async function send(P, textoProgramatico) {
          assume a conversa aqui e desliga o agente do outro lado. */
       if (inicio && inicio.jaAberta) {
         P.busy = false; concluirEscolhasEnvio(P, escolhasDoEnvio, false);
-        recuperarEnvio(P, bolha, text, anexos);
+        recuperarEnvio(P, bolha, text, anexos, !opcoes.ajustes);
         setDot(P, 'off');
         note(P, 'Esta conversa já está aberta ' + (inicio.onde || 'em outra tela')
           + '. Mande de novo para trazer ela para cá — o chat de lá para.', true);
-        return;
+        return retorno(false, 'Esta conversa já está aberta em outra tela. Seus ajustes continuam salvos.');
       }
       // Uma versao antiga podia guardar aqui o numero da conversa do outro motor. O processo
       // principal se recupera abrindo outra; antes de mandar a fala, esta tela repoe o contexto.
@@ -4290,10 +4382,10 @@ async function send(P, textoProgramatico) {
       P.started = true; P.ultraAvisado = false;   // processo novo: liberar o ultracode de novo
       P.forkPendente = false;   // o ramo já nasceu no start; não pode forkar de novo
     } catch (e) {
-      if (!painelAindaAtual(P, revisao)) return;
+      if (!painelAindaAtual(P, revisao)) return retorno(false, 'Esta conversa mudou. Reabra o arquivo.');
       P.busy = false; concluirEscolhasEnvio(P, escolhasDoEnvio, false);
-      recuperarEnvio(P, bolha, text, anexos);
-      setDot(P, 'off'); note(P, 'Não consegui ligar: ' + (e && e.message || e), true); return;
+      recuperarEnvio(P, bolha, text, anexos, !opcoes.ajustes);
+      setDot(P, 'off'); note(P, 'Não consegui ligar: ' + (e && e.message || e), true); return retorno(false, 'Não consegui ligar o chat. Seus ajustes continuam salvos.');
     }
   }
   P.busy = true; P.comecouEm = Date.now(); setDot(P, 'busy');
@@ -4320,7 +4412,7 @@ async function send(P, textoProgramatico) {
     if (escolhasDoEnvio) escolhasDoEnvio.phase = 'sending';
     const ok = await window.api.paneSend({ paneId: P.id, engine: P.engine, text: envio,
       attachments: anexos, ...pedidoCodex });
-    if (!painelAindaAtual(P, revisao)) return;
+    if (!painelAindaAtual(P, revisao)) return retorno(false, 'Esta conversa mudou. Reabra o arquivo.');
     const aceito = ok !== false && !(ok && (ok.error || ok.ok === false));
     concluirEscolhasEnvio(P, escolhasDoEnvio, aceito);
     // false = o motor caiu antes de receber. Sem isto o chat ficava em "trabalhando..."
@@ -4335,13 +4427,14 @@ async function send(P, textoProgramatico) {
       note(P, 'O motor não estava no ar e a mensagem não chegou. Manda de novo que ele religa.', true);
       /* o texto volta para o campo E a bolha sai da tela junto. Antes so o texto voltava: a
          bolha ficava, e cada Enter empilhava mais uma bolha e mais um item no P.hist. */
-      recuperarEnvio(P, bolha, text, anexos);
+      recuperarEnvio(P, bolha, text, anexos, !opcoes.ajustes);
       /* o anexo tambem volta para o campo. Sem isto, o print que ele colou sem escrever nada
          sumia de vez quando o motor estava fora do ar: o texto voltava vazio e a fichinha
          ja tinha sido apagada do campo la em cima. */
     }
+    return retorno(aceito, aceito ? '' : 'O chat não recebeu os ajustes. Tente novamente.');
   }
-  catch (e) { if (!painelAindaAtual(P, revisao)) return;
+  catch (e) { if (!painelAindaAtual(P, revisao)) return retorno(false, 'Esta conversa mudou. Reabra o arquivo.');
     if (!P.passarContexto) P.passarContexto = contextoDoEnvio;
     P.ultraAvisado = ultraAntes;
     concluirEscolhasEnvio(P, escolhasDoEnvio, false);
@@ -4349,8 +4442,8 @@ async function send(P, textoProgramatico) {
     // falha para sempre (mesmo motivo do ramo `!aceito` acima e do catch de agendarFila).
     P.started = false; P.resumeId = P.sessaoId || P.resumeId;
     P.busy = false; pararTrabalho(P); limparPassos(P);
-    recuperarEnvio(P, bolha, text, anexos);
-    setDot(P, 'idle'); note(P, 'Falhou: ' + (e && e.message || e), true); }
+    recuperarEnvio(P, bolha, text, anexos, !opcoes.ajustes);
+    setDot(P, 'idle'); note(P, 'Falhou: ' + (e && e.message || e), true); return retorno(false, (e && e.message) || 'Não consegui enviar os ajustes.'); }
 }
 
 /* ============ eventos vindos do motor ============ */
@@ -4465,7 +4558,7 @@ function receberEventoPane(ev) {
     'question', 'approval', 'compacting'].includes(ev.kind)) {
     if (P.contTimer) { clearTimeout(P.contTimer); P.contTimer = 0; }
     limparContinuar(P);
-    if (!P.busy && P.engine === 'claude' && ['text-delta', 'think-delta', 'tool-start'].includes(ev.kind)) {
+    if (!P.busy && (P.engine === 'claude' || EH_PROVEDOR(P.engine)) && ['text-delta', 'think-delta', 'tool-start'].includes(ev.kind)) {
       P.busy = true; setDot(P, 'busy'); comecarTurno(P); trabalhando(P);
     }
   }
@@ -6004,6 +6097,8 @@ MODOS.gemini = [
   { id: 'bypass', ic: 'unlock', nome: 'Sem pedir permissão', desc: 'Libera as ferramentas do Gemini automaticamente', curta: 'Faz tudo sem perguntar' },
 ];
 MODOS.grok = [MODOS.acp[0], MODOS.acp[3]];
+// as IAs de chave rodam no Claude Code: mesmos modos (manual, editar, plano, sem pedir permissão)
+for (const e of PROVEDORES_IDS) MODOS[e] = MODOS.claude;
 const esforcoDe = (P) => P.effort;
 /* Plano no Codex é collaborationMode, separado da permissão. A troca de motor preserva
    essa intenção; aqui a permissão equivalente continua Manual, nunca a opção mais solta. */
@@ -6309,7 +6404,7 @@ function avisoEnvio(P, txt, dica) {
 
 function subirNaLista(P) {
   const id = P.sessaoId || P.resumeId;
-  const lista = histCache[P.engine];
+  const lista = histCache[motorDaLista(P.engine)];
   if (!id || !lista) return;
   const i = lista.findIndex(s => s.id === id);
   if (i < 0) return;
@@ -6536,14 +6631,56 @@ function fecharMenus() {
 }
 document.addEventListener('click', fecharMenus);
 
-// link de site sempre abre no navegador do Mac, nunca dentro do app
+/* Link de site (09/10): o clique PERGUNTA onde abrir — dentro do Cockpit (navegador interno, onde dá
+   para marcar um trecho e pedir alteração, como no PDF) ou no navegador do Mac. Arquivo local segue
+   abrindo direto. No celular não existe navegador interno: abre como antes. */
+const SVG_LINK_COCKPIT = '<svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.25" y="3" width="11.5" height="10" rx="1.6"/><path d="M2.25 6.2h11.5"/></svg>';
+let linkEscolhaFechar = null;
+function fecharLinkEscolha() {
+  const m = document.getElementById('linkEscolha');
+  if (m) m.classList.add('hidden');
+  if (linkEscolhaFechar) { linkEscolhaFechar(); linkEscolhaFechar = null; }
+}
+function perguntarAbrirLink(href, ev, ancora) {
+  fecharLinkEscolha();
+  let m = document.getElementById('linkEscolha');
+  if (!m) { m = document.createElement('div'); m.id = 'linkEscolha'; m.setAttribute('role', 'menu'); document.body.appendChild(m); }
+  m.innerHTML = '<div class="le-url"></div>'
+    + '<button type="button" data-onde="cockpit" role="menuitem">' + SVG_LINK_COCKPIT + '<span>Abrir no Cockpit</span></button>'
+    + '<button type="button" data-onde="navegador" role="menuitem">' + ico('external') + '<span>Abrir no navegador</span></button>';
+  $('.le-url', m).textContent = href;
+  m.classList.remove('hidden');
+  const largura = m.offsetWidth, altura = m.offsetHeight;
+  m.style.left = Math.max(8, Math.min(ev.clientX, window.innerWidth - largura - 8)) + 'px';
+  m.style.top = Math.max(8, Math.min(ev.clientY + 6, window.innerHeight - altura - 8)) + 'px';
+  const dono = [...panes.values()].find(P => P.el && P.el.contains(ancora)) || focusPane;
+  const escolher = (onde) => {
+    fecharLinkEscolha();
+    if (onde === 'cockpit' && dono) verSite(dono, href); else window.api.abrirLink(href);
+  };
+  $$('button', m).forEach(b => { b.onclick = (e) => { e.stopPropagation(); escolher(b.dataset.onde); }; });
+  const fora = (e) => { if (!m.contains(e.target)) fecharLinkEscolha(); };
+  const tecla = (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fecharLinkEscolha(); } };
+  document.addEventListener('mousedown', fora, true);
+  document.addEventListener('keydown', tecla, true);
+  window.addEventListener('blur', fecharLinkEscolha);
+  linkEscolhaFechar = () => {
+    document.removeEventListener('mousedown', fora, true);
+    document.removeEventListener('keydown', tecla, true);
+    window.removeEventListener('blur', fecharLinkEscolha);
+  };
+  const primeiro = $('button', m); if (primeiro) primeiro.focus();
+}
 document.addEventListener('click', (e) => {
   const a = e.target.closest && e.target.closest('a[href]');
   if (!a) return;
   const href = a.getAttribute('href') || '';
   if (a.classList.contains('arquivo') || href.startsWith('#')) return;
   e.preventDefault(); e.stopPropagation();
-  if (/^https?:\/\//i.test(href)) window.api.abrirLink(href);
+  if (/^https?:\/\//i.test(href)) {
+    if (window.SEM_ELECTRON || !window.RevisaoArquivo) window.api.abrirLink(href);
+    else perguntarAbrirLink(href, e, a);
+  }
   else if (href.startsWith('file://')) window.api.abrirLink(decodeURIComponent(href.replace('file://', '')));
   else if (href.startsWith('/')) window.api.abrirLink(href);
 }, true);
@@ -8699,7 +8836,7 @@ function agPintarCartaoConversa(P) {
 }
 
 /* ============ conta e limite fixos na barra lateral ============ */
-const contaCache = { claude: null, codex: null, acp: null, gemini: null, grok: null };
+const contaCache = porMotor(null);
 
 /* O "Entrar" do cartao da conta chamava contaAcao(focusPane) — o motor do CHAT EM FOCO, nao o
    da IA do cartao. Com um chat do Codex em foco, clicar em "Entrar" no cartao do Claude rodava
@@ -8709,6 +8846,7 @@ const contaCache = { claude: null, codex: null, acp: null, gemini: null, grok: n
    login é sempre o pedido; o chat só empresta a janelinha, então sem chat daquela IA serve o
    que estiver em foco. outra = já tem conta e quer entrar em outra (sai e entra de novo). */
 function entrarNaConta(engine, outra, extra) {
+  if (EH_PROVEDOR(engine)) return abrirChaveProvedor(engine);
   let P = (focusPane && focusPane.engine === engine)
     ? focusPane
     : [...panes.values()].find((q) => q.engine === engine);
@@ -8716,6 +8854,64 @@ function entrarNaConta(engine, outra, extra) {
   // nenhum chat aberto: abre um da própria IA para a janelinha ter onde nascer
   if (!P) P = novoChatNaAba(engine);
   if (P) { setFocus(P); contaAcao(P, outra ? 'trocar' : 'login', engine, extra); return; }
+}
+
+/* ---- IAs de chave: colar, trocar e remover a chave (06/10) ----
+   DeepSeek, MiMo e Muse Spark não têm login por navegador: a conta é uma chave de API. Uma janela
+   só serve aos três: colar → o Cockpit confere com uma mensagem de 1 token → guarda no Mac
+   (~/.cockpit/provedores.json, só o dono lê) e acende o anel do topo. Com chave: mostra o final
+   dela e o saldo, e troca ou remove. Sem frase explicativa: rótulo e número. */
+const semChaveDoProvedor = (engine) => { const c = contaCache[engine]; return !!c && c.entrou === false; };
+async function abrirChaveProvedor(engine) {
+  const p = PROVEDORES_UI[engine];
+  if (!p) return;
+  fecharMenus();
+  let c = contaCache[engine];
+  try { c = await window.api.contaLer(engine); contaCache[engine] = c; } catch {}
+  const entrou = !!(c && c.entrou);
+  const cx = abrirModalGlobal();
+  cx.classList.add('cx-chave');
+  cx.innerHTML = '<div class="mo-top"><span class="mo-logo" data-motor="' + engine + '">' + svgMotor(engine) + '</span>'
+    + '<span class="mo-tit"></span><button class="mo-x" title="Fechar">' + ico('x') + '</button></div>'
+    + '<div class="mo-sub chv-estado"></div>'
+    + '<form class="mo-form"><input class="na-caminho" id="chvChave" type="password" autocomplete="off" spellcheck="false">'
+    + '<div class="mo-erro hidden" id="chvErro"></div></form>'
+    + '<div class="mo-rodape chv-rodape"><button type="button" class="mo-btn" id="chvPegar">Pegar chave</button>'
+    + (entrou ? '<button type="button" class="mo-btn perigo" id="chvRemover">Remover</button>' : '')
+    + '<span class="mo-gap"></span><button type="submit" form="chvForm" class="mo-btn destaque" id="chvOk"></button></div>';
+  $('.mo-tit', cx).textContent = 'Chave do ' + p.nome;
+  const estado = $('.chv-estado', cx);
+  if (entrou) estado.textContent = [c.email, c.saldoTexto ? 'Saldo ' + c.saldoTexto : ''].filter(Boolean).join(' · ');
+  else estado.classList.add('hidden');
+  const form = $('.mo-form', cx); form.id = 'chvForm';
+  const inp = $('#chvChave', cx), erro = $('#chvErro', cx), ok = $('#chvOk', cx);
+  inp.placeholder = (entrou ? 'Nova chave ' : 'Cole a chave ') + '(' + p.dica + ')';
+  ok.textContent = entrou ? 'Trocar' : 'Conectar';
+  const falhou = (t) => { erro.textContent = t; erro.classList.remove('hidden'); ok.disabled = false; ok.textContent = entrou ? 'Trocar' : 'Conectar'; };
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const chave = (inp.value || '').trim();
+    if (!chave) { inp.focus(); return; }
+    erro.classList.add('hidden'); ok.disabled = true; ok.textContent = 'Conferindo…';
+    let r = null;
+    try { r = await window.api.provedorSalvar({ engine, chave }); } catch (err) { r = { error: String((err && err.message) || err) }; }
+    if (!r || r.error) return falhou((r && r.error) || 'Não deu certo.');
+    contaCache[engine] = r.conta || null; contaLidaEm[engine] = Date.now();
+    fecharModalGlobal();
+    pintarContaLateral(engine, true); pintarContasAjustes(true);
+    mostrarAviso({ id: 'chave-' + engine, tipo: r.aviso ? 'alerta' : 'info',
+      texto: r.aviso ? p.nome + ' conectado. ' + r.aviso : p.nome + ' conectado.' });
+  };
+  $('#chvPegar', cx).onclick = () => { try { window.api.abrirLink(p.painel); } catch {} };
+  const rem = $('#chvRemover', cx);
+  if (rem) rem.onclick = async () => {
+    if (!confirm('Remover a chave do ' + p.nome + ' deste Mac?')) return;
+    try { await window.api.provedorRemover(engine); } catch {}
+    contaCache[engine] = { entrou: false }; fecharModalGlobal();
+    pintarContaLateral(engine, true); pintarContasAjustes(true);
+  };
+  $('.mo-x', cx).onclick = () => fecharModalGlobal();
+  setTimeout(() => inp.focus(), 50);
 }
 
 /* ---- "+ Adicionar conta" (29/09) ----
@@ -8737,6 +8933,7 @@ async function guardarContaSozinha(eng) {
   } catch { /* guardar é bônus: sem isso o login segue igual */ }
 }
 async function adicionarConta(eng) {
+  if (EH_PROVEDOR(eng)) return abrirChaveProvedor(eng);
   let c = contaCache[eng];
   if (!c) { try { c = await window.api.contaLer(eng); } catch {} }
   const entrou = !!(c && c.entrou);
@@ -8804,8 +9001,8 @@ async function pintarContasAjustes(forcar) {
       $('.ajc-n', linha).textContent = motor;
       $('.ajc-e', linha).textContent = !conta ? '…' : entrou ? (conta.email || conta.nome || conta.plano || 'Vinculada') : 'Não vinculada';
       const bt = $('.ajc-bt', linha);
-      bt.textContent = entrou ? 'Vincular outra' : 'Vincular uma conta';
-      bt.title = entrou ? 'Entrar em outra conta do ' + motor : '';
+      bt.textContent = EH_PROVEDOR(m) ? (entrou ? 'Trocar chave' : 'Colar chave') : (entrou ? 'Vincular outra' : 'Vincular uma conta');
+      bt.title = entrou ? (EH_PROVEDOR(m) ? 'Colar outra chave do ' + motor : 'Entrar em outra conta do ' + motor) : '';
       bt.onclick = (e) => { e.stopPropagation(); entrarNaConta(m, entrou); };
       linha.title = entrou ? [conta.email, conta.plano].filter(Boolean).join(' · ') : '';
       linha.onclick = entrou ? () => abrirContaDaLateral(m) : null;
@@ -8884,13 +9081,94 @@ function pintarAnelTopo(topo, engine, c) {
     + '<circle class="ut-trilho" cx="14" cy="14" r="' + R + '"></circle>'
     + (j ? '<circle class="ut-feito" cx="14" cy="14" r="' + R + '" stroke-dasharray="' + (volta * pct / 100).toFixed(2) + ' ' + volta.toFixed(2) + '"></circle>' : '')
     + '</svg><span class="ut-logo mo-logo" data-motor="' + engine + '">' + svgMotor(engine) + '</span></span>'
-    + '<span class="ut-pct">' + (j ? pct + '%' : '—') + '</span>';
+    + '<span class="ut-pct">' + (j ? pct + '%' : (entrou && c.saldoCurto ? escaparAtributo(c.saldoCurto) : '—')) + '</span>';
   el.setAttribute('aria-label', entrou
-    ? 'Uso do ' + nomeDoMotor(engine) + (j ? ': ' + pct + '%' : ', limite indisponível')
+    ? 'Uso do ' + nomeDoMotor(engine) + (j ? ': ' + pct + '%' : (c.saldoTexto ? ', saldo ' + c.saldoTexto : ', limite indisponível'))
     : nomeDoMotor(engine) + ': sem conta vinculada');
   // cartão aberto desta IA: repinta junto, com os números novos
   const cartao = $('#usoCartao');
   if (cartao && !cartao.classList.contains('hidden') && cartao.dataset.motor === engine) abrirCartaoUso(el, engine);
+}
+/* Uso do computador no topo (09/10): CPU, memória e disco, no mesmo desenho dos anéis das IAs
+   (ícone no meio, % ao lado). Lado direito da barra, o inverso dos limites das IAs. O main.js lê
+   a cada pedido (sistema:uso); aqui só pinta, de 3 em 3 segundos, e só com a janela à vista. */
+const PC_ICONES = {
+  cpu: '<svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1.6"/><path d="M6.5 1.9v2.1M9.5 1.9v2.1M6.5 12v2.1M9.5 12v2.1M1.9 6.5H4M1.9 9.5H4M12 6.5h2.1M12 9.5h2.1"/></svg>',
+  ram: '<svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.75" y="4.25" width="12.5" height="6.5" rx="1.3"/><path d="M4.5 10.75v2M8 10.75v2M11.5 10.75v2M4.75 7.5h1M7.5 7.5h1M10.25 7.5h1"/></svg>',
+  disco: '<svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="8.75" width="12" height="4.5" rx="1.3"/><path d="M2.6 8.75l1.7-5h7.4l1.7 5"/><path d="M11.4 11h.01"/></svg>',
+};
+const PC_ROTULOS = { cpu: 'CPU', ram: 'Memória', disco: 'Disco' };
+const gbTxt = (b) => (b / 1073741824).toFixed(1).replace('.', ',') + ' GB';
+let usoPcUltimo = null;
+function abrirCartaoPc(el, k) {
+  clearTimeout(cartaoUsoTimer);
+  let cartao = $('#usoCartao');
+  if (!cartao) {
+    cartao = document.createElement('div');
+    cartao.id = 'usoCartao';
+    cartao.setAttribute('role', 'tooltip');
+    cartao.addEventListener('mouseenter', () => clearTimeout(cartaoUsoTimer));
+    cartao.addEventListener('mouseleave', () => fecharCartaoUso(false));
+    document.body.appendChild(cartao);
+  }
+  const d = usoPcUltimo && usoPcUltimo[k], ok = !!(d && typeof d.pct === 'number');
+  const pct = ok ? Math.min(100, Math.max(0, Math.round(d.pct))) : 0;
+  const titulos = { cpu: 'Uso da CPU', ram: 'Uso da memória', disco: 'Uso do disco' };
+  const rotulos = { cpu: 'Agora', ram: 'Em uso', disco: 'Ocupado' };
+  const plano = k === 'cpu' && ok && d.nucleos ? d.nucleos + ' núcleos' : '';
+  let corpo = '<div class="uc-num">Indisponível</div>';
+  if (ok) {
+    const linhaGb = k === 'cpu' ? ''
+      : '<div class="uc-num uc-saldo">' + gbTxt(d.usado) + ' de ' + gbTxt(d.total) + ' · livre ' + gbTxt(Math.max(0, d.total - d.usado)) + '</div>';
+    corpo = '<div class="uc-jan" data-nivel="' + nivelDeUso(pct) + '"><div class="uc-lin"><span class="uc-rot">' + rotulos[k] + '</span></div>'
+      + '<div class="uc-barra"><span style="width:' + pct + '%"></span></div>'
+      + '<div class="uc-num">' + pct + '% usado · ' + (100 - pct) + '% livre</div></div>' + linhaGb;
+  }
+  cartao.dataset.motor = ''; cartao.dataset.pc = k;
+  cartao.innerHTML = '<div class="uc-top"><span class="uc-logo">' + PC_ICONES[k] + '</span><span class="uc-tit"></span>'
+    + (plano ? '<span class="uc-plano"></span>' : '') + '</div>' + corpo;
+  $('.uc-tit', cartao).textContent = titulos[k];
+  if (plano) $('.uc-plano', cartao).textContent = plano;
+  cartao.classList.remove('hidden');
+  const r = el.getBoundingClientRect(), w = cartao.offsetWidth || 268;
+  cartao.style.top = Math.round(r.bottom + 8) + 'px';
+  cartao.style.left = Math.round(Math.max(8, Math.min(r.left + r.width / 2 - w / 2, window.innerWidth - w - 8))) + 'px';
+}
+function pintarUsoPc(u) {
+  const topo = $('#usoPc'); if (!topo) return;
+  usoPcUltimo = u;
+  for (const k of ['cpu', 'ram', 'disco']) {
+    let el = $('.ut-ia[data-pc="' + k + '"]', topo);
+    if (!el) {
+      el = document.createElement('span'); el.className = 'ut-ia ut-pc'; el.dataset.pc = k; topo.appendChild(el);
+      el.addEventListener('mouseenter', () => abrirCartaoPc(el, k));
+      el.addEventListener('mouseleave', () => fecharCartaoUso(false));
+    }
+    const d = u && u[k], ok = !!(d && typeof d.pct === 'number');
+    const pct = ok ? Math.min(100, Math.max(0, Math.round(d.pct))) : 0;
+    const R = 11, volta = 2 * Math.PI * R;
+    el.dataset.nivel = ok ? nivelDeUso(pct) : '';
+    el.innerHTML = '<span class="ut-anel"><svg viewBox="0 0 28 28" aria-hidden="true">'
+      + '<circle class="ut-trilho" cx="14" cy="14" r="' + R + '"></circle>'
+      + (ok ? '<circle class="ut-feito" cx="14" cy="14" r="' + R + '" stroke-dasharray="' + (volta * pct / 100).toFixed(2) + ' ' + volta.toFixed(2) + '"></circle>' : '')
+      + '</svg><span class="ut-logo">' + PC_ICONES[k] + '</span></span>'
+      + '<span class="ut-pct">' + (ok ? pct + '%' : '—') + '</span>';
+    const detalhe = !ok ? '' : k === 'cpu' ? ' · ' + (d.nucleos || '') + ' núcleos' : ' · ' + gbTxt(d.usado) + ' de ' + gbTxt(d.total);
+    el.removeAttribute('title');
+    el.setAttribute('aria-label', PC_ROTULOS[k] + (ok ? ' ' + pct + '%' + detalhe : ': indisponível'));
+    const aberto = $('#usoCartao');
+    if (aberto && !aberto.classList.contains('hidden') && aberto.dataset.pc === k) abrirCartaoPc(el, k);
+  }
+}
+let usoPcTimer = 0;
+async function lerUsoPc() {
+  if (document.hidden || !window.api.sistemaUso) return;
+  try { pintarUsoPc(await window.api.sistemaUso()); } catch {}
+}
+function iniciarUsoPc() {
+  if (window.SEM_ELECTRON || !window.api.sistemaUso || !$('#usoPc')) return;
+  pintarUsoPc(null); lerUsoPc();
+  clearInterval(usoPcTimer); usoPcTimer = setInterval(lerUsoPc, 3000);
 }
 function textoRenova(ms) {
   if (!(ms > Date.now())) return 'Já renovou';
@@ -8925,13 +9203,14 @@ function abrirCartaoUso(el, engine) {
       + '<div class="uc-barra"><span style="width:' + pct + '%"></span></div>'
       + '<div class="uc-num">' + pct + '% usado · ' + (100 - pct) + '% restante</div></div>';
   };
-  const corpo = janela('Sessão', c.sessao) + janela('Semana', c.semana);
-  cartao.dataset.motor = engine;
+  const saldoLinha = c.saldoTexto ? '<div class="uc-num uc-saldo' + (c.semSaldo ? ' sem' : '') + '">Saldo ' + escaparAtributo(c.saldoTexto) + '</div>' : '';
+  const corpo = janela(EH_PROVEDOR(engine) ? 'Por minuto' : 'Sessão', c.sessao) + janela(EH_PROVEDOR(engine) ? 'Crédito' : 'Semana', c.semana) + saldoLinha;
+  cartao.dataset.motor = engine; cartao.dataset.pc = '';
   cartao.innerHTML = '<div class="uc-top"><span class="uc-logo mo-logo" data-motor="' + engine + '">' + svgMotor(engine) + '</span>'
     + '<span class="uc-tit"></span>' + (c.plano ? '<span class="uc-plano"></span>' : '') + '</div>'
-    + (corpo || '<div class="uc-num">Limite indisponível</div>')
+    + (corpo || '<div class="uc-num">' + (EH_PROVEDOR(engine) ? 'Saldo indisponível' : 'Limite indisponível') + '</div>')
     + (c.velho ? '<div class="uc-velho">Última leitura ' + escaparAtributo(haQuanto(c.velho)) + '</div>' : '');
-  $('.uc-tit', cartao).textContent = 'Uso do ' + nomeDoMotor(engine);
+  $('.uc-tit', cartao).textContent = (EH_PROVEDOR(engine) ? 'Saldo do ' : 'Uso do ') + nomeDoMotor(engine);
   if (c.plano) $('.uc-plano', cartao).textContent = String(c.plano).charAt(0).toUpperCase() + String(c.plano).slice(1);
   cartao.classList.remove('hidden');
   // preso embaixo do anel; sem sair da janela pela direita
@@ -9005,6 +9284,7 @@ function pintarBlocoDeUso(cx, engine, c) {
 /* clicar no bloco abre a janela da conta daquela IA. A janelinha nasce DENTRO de um chat: tem
    de ser um que esteja na tela, senao o clique parece nao fazer nada. */
 function abrirContaDaLateral(engine) {
+  if (EH_PROVEDOR(engine)) return abrirChaveProvedor(engine);
   const naAba = abaAtiva ? abaAtiva.ordem.map(id => panes.get(id)).filter(Boolean) : [];
   const P = naAba.find(q => q.engine === engine) || (focusPane && naAba.includes(focusPane) ? focusPane : naAba[0])
          || [...panes.values()].find(q => q.engine === engine) || focusPane || panes.values().next().value;
@@ -9014,6 +9294,7 @@ function abrirContaDaLateral(engine) {
 /* O 2o argumento diz de QUAL motor e a conta. Sem ele, clicar no cartao da conta do Claude
    na coluna da esquerda abria a conta do CODEX sempre que o chat em foco fosse do Codex. */
 async function janelaConta(P, motorPedido) {
+  if (EH_PROVEDOR(motorPedido || P.engine)) return abrirChaveProvedor(motorPedido || P.engine);
   fecharMenus();
   document.body.classList.remove('gaveta');
   const eng = motorPedido || P.engine;
@@ -9223,14 +9504,14 @@ const USO_AVISO_SESSAO = 90;
 const USO_AVISO_SEMANA = 90;
 const USO_DENOVO = 5;
 const USO_INTERVALO = 300000;      // relê no maximo de 5 em 5 minutos
-const USO = { claude: null, codex: null, acp: null, gemini: null, grok: null };
+const USO = porMotor(null);
 /* O "ja fechei este aviso" mora aqui, por MOTOR — antes ficava em cada chat, entao com 3 chats
    abertos apareciam 3 tarjas iguais e ele tinha de fechar uma por uma. E quando a leitura do
    limite falhava (rede, 429, token), o codigo antigo APAGAVA o "fechado" e a tarja renascia
    sozinha na leitura seguinte. Agora falha de leitura so esconde; nao esquece. */
-const USO_FECHADO = { claude: null, codex: null, acp: null, gemini: null, grok: null };
-const USO_QUANDO = { claude: 0, codex: 0, acp: 0, gemini: 0, grok: 0 };
-const USO_LENDO = { claude: false, codex: false, acp: false, gemini: false, grok: false };
+const USO_FECHADO = porMotor(null);
+const USO_QUANDO = porMotor(0);
+const USO_LENDO = porMotor(false);
 
 const codexGlobais = { contaTimer: null, conectoresTimer: null, lendoConta: false, lendoConectores: false, vistos: new Map() };
 function receberEventoGlobalCodex(ev) {
@@ -9335,7 +9616,7 @@ function pintarLimiteMini(P) {
   const ps = u ? usoPct(u.sessao) : null, pw = u ? usoPct(u.semana) : null;
   const partes = [];
   if (ps !== null) partes.push('sessão ' + ps + '%');
-  if (pw !== null) partes.push('semana ' + pw + '%');
+  if (pw !== null) partes.push((EH_PROVEDOR(P.engine) ? 'crédito ' : 'semana ') + pw + '%');
   el.textContent = partes.join(' · ');
   el.title = partes.length ? 'Quanto do plano do ' + nomeDoMotor(P.engine) + ' já foi usado' : '';
 }
@@ -9372,7 +9653,7 @@ function pintarUso(P) {
   faixa.innerHTML = '<svg class="uso-anel" viewBox="0 0 16 16" aria-hidden="true">'
     + '<circle class="ua-fundo" cx="8" cy="8" r="6"></circle>'
     + '<circle class="ua-fio" cx="8" cy="8" r="6" stroke-dasharray="' + cheio + ' 37.7" transform="rotate(-90 8 8)"></circle></svg>'
-    + '<span class="uso-alerta">' + (naSessao ? 'Sessão ' : 'Semana ') + (pct === null ? '—' : pct + '%') + '</span>'
+    + '<span class="uso-alerta">' + (naSessao ? 'Sessão ' : (EH_PROVEDOR(P.engine) ? 'Crédito ' : 'Semana ')) + (pct === null ? '—' : pct + '%') + '</span>'
     + (zera && zera.reseta ? '<span class="uso-zera">zera ' + quandoFuturo(zera.reseta) + '</span>' : '')
     // leitura atual falhou e este numero e' reaproveitado de antes: avisar que esta desatualizado,
     // senao a tarja mais importante da tela passa um numero velho como se fosse o de agora
@@ -9452,6 +9733,7 @@ function lerStatusConta(txt) {
    nada continua caindo no motor do proprio chat, como antes. */
 async function contaAcao(P, acao, motorPedido, destino) {
   const eng = motorPedido || P.engine;
+  if (EH_PROVEDOR(eng)) { if (acao !== 'status') abrirChaveProvedor(eng); return; }
   const cwd = destino && destino.cwd || '';
   const remoto = NA_VPS(cwd);
   const r = await window.api.auth({ engine: eng, acao, cwd });
@@ -10020,6 +10302,8 @@ function cabecaVisor(v, nome, caminho, icone) {
 function fecharVisor(P) {
   if (!P || !P.el) return;
   const v = $('.p-visor', P.el); if (!v) return;
+  v.pedidoArquivo = null;
+  if (P.revisorArquivo) { P.revisorArquivo.destroy(); P.revisorArquivo = null; }
   v.classList.add('hidden'); $('.visor-corpo', v).innerHTML = '';
 }
 
@@ -10040,6 +10324,7 @@ function recadoVisor(corpo, linhas) {
 
 async function verArquivo(P, caminho) {
   const v = $('.p-visor', P.el);
+  if (P.revisorArquivo) { P.revisorArquivo.destroy(); P.revisorArquivo = null; }
   const pedido = {}; v.pedidoArquivo = pedido;
   const corpo = $('.visor-corpo', v);
   posicionarVisor(v);
@@ -10057,10 +10342,38 @@ async function verArquivo(P, caminho) {
   /* Arquivo da VPS nao tem o que abrir no Finder. TOGGLE, nunca add: o visor e o MESMO
      elemento para todos os arquivos daquele painel, e um "add" grudaria o botao escondido
      para sempre no proximo arquivo local. */
-  $('.visor-abrir', v).classList.toggle('hidden', NA_VPS(caminho));
+  $('.visor-abrir', v).classList.toggle('hidden', NA_VPS(caminho) || !!window.SEM_ELECTRON);
   corpo.innerHTML = '<div class="visor-vazio">abrindo…</div>';
 
   let a;
+  if (/\.(pdf|docx?|html?)$/i.test(caminho) && !NA_VPS(caminho) && window.RevisaoArquivo && (window.api.revisarArquivo || window.api.verArquivo)) {
+    try {
+      a = await (window.api.revisarArquivo || window.api.verArquivo)(caminho);
+      if (v.pedidoArquivo !== pedido || v.classList.contains('hidden')) return;
+      if (!a || a.erro) { recadoVisor(corpo, ['Não consegui abrir.', a && a.erro || '']); return; }
+      cabecaVisor(v, a.nome, caminho, 'file');
+      const dono = { engine: P.engine, revisao: P.revisaoConversa || 0 };
+      P.revisorArquivo = window.RevisaoArquivo.abrir({ corpo, dados: a,
+        chaveConversa: [P.engine, P.cwd, P.sessaoId || P.resumeId || P.id].join('|'),
+        conferir: async o => window.api.revisaoConferir ? window.api.revisaoConferir(o) : { ok: (await window.api.verArquivo(o.caminho))?.hash === o.hash },
+        enviar: async texto => {
+          if (panes.get(P.id) !== P || P.engine !== dono.engine || (P.revisaoConversa || 0) !== dono.revisao) return { ok: false, error: 'Esta conversa mudou. Reabra o arquivo na conversa em que quer enviar os ajustes.' };
+          const inp = $('.p-input', P.el), rascunho = inp.value;
+          const r = await send(P, texto, { ajustes: true });
+          if (r && r.ok) { fecharVisor(P); setFocus(P); }
+          else if (inp.value === texto) { inp.value = rascunho; inp.dispatchEvent(new Event('input', { bubbles: true })); }
+          return r;
+        },
+      });
+      await P.revisorArquivo.ready;
+    } catch (e) {
+      if (v.pedidoArquivo === pedido && !v.classList.contains('hidden')) {
+        if (P.revisorArquivo) { P.revisorArquivo.destroy(); P.revisorArquivo = null; }
+        recadoVisor(corpo, ['Não consegui abrir.', e.message || '']);
+      }
+    }
+    return;
+  }
   try { a = await lerParaVisor(caminho); }
   catch (e) { a = { erro: e.message || 'Falha ao ler o arquivo.' }; }
   if (v.pedidoArquivo !== pedido || v.classList.contains('hidden')) return;
@@ -10081,6 +10394,60 @@ async function verArquivo(P, caminho) {
     }
   }
   else recadoVisor(corpo, ['Este tipo não abre aqui dentro.', 'Use o botão do canto para abrir no Mac.']);
+}
+
+/* Página web no visor (09/10): o mesmo painel de ajustes do PDF/Word, com a página de verdade dentro
+   (webview). Selecionar texto ou marcar uma área → "Ajustar" → o pedido vai para a conversa que abriu. */
+async function verSite(P, url) {
+  const v = $('.p-visor', P.el);
+  if (P.revisorArquivo) { P.revisorArquivo.destroy(); P.revisorArquivo = null; }
+  const pedido = {}; v.pedidoArquivo = pedido;
+  const corpo = $('.visor-corpo', v);
+  posicionarVisor(v);
+  v.classList.remove('hidden');
+  v.onclick = (e) => { if (e.target === v) fecharVisor(P); };
+  let host = url, origem = url;
+  try { const u = new URL(url); host = u.host; origem = u.origin; } catch {}
+  cabecaVisor(v, host, '', 'external');
+  $('.visor-nome', v).textContent = host;
+  const cam = $('.visor-caminho', v); if (cam) { cam.textContent = url; cam.title = url; }
+  $('.visor-x', v).innerHTML = ico('x');
+  $('.visor-x', v).onclick = () => fecharVisor(P);
+  const abrirFora = $('.visor-abrir', v);
+  abrirFora.innerHTML = ico('external') + '<span>Abrir no navegador</span>';
+  abrirFora.title = 'Abrir no navegador do Mac';
+  abrirFora.classList.remove('hidden');
+  abrirFora.onclick = () => window.api.openUrl((P.revisorArquivo && P.revisorArquivo.urlAtual()) || url);
+  corpo.innerHTML = '<div class="visor-vazio">abrindo…</div>';
+  try {
+    const dono = { engine: P.engine, revisao: P.revisaoConversa || 0 };
+    P.revisorArquivo = window.RevisaoArquivo.abrir({ corpo,
+      dados: { tipo: 'site', url, nome: host, path: 'site:' + origem, hash: 'site' },
+      chaveConversa: [P.engine, P.cwd, P.sessaoId || P.resumeId || P.id].join('|'),
+      conferir: async () => ({ ok: true }),
+      enviar: async texto => {
+        if (panes.get(P.id) !== P || P.engine !== dono.engine || (P.revisaoConversa || 0) !== dono.revisao) return { ok: false, error: 'Esta conversa mudou. Abra a página de novo na conversa em que quer enviar os ajustes.' };
+        const inp = $('.p-input', P.el), rascunho = inp.value;
+        const r = await send(P, texto, { ajustes: true });
+        if (r && r.ok) { fecharVisor(P); setFocus(P); }
+        else if (inp.value === texto) { inp.value = rascunho; inp.dispatchEvent(new Event('input', { bubbles: true })); }
+        return r;
+      },
+    });
+    // título e endereço do cabeçalho acompanham a navegação dentro da página
+    const nome = $('.visor-nome', v);
+    const acompanha = setInterval(() => {
+      const r = P.revisorArquivo;
+      if (v.pedidoArquivo !== pedido || v.classList.contains('hidden') || !r) { clearInterval(acompanha); return; }
+      try { nome.textContent = r.tituloAtual() || host; if (cam) { cam.textContent = r.urlAtual(); cam.title = r.urlAtual(); } } catch {}
+    }, 1000);
+    await P.revisorArquivo.ready;
+  } catch (e) {
+    if (v.pedidoArquivo === pedido && !v.classList.contains('hidden')) {
+      if (P.revisorArquivo) { P.revisorArquivo.destroy(); P.revisorArquivo = null; }
+      recadoVisor(corpo, ['Não consegui abrir a página.', e.message || '']);
+    }
+  }
 }
 
 /* ============ conversas recentes ============ */
@@ -10221,6 +10588,7 @@ function pintarErrosDaLista() {
 }
 
 async function loadHist(engine, force) {
+  engine = motorDaLista(engine);
   const pedido = leituraHistorico[engine] = (leituraHistorico[engine] || 0) + 1;
   const box = caixaHist();
   /* 25/09: a caixa e de TODOS os motores. "Carregando…" e o erro de leitura so ocupam a caixa
@@ -10275,6 +10643,7 @@ async function lerClientes() {
 // o caminho esta dentro da pasta alvo (ou e ela mesma)?
 function dentroDe(cwd, alvo) {
   if (!cwd || !alvo) return false;
+  cwd = cwd.normalize('NFC'); alvo = alvo.normalize('NFC');
   return cwd === alvo || cwd.startsWith(alvo.replace(/\/+$/, '') + '/');
 }
 /* De qualquer caminho, descobre de qual cliente ele e — e o que define em qual aba a conversa
@@ -10283,7 +10652,8 @@ function dentroDe(cwd, alvo) {
    Pasta fora de Projetos devolve ela mesma, e nao vazio: vazio queria dizer "Mac
    inteiro", entao uma aba dessas despejava TODAS as conversas do computador na lista. */
 function clienteDe(cwd) {
-  const raiz = PROJETOS();
+  const raiz = PROJETOS().normalize('NFC');
+  cwd = (cwd || '').normalize('NFC');
   if (!dentroDe(cwd, raiz)) return cwd || '';
   const primeiro = cwd.slice(raiz.length + 1).split('/').filter(Boolean)[0];
   return primeiro ? raiz + '/' + primeiro : raiz;
@@ -10464,7 +10834,7 @@ function pintarConversas() { return paintHist(VISTA_CONVERSAS, listaUnica()); }
    e entram na lista unica tambem: antes o ⌘P com um chat ACP em foco abria a coluna dele, e sem
    ler aqui elas sumiam da lista e da busca (e a parte ACP de uma cadeia virava fantasma). E
    barato: e um JSONL por sessao que o Cockpit mesmo grava. */
-const MOTORES_DA_LISTA = [...MOTORES_VISIVEIS, 'acp'];
+const MOTORES_DA_LISTA = [...MOTORES_VISIVEIS.filter(m => !EH_PROVEDOR(m)), 'acp'];
 let costuraAntigaPedida = false;
 /* Le as conversas de todas as IAs e a costura entre elas. As listas chegam cada uma no seu
    tempo (o Codex demora mais): a lista vai se completando, cada chegada redesenha. */
@@ -10503,8 +10873,8 @@ function logosDaConversa(s) {
 // nome novo dado pela lista ou pelo lapis do chat: vale na hora para a linha e para a cadeia
 function lembrarNomeDaParte(p, nome) {
   if (!p || !p.id || !nome) return;
-  if (Array.isArray(histCache[p.engine])) {
-    for (const x of histCache[p.engine]) if (x.id === p.id && (!p.file || !x.file || x.file === p.file)) x.title = nome;
+  if (Array.isArray(histCache[motorDaLista(p.engine)])) {
+    for (const x of histCache[motorDaLista(p.engine)]) if (x.id === p.id && (!p.file || !x.file || x.file === p.file)) x.title = nome;
   }
   if (Object.values(LIGACOES).some(l => (l.engine === p.engine && l.id === p.id) || (l.anterior.engine === p.engine && l.anterior.id === p.id))) {
     NOMES_LIGADOS[p.id] = nome;
@@ -10792,7 +11162,7 @@ function pintarAberta(d) {
     && !(F.sessaoFile && arq && F.sessaoFile !== arq));
   d.classList.toggle('ab-claude', eng === 'claude');
   d.classList.toggle('ab-codex', eng === 'codex');
-  for (const e of ['gemini', 'grok']) d.classList.toggle('ab-' + e, eng === e);
+  for (const e of ['gemini', 'grok', ...PROVEDORES_IDS]) d.classList.toggle('ab-' + e, eng === e);
   d.classList.toggle('ab-acp', eng === 'acp');   // leva 12.4: a moldura da conversa aberta
 }
 function marcarAbertas() {
@@ -10960,7 +11330,7 @@ async function esquecerParteApagada(s) {
     for (const c of (ab.chats || [])) if (c && ehEsta(c.parteAnterior)) delete c.parteAnterior;
   }
   // R2-008: filtra por id E arquivo — senão a conversa irmã (arquivo diferente, mesmo id) sumia da lista
-  if (Array.isArray(histCache[s.engine])) histCache[s.engine] = histCache[s.engine].filter(x => !(x.id === s.id && (x.file || '') === (s.file || '')));
+  { const ml = motorDaLista(s.engine); if (Array.isArray(histCache[ml])) histCache[ml] = histCache[ml].filter(x => !(x.id === s.id && (x.file || '') === (s.file || ''))); }
   if (Array.isArray(cfg.favoritos)) cfg.favoritos = cfg.favoritos.filter(k => k !== chaveFav(s));
   if (cfg.grupoSessao) delete cfg.grupoSessao[chaveFav(s)];
   // a costura com as outras partes sai junto (o main tira do ligacoes.json no apagar)
@@ -10989,7 +11359,7 @@ function menuDaConversa(bt, s, d) {
    R10: a chave TEM de ser cfg.gruposConversa — o savePanes() faz `delete cfg.grupos` a cada
    salvamento, então um grupo guardado em cfg.grupos sumiria sozinho no salvamento seguinte. */
 const GRUPO_CORES = ['#6ea8fe', '#d97757', '#5aa469', '#d7ba7d', '#e05252', '#b083f0', '#f0839f', '#4fd1c5'];
-const filtroGrupo = { claude: null, codex: null, acp: null, gemini: null, grok: null, todas: null };   // não é salvo: volta a "Todos" a cada abertura
+const filtroGrupo = { ...porMotor(null), todas: null };   // não é salvo: volta a "Todos" a cada abertura
 // a cor entra em style: se o config foi editado na mão, só passa o que é cor de verdade
 const corSegura = (c) => (/^#[0-9a-fA-F]{3,8}$/.test(String(c || '')) ? String(c) : GRUPO_CORES[0]);
 
@@ -11615,6 +11985,41 @@ document.querySelectorAll('[data-new]').forEach(b =>
 {
 }
 
+/* ============ nova janela (09/10) ============
+   Arrastar um chat ou uma aba para FORA do Cockpit (ou Dock > Nova janela) abre outra janela.
+   O chat leva a conversa junto: a janela nova reabre a mesma sessão. Chat trabalhando não vai
+   (mover no meio do turno cortaria o agente). */
+const saiuDaJanela = (ev) => ev.clientX < 0 || ev.clientY < 0 || ev.clientX > window.innerWidth || ev.clientY > window.innerHeight;
+const chatOcupado = (P) => !!(P && (P.busy || agTrabalhando(P)));
+function avisoJanela(texto) { try { mostrarAviso({ id: 'nova-janela', tipo: 'alerta', texto }); } catch {} }
+async function levarChatParaNovaJanela(P) {
+  if (window.SEM_ELECTRON || !window.api.janelaNova) return;
+  if (chatOcupado(P)) { avisoJanela('Esse chat está trabalhando. Espere ele terminar para abrir em outra janela.'); return; }
+  const A = abaDe(P), c = serializarChat(P); if (!c) return;
+  const payload = { abas: [{ cwd: (A && A.cwd) || P.cwd, ativo: 0, chats: [c] }], abaAberta: 0 };
+  await closePane(P.id, true);   // sai daqui antes: a mesma conversa não pode ficar presa nas duas telas
+  const r = await window.api.janelaNova(payload).catch(() => null);
+  if (!r || !r.ok) avisoJanela('Não consegui abrir a nova janela. A conversa continua na lista, é só abrir de novo.');
+}
+async function levarAbaParaNovaJanela(A) {
+  if (window.SEM_ELECTRON || !window.api.janelaNova || !A) return;
+  if (A.ordem.some(id => chatOcupado(panes.get(id)))) { avisoJanela('Tem chat trabalhando nesta pasta. Espere terminar para abrir em outra janela.'); return; }
+  const chats = A.ordem.map(id => serializarChat(panes.get(id))).filter(Boolean);
+  if (!chats.length) return;
+  const payload = { abas: [{ cwd: A.cwd, ativo: Math.max(0, A.ordem.indexOf(A.ativo)), chats }], abaAberta: 0 };
+  await fecharAba(A);
+  const r = await window.api.janelaNova(payload).catch(() => null);
+  if (!r || !r.ok) avisoJanela('Não consegui abrir a nova janela. As conversas continuam na lista, é só abrir de novo.');
+}
+// fechar uma janela extra: o main pede, ela para os chats e terminais dela e devolve o "pode fechar"
+if (window.api && window.api.onJanelaEncerrar) {
+  window.api.onJanelaEncerrar(async () => {
+    try { await Promise.all([...panes.values()].map(P => window.api.paneStop({ paneId: P.id, engine: P.engine }).catch(() => {}))); } catch {}
+    for (const P of panes.values()) { try { if (P.fecharTerminal) P.fecharTerminal(); } catch {} }
+    try { window.api.janelaFecharAgora(); } catch {}
+  });
+}
+
 /* ============ arrastar: chats dentro da aba, e abas entre si ============ */
 
 // pega um chat pelo cabecalho e leva para outra posicao (ou para outra aba)
@@ -11639,17 +12044,21 @@ function comecarArrastePane(P, e0) {
     }
     fantasma.style.left = (ev.clientX + 13) + 'px';
     fantasma.style.top = (ev.clientY - 15) + 'px';
-    alvo = alvoDoPane(ev, P);
+    const fora = saiuDaJanela(ev);
+    fantasma.classList.toggle('fora', fora);
+    $('.ft-n', fantasma).textContent = fora ? 'Soltar para abrir em nova janela' : (P.titulo || 'Conversa nova');
+    alvo = fora ? null : alvoDoPane(ev, P);
     pintarAlvoPane(alvo, marca);
   };
 
-  const up = () => {
+  const up = (ev) => {
     window.removeEventListener('mousemove', move);
     window.removeEventListener('mouseup', up);
     document.body.classList.remove('arrastando-aba');
     if (fantasma) fantasma.remove();
     if (marca) marca.remove();
     P.el.classList.remove('saindo');
+    if (ativo && ev && saiuDaJanela(ev)) { levarChatParaNovaJanela(P); return; }
     if (ativo && alvo) soltarPane(P, alvo);
   };
 
@@ -11732,6 +12141,10 @@ function comecarArrasteAba(A, e0) {
     }
     fantasma.style.left = (ev.clientX + 13) + 'px';
     fantasma.style.top = (ev.clientY - 15) + 'px';
+    const fora = saiuDaJanela(ev);
+    fantasma.classList.toggle('fora', fora);
+    $('.ft-n', fantasma).textContent = fora ? 'Soltar para abrir em nova janela' : nomeProjeto(A.cwd);
+    if (fora) { marca.style.display = 'none'; indice = null; return; }
 
     const lista = $('#abasLista');
     const els = [...lista.children];
@@ -11749,13 +12162,14 @@ function comecarArrasteAba(A, e0) {
     marca.style.height = r0.height + 'px';
   };
 
-  const up = () => {
+  const up = (ev) => {
     window.removeEventListener('mousemove', move);
     window.removeEventListener('mouseup', up);
     document.body.classList.remove('arrastando-aba');
     if (fantasma) fantasma.remove();
     if (marca) marca.remove();
     A.el.classList.remove('saindo');
+    if (ativo && ev && saiuDaJanela(ev)) { levarAbaParaNovaJanela(A); return; }
     if (!ativo || indice == null) return;
     const lista = $('#abasLista');
     const els = [...lista.children];
@@ -11955,8 +12369,8 @@ $('#btnNovoChat').addEventListener('click', () => novoChatNaAba());
    acompanham), e isso por sua vez dispara o evento 'cockpit:aparencia' logo abaixo. */
 function aplicarTema(t) {
   const escolha = window.Aparencia ? window.Aparencia.aplicar(t)
-    : (t === 'escura' || t === 'escuro' ? 'escura' : (t === 'clara' || t === 'claro' || t === 'jornal') ? 'clara' : 'auto');
-  if (!window.Aparencia) document.documentElement.setAttribute('data-theme', escolha === 'clara' ? 'light' : 'dark');
+    : (t === 'escura' || t === 'escuro' ? 'escura' : t === 'jornal' ? 'jornal' : (t === 'clara' || t === 'claro') ? 'clara' : 'auto');
+  if (!window.Aparencia) document.documentElement.setAttribute('data-theme', escolha === 'jornal' ? 'light-paper' : escolha === 'clara' ? 'light' : 'dark');
   // so no Mac: no celular o web.js guarda o tema na gaveta do aparelho, e a migracao ali pareceria
   // um toque dele (e prenderia o celular numa escolha que ele nunca fez)
   if (!window.SEM_ELECTRON && cfg && cfg.tema !== undefined && cfg.tema !== escolha) cfg.tema = escolha;
@@ -12164,7 +12578,7 @@ function torreVisivel() {
   const v = $('.side-view[data-view="conversas"]'), lat = $('#sidebar');
   return !!v && !v.classList.contains('hidden') && !!lat && !lat.classList.contains('hidden');
 }
-const nomeMotor = (e) => ({ claude: 'Claude', codex: 'Codex', acp: 'ACP', gemini: 'Gemini', grok: 'Grok' }[e] || 'IA');
+const nomeMotor = (e) => NOME_MOTOR[e] || 'IA';
 
 /* O estado sai do MESMO lugar que a tela usa, para os dois nunca discordarem: a tarja de
    permissão (`.pane-perm` sem `hidden`), as perguntas do Codex (`P.questions`), o `P.busy` e a
@@ -12477,9 +12891,9 @@ setInterval(() => {
   if (document.hidden) return;
   if (!$('#usoTopo') && ($('#sidebar').classList.contains('hidden') || !lateralAberta())) return;
   // Gemini e Grok não passam pelo lerUso: a conta relê o uso deles, no máximo a cada 5 min
-  for (const eng of ['gemini', 'grok']) if (contaCache[eng] && contaCache[eng].entrou && Date.now() - contaLidaEm[eng] > 300000) pintarContaLateral(eng, true);
+  for (const eng of ['gemini', 'grok', ...PROVEDORES_IDS].filter(e => MOTORES_VISIVEIS.includes(e))) if (contaCache[eng] && contaCache[eng].entrou && Date.now() - contaLidaEm[eng] > 300000) pintarContaLateral(eng, true);
   // 25/09: a vista única mostra o uso de todas: relê as duas que têm limite de sessão e semana
-  for (const eng of ['claude', 'codex']) if (contaCache[eng]) lerUso(eng, true);   // o lerUso repinta a lateral
+  for (const eng of ['claude', 'codex', ...PROVEDORES_IDS].filter(e => MOTORES_VISIVEIS.includes(e))) if (contaCache[eng] && (!EH_PROVEDOR(eng) || contaCache[eng].entrou)) lerUso(eng, true);   // o lerUso repinta a lateral
 }, 120000);
 /* 25/09: ele trocou de IA no celular e voltou para o Mac com a lateral aberta: a costura gravada
    la entra na lista na hora, sem precisar fechar e abrir a coluna (no celular quem faz isso e o
@@ -12961,6 +13375,13 @@ document.addEventListener('keydown', (e) => {
     PESSOAL_NOME = pe.nome || '';
     $$('.na-onde[data-onde="vps"]').forEach(b => b.classList.toggle('hidden', !pe.servidor));
     cfg = await window.api.getConfig();
+    // janela extra: as abas dela vêm do main (nada do config.json), vazias ou com o chat/aba que foi arrastado
+    if (JANELA_N && window.api.janelaInicial) {
+      const ini = await window.api.janelaInicial().catch(() => null);
+      cfg.abas = (ini && Array.isArray(ini.abas)) ? ini.abas : [];
+      cfg.abaAberta = (ini && ini.abaAberta) || 0;
+      document.title = 'Cockpit · janela ' + JANELA_N;
+    }
     cfg.defCwd = cfg.defCwd || HOME;
     pintarCaminho($('#defCwd'), cfg.defCwd);
     $('#chkRobos').checked = !!cfg.verRobos;
@@ -13028,6 +13449,7 @@ document.addEventListener('keydown', (e) => {
     for (const eng of MOTORES_VISIVEIS) pintarAnelTopo($('#usoTopo'), eng, contaCache[eng]);
     pintarUsoLateral();
   }
+  iniciarUsoPc();
   // leva 12.5: o radar de motores instalados, sem segurar o boot e sem derrubar nada se falhar
   if (window.api.motoresDisponiveis) window.api.motoresDisponiveis().then(m => {
     MOTORES_OK = m || null;
@@ -13038,6 +13460,7 @@ document.addEventListener('keydown', (e) => {
     naPintar();
   }).catch(() => {});
   if (!noTelefone && window.api.catalogoEstado) window.api.catalogoEstado().then(aplicarCatalogoModelos).catch(() => {});
+  if (window.api.geminiModelos) Promise.resolve(window.api.geminiModelos()).then(aplicarModelosGemini).catch(() => {});
   if (!noTelefone) window.api.codexModels().then(ms => {
     if (ms && ms.length) { MODELOS_CODEX = traduzCodex(ms); for (const P of panes.values()) if (P.engine === 'codex') fillModels(P); }
   });
@@ -13092,5 +13515,64 @@ document.addEventListener('keydown', (e) => {
   /* leva 10.6: radar de versão. Atrasado de propósito: a consulta ao npm leva segundos e o
      boot não pode esperar por ela. Se ainda não houver chat nenhum, ele mesmo se reagenda. */
   setTimeout(checarVersoesDosMotores, 12000);
+  window.__cockpitPronto = true;
   window.dispatchEvent(new Event('cockpit:pronto'));
+})();
+
+/* ============ rascunho que sobrevive a recarregar a tela (só no Mac) ============
+   Recarregar a tela devolvia as abas e os chats, mas o texto que ele estava escrevendo no
+   campo sumia. Com a tela viva a recarga virou rotina (toda publicação de tela), então o
+   texto passa a ser guardado e reposto. O telefone já tinha o dele (mobile.js); este é o do
+   Mac, um por janela. Só texto: anexo não entra.
+   Casa pelo fio da conversa; chat sem conversa ainda casa pela posição. Rascunho de mais de
+   um dia não volta. Painel que não existe mais não é recriado. */
+(function () {
+  if (window.SEM_ELECTRON) return;
+  const CHAVE = 'cockpit:rascunhos-mac:' + JANELA_N, VALIDADE = 24 * 60 * 60 * 1000;
+  const fio = P => P.sessaoId || P.resumeId || '';
+  let pronto = false, relogio = 0;
+  function guardar() {
+    clearTimeout(relogio);
+    if (!pronto) return;
+    const agora = Date.now();
+    const itens = [...panes.values()].map((P, indice) => ({
+      engine: P.engine, cwd: P.cwd, fio: fio(P), indice, em: agora,
+      texto: (P.el.querySelector('.p-input') || {}).value || '',
+    })).filter(x => x.texto);
+    try {
+      if (itens.length) localStorage.setItem(CHAVE, JSON.stringify(itens));
+      else localStorage.removeItem(CHAVE);
+    } catch {}
+  }
+  function repor() {
+    let itens = [];
+    try { itens = JSON.parse(localStorage.getItem(CHAVE) || '[]'); } catch {}
+    if (!Array.isArray(itens)) return;
+    const usados = new Set(), lista = [...panes.values()];
+    for (const item of itens) {
+      if (!item || typeof item.texto !== 'string' || Date.now() - (Number(item.em) || 0) > VALIDADE) continue;
+      const P = lista.find((p, indice) => !usados.has(p) && p.engine === item.engine && p.cwd === item.cwd
+        && (item.fio ? item.fio === fio(p) : !fio(p) && item.indice === indice));
+      if (!P) continue;
+      usados.add(P);
+      const campo = P.el.querySelector('.p-input');
+      if (!campo || campo.value) continue;
+      campo.value = item.texto;
+      campo.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+  const comecar = () => { if (pronto) return; try { repor(); } catch {} pronto = true; };
+  if (window.__cockpitPronto) comecar(); else window.addEventListener('cockpit:pronto', comecar);
+  // não gravar a cada tecla: espera ele parar de digitar meio segundo
+  document.addEventListener('input', e => {
+    if (e.target.matches && e.target.matches('.p-input')) { clearTimeout(relogio); relogio = setTimeout(guardar, 500); }
+  });
+  // mandou: o campo já esvaziou, então gravar de novo é o que apaga o rascunho
+  document.addEventListener('click', e => { if (e.target.closest && e.target.closest('.p-send')) setTimeout(guardar, 0); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey && e.target.matches && e.target.matches('.p-input')) setTimeout(guardar, 0);
+  });
+  window.addEventListener('blur', guardar);
+  window.addEventListener('pagehide', guardar);
+  window.addEventListener('cockpit:salvar-rascunhos', guardar);
 })();

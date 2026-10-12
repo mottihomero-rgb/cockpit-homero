@@ -97,6 +97,8 @@ function montarDrag(ordemIds, larguras) {
     window: win, abas, savePanes() {},
   };
   vm.createContext(c);
+  // 09/10 (várias janelas): o arraste pergunta se o ponteiro saiu da janela. Roda a conta de verdade.
+  vm.runInContext(/^const saiuDaJanela = .*$/m.exec(source)[0], c);
   vm.runInContext(func('comecarArrasteAba'), c);
   return { c, lista, abas, win };
 }

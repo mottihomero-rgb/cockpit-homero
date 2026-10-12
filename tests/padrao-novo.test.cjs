@@ -1,12 +1,13 @@
 'use strict';
-/* Toda conversa nova: Codex no Sol, Claude no Opus 5.5 sem o 1M, os dois no Alto
-   (pedido do Homero em 15/09/2026). Este teste segura a regra e confere que o modelo do
+/* Toda conversa nova: Codex no Sol, Claude no Sonnet 5.5, os dois no Alto
+   (pedido do Homero em 15/09/2026; Sonnet 5.5 desde 06/10/2026). Este teste segura a regra e confere que o modelo do
    Claude existe na lista do app, senao o fillModels cairia calado em outro. */
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+require('./provedores-no-vm.cjs');
 
 const src = fs.readFileSync(path.resolve(__dirname, '../renderer/app.js'), 'utf8');
 function trecho(inicio, fim) {
@@ -26,12 +27,12 @@ test('Codex nasce no Sol 6, no Alto', () => {
   assert.equal(esforcoNovo('codex'), 'high');
 });
 
-test('Claude nasce no Opus 5.5 sem o 1M, no Alto, e o modelo existe na lista', () => {
-  assert.equal(modeloNovo('claude'), 'claude-opus-5-5');
+test('Claude nasce no Sonnet 5.5, no Alto, e o modelo existe na lista', () => {
+  assert.equal(modeloNovo('claude'), 'claude-sonnet-5-5');
   assert.doesNotMatch(modeloNovo('claude'), /\[1m\]/);
   assert.equal(esforcoNovo('claude'), 'high');
   const m = MODELOS_CLAUDE.find((x) => x.id === PADRAO_NOVO.claude.model);
-  assert.ok(m, 'Opus 5.5 sumiu da lista do Claude');
+  assert.ok(m, 'Sonnet 5.5 sumiu da lista do Claude');
   assert.ok(m.efforts.includes('high'));
 });
 

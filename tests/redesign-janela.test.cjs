@@ -73,7 +73,7 @@ test('a faixa de aviso empurra os chats no Mac e no celular (não cobre o cabeç
   assert.match(css, /#titlebar\{order:-3;flex:none\}/);
   assert.match(css, /#abasTopo\{order:-2\}/);
   assert.match(css, /#faixaAvisos\{order:-1;flex:none\}/);
-  assert.match(css, /#shell\{flex:1 1 auto;min-height:0;height:auto\}/);
+  assert.match(css, /#shell\{flex:1 1 auto;min-height:0;height:auto;background:var\(--bg-canvas\)\}/);
   // no iPhone ela ficava position:fixed por cima do cabeçalho do chat (sumia o seletor e o ×)
   const faixa = (ler('renderer/style.css').match(/#faixaAvisos\{[^}]*\}/) || [''])[0];
   assert.ok(faixa, 'a regra da faixa sumiu do style.css');

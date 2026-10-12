@@ -225,21 +225,16 @@
     mask-image:linear-gradient(to bottom,#000 calc(100% - 28px),transparent 100%)}
 
   /* ---------- a caixa ----------
-     Vidro, raio 12, a 8pt das bordas, padding 8 6 6, sem borda. Painel em foco: anel azul. */
+     Vidro, raio 12, a 8pt das bordas, padding 8 6 6, sem borda. */
   .pane-cmp{margin:0 8px 8px;padding:8px 6px 6px;border:0;border-radius:12px;
     display:flex;flex-direction:column;gap:4px;
     background:var(--glass-regular);-webkit-backdrop-filter:var(--blur-glass);backdrop-filter:var(--blur-glass);
     box-shadow:var(--shadow-float)}
-  .pane.focus .pane-cmp{border-color:transparent;box-shadow:var(--shadow-float),var(--anel-foco)}
-  /* ... só sem nada aberto por cima (Janela.dc.html: composerShadow = focus && !ov). Com menu,
-     visor, configuração, conta, terminal, atalhos, nova aba, quadro ou painel de agentes aberto o
-     foco está na camada da frente, e a caixa fica só com a sombra. Menu, visor e janelinha moram
-     no painel dono: só contam os da aba da frente (.espaco:not(.oculta)). O visor esquecido
-     aberto numa aba de fundo não aparece (a aba está em display:none), mas apagava o anel do chat
-     em foco da aba da frente, que é quem mostra qual chat está em foco (o irAoChat não pisca). */
+  .pane.focus .pane-cmp{border-color:transparent;box-shadow:var(--shadow-float)}
+  /* Uma janela aberta por cima esconde o contorno do chat. Janelas de outra aba não contam. */
   body:has(.espaco:not(.oculta) .pane .p-modal:not(.hidden), .espaco:not(.oculta) .pane .p-visor:not(.hidden), #telaAtalhos:not(.hidden),
     #novaAba:not(.hidden), #modalGrupo:not(.hidden), #popGrupo:not(.hidden), #qdPainel:not(.hidden),
-    #agPainel:not(.hidden)) .pane.focus .pane-cmp{box-shadow:var(--shadow-float)}
+    #agPainel:not(.hidden)) .pane.focus::after{border-color:transparent}
   .p-anexos{padding:0 4px 2px;gap:6px}
   .pane-cmp .p-sugs{padding:0 6px 2px}
 

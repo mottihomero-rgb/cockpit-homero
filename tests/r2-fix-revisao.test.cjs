@@ -81,7 +81,7 @@ function camadasDePainel(lista) {
   return lista.split(',').map(s => s.trim()).filter(s => /p-modal|p-visor/.test(s));
 }
 test('visor ou janelinha esquecido numa aba de fundo não apaga o anel do chat em foco', () => {
-  const m = /body:has\(([^{]+?)\) \.pane\.focus \.pane-cmp\{box-shadow:var\(--shadow-float\)\}/.exec(caixa);
+  const m = /body:has\(([^{]+?)\) \.pane\.focus::after\{border-color:transparent\}/.exec(caixa);
   assert.ok(m, 'regra que tira o anel');
   const camadas = camadasDePainel(m[1]);
   assert.equal(camadas.length, 2, 'menu/janelinha e visor');

@@ -26,7 +26,7 @@ body:has(> #shell){display:flex;flex-direction:column}
 #abasTopo{order:-2}
 #titlebar.hidden ~ #abasTopo{height:40px}
 #faixaAvisos{order:-1;flex:none}
-#shell{flex:1 1 auto;min-height:0;height:auto}
+#shell{flex:1 1 auto;min-height:0;height:auto;background:var(--bg-canvas)}
 
 /* ---------- barra do topo ----------
    Fundo --bg-window, sem linha embaixo: quem separa a barra dos chats é o --bg-content deles.
@@ -297,6 +297,9 @@ body:has(> #novaAba:not(.hidden)) .aba.ativa:hover{background:var(--fill-3);colo
 .ut-ia:not(:disabled)[data-motor="codex"]:is(:hover,:focus-visible) .ut-anel .ut-logo{color:var(--codex)}
 .ut-ia:not(:disabled)[data-motor="gemini"]:is(:hover,:focus-visible) .ut-anel .ut-logo{color:var(--gemini)}
 .ut-ia:not(:disabled)[data-motor="grok"]:is(:hover,:focus-visible) .ut-anel .ut-logo{color:var(--grok)}
+.ut-ia:not(:disabled)[data-motor="deepseek"]:is(:hover,:focus-visible) .ut-anel .ut-logo{color:var(--deepseek)}
+.ut-ia:not(:disabled)[data-motor="mimo"]:is(:hover,:focus-visible) .ut-anel .ut-logo{color:var(--mimo)}
+.ut-ia:not(:disabled)[data-motor="muse"]:is(:hover,:focus-visible) .ut-anel .ut-logo{color:var(--muse)}
 .ut-anel .ut-logo svg{width:11px;height:11px}
 .ut-anel .ut-logo .logo-motor > g[mask]{display:none}
 .ut-anel .ut-logo .logo-motor > path{fill:currentColor}
@@ -329,3 +332,41 @@ body:has(> #novaAba:not(.hidden)) .aba.ativa:hover{background:var(--fill-3);colo
 #usoCartao .uc-num{font:400 11px/14px var(--font-sans);color:var(--label-2);font-variant-numeric:tabular-nums}
 #usoCartao .uc-velho{margin-top:10px;font:400 11px/14px var(--font-sans);color:var(--label-3)}
 html[data-theme$="-hc"] #usoCartao,body.sem-vidro #usoCartao{background:var(--bg-elevated)}
+
+/* saldo (IAs de chave) no cartão do topo */
+#usoCartao .uc-saldo{margin-top:6px;font-variant-numeric:tabular-nums}
+#usoCartao .uc-saldo.sem{color:var(--status-error)}
+
+/* ---------- barra em 3 colunas + uso do computador + pasta na aba (09/10) ----------
+   Esquerda | pastas | direita. As duas pontas crescem por igual (1fr), então o bloco das pastas
+   fica no meio EXATO da janela, qualquer que seja a largura dos anéis de cada lado. Cada ponta
+   nunca fica menor que o próprio conteúdo (max-content). Só vale no Mac: o index-web.html não
+   tem os três blocos e segue com as duas folgas de antes. */
+#abasTopo:has(> #abasCentro){display:grid;
+  grid-template-columns:minmax(max-content,1fr) minmax(0,auto) minmax(max-content,1fr);align-items:center}
+#abasTopo:has(> #abasCentro){padding:0 12px}   /* simétrico: o recuo dos semáforos passa para dentro da coluna da esquerda */
+#abasEsq,#abasDir{display:flex;align-items:center;min-width:0}
+#abasEsq{justify-content:flex-start;padding-left:calc(var(--recuo-semaforo) - 12px)}
+#abasDir{justify-content:flex-end;gap:4px}
+#abasCentro{display:flex;align-items:center;justify-content:center;min-width:0}
+#abasCentro #abasLista{flex:0 1 auto}
+#usoPc{flex:none;display:flex;align-items:center;gap:4px;-webkit-app-region:no-drag}
+#usoPc:empty{display:none}
+/* os anéis do PC são só leitura: sem clique, o cursor não vira mãozinha */
+.ut-pc{cursor:default}
+.ut-pc:hover{background:var(--fill-3)}
+.ut-anel .ut-logo svg.ic{fill:none;stroke:currentColor}
+.ut-pc[data-pc]:hover .ut-anel .ut-logo{color:var(--label-1)}
+.ut-pc[data-nivel="medio"]:hover .ut-feito{stroke:var(--status-wait)}
+.ut-pc[data-nivel="alto"]:hover .ut-feito{stroke:var(--status-error)}
+.ut-pc[data-nivel="alto"]:hover .ut-pct{color:var(--status-error)}
+
+/* pasta do projeto, ao lado do nome da aba: traço fino de 13, em cinza (acende na aba aberta) */
+.aba .aba-pasta{display:inline-grid;place-items:center;flex:none;width:13px;height:13px;margin-right:-1px;color:var(--label-3)}
+.aba .aba-pasta .ic{width:13px;height:13px}
+.aba.ativa .aba-pasta,.aba:hover .aba-pasta{color:var(--label-2)}
+.aba.vps .aba-pasta{display:none}
+
+/* arrastando para fora do Cockpit: o fantasma vira o aviso "abrir em nova janela" */
+.aba-fantasma.fora{background:var(--accent,#3178da);color:#fff;max-width:300px}
+.aba-fantasma.fora .aba-ic{color:#fff}

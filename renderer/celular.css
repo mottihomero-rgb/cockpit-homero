@@ -50,7 +50,11 @@ body.sem-mac::after{content:"reconectando ao Mac…";position:fixed;left:0;right
 
   /* a lateral vira gaveta por cima */
   /* a barra do topo fica por cima da gaveta, para o botao de fechar continuar na mao */
-  #titlebar{position:relative;z-index:130}
+  /* sticky (e nao relative) por causa do iOS 26: no app da Tela de Inicio ele desenha um borrao
+     de vidro por cima do topo, uns 40pt abaixo do relogio, e o nome da conversa e as abas ficavam
+     embacados. O iOS so deixa de borrar quando uma caixa fixa ou sticky com fundo encosta no topo;
+     ai ele usa a cor dela. Nada rola a pagina aqui, entao sticky se comporta igual a relative. */
+  #titlebar{position:sticky;top:0;z-index:130}
   #activitybar{position:fixed;z-index:120;top:calc(46px + var(--sat));bottom:0;left:0;
     padding-bottom:var(--sab);
     transform:translateX(-100%);transition:transform .22s ease-out;box-shadow:0 0 30px #00000070}

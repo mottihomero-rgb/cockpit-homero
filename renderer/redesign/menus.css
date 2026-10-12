@@ -68,6 +68,9 @@
 .mi[data-motor="codex"] .mi-logo{color:var(--logo-codex)}
 .mi[data-motor="gemini"] .mi-logo{color:var(--logo-gemini)}
 .mi[data-motor="grok"] .mi-logo{color:var(--logo-grok)}
+.mi[data-motor="deepseek"] .mi-logo{color:var(--logo-deepseek)}
+.mi[data-motor="mimo"] .mi-logo{color:var(--logo-mimo)}
+.mi[data-motor="muse"] .mi-logo{color:var(--logo-muse)}
 /* o logo oficial do Gemini vem com o degradê colorido dele (camada com máscara). Nos menus ele é
    recolorido como os outros (regra 8 do README): fica só a estrela, na cor --logo-gemini */
 :is(.modal.p-modal.como-menu > .modal-cx, .pop-global, .menu-fantasma) .mi-logo .logo-motor > path{fill:currentColor}

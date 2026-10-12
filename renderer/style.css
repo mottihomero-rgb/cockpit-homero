@@ -38,6 +38,7 @@
   /* assistentes: SO no logo. --acp (protocolo antigo, sem marca) fica neutro */
   --claude:var(--logo-claude); --codex:var(--logo-codex); --gemini:var(--logo-gemini);
   --grok:var(--logo-grok); --acp:var(--label-2);
+  --deepseek:var(--logo-deepseek); --mimo:var(--logo-mimo); --muse:var(--logo-muse);
   /* a aba em foco era contornada com a cor do motor; agora com o azul do sistema */
   --aba-neon:var(--accent);
   /* tipografia: so SF Pro e SF Mono */
@@ -378,7 +379,7 @@ body.foco .exec,body.foco .think{display:none !important}
 
 .pane-cmp{flex:none;margin:8px 12px 10px;background:var(--bg2);border:1px solid var(--line2);
   border-radius:10px;padding:8px 8px 6px;position:relative}
-.pane.focus .pane-cmp{border-color:var(--accent)}
+.pane.focus .pane-cmp{border-color:var(--line2)}
 .cmp-top{padding:0 3px;position:relative}
 /* continuar a um clique */
 .p-cont{display:flex;gap:6px;padding:0 2px 6px}
@@ -1140,6 +1141,9 @@ body.arrastando-aba,body.arrastando-aba *{cursor:grabbing !important}
 .na-motor[data-motor="codex"]{--motor:var(--codex)}
 .na-motor[data-motor="gemini"]{--motor:var(--gemini)}
 .na-motor[data-motor="grok"]{--motor:var(--grok)}
+.na-motor[data-motor="deepseek"]{--motor:var(--deepseek)}
+.na-motor[data-motor="mimo"]{--motor:var(--mimo)}
+.na-motor[data-motor="muse"]{--motor:var(--muse)}
 .na-motor.on .na-ico{color:var(--motor)}
 .na-ico{width:28px;height:28px;display:grid;place-items:center;color:var(--fg-dim)}
 .na-ico svg{width:100%;height:100%;fill:currentColor}
@@ -1239,6 +1243,9 @@ body.arrastando-aba,body.arrastando-aba *{cursor:grabbing !important}
 .side-view[data-view="hacp"] .sc-av{color:var(--acp)}
 .side-view[data-view="hgemini"] .sc-av{color:var(--gemini)}
 .side-view[data-view="hgrok"] .sc-av{color:var(--grok)}
+.side-view[data-view="hdeepseek"] .sc-av{color:var(--deepseek)}
+.side-view[data-view="hmimo"] .sc-av{color:var(--mimo)}
+.side-view[data-view="hmuse"] .sc-av{color:var(--muse)}
 .sc-txt{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
 .sc-n{font-size:11px;color:var(--fg-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sc-e{font-size:9.5px;color:var(--fg-fraco);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1674,10 +1681,25 @@ body.arrastando-aba,body.arrastando-aba *{cursor:grabbing !important}
 .act.ic-gemini{color:var(--gemini)}
 .pane.eng-gemini{--motor:var(--gemini)}
 .act.ic-grok{color:var(--grok)}
+.act.ic-deepseek{color:var(--deepseek)}
+.act.ic-mimo{color:var(--mimo)}
+.act.ic-muse{color:var(--muse)}
 .pane.eng-grok{--motor:var(--grok)}
+.pane.eng-deepseek{--motor:var(--deepseek)}
+.pane.eng-mimo{--motor:var(--mimo)}
+.pane.eng-muse{--motor:var(--muse)}
 
 /* Organização das conversas, 11/09. Título e quadro mantêm o desenho anterior. */
 .espaco > .coluna{display:flex;flex-direction:column;flex:1 1 0;min-width:var(--chat-min,330px);min-height:0;overflow-y:auto;overflow-x:hidden}
+/* Quando os chats não cabem, a largura deixa meia coluna seguinte à vista. */
+@media (min-width: 821px) and (not (pointer: coarse)), (min-width: 1101px) {
+  .espaco{gap:2px;padding:6px;background:var(--bg-canvas);scroll-padding-inline:6px}
+  .espaco > .coluna{row-gap:2px}
+  .espaco > .coluna > .pane{border-radius:var(--r-panel)}
+  .espaco.mostra-proximo{scroll-snap-type:x mandatory}
+  .espaco.mostra-proximo > .coluna{flex:0 0 var(--largura-chat-preview)}
+  .espaco.mostra-proximo > .coluna{scroll-snap-align:start}
+}
 .espaco > .coluna > .pane{flex:1 1 0;min-width:0;width:auto;min-height:var(--painel-min,220px);border-left:none;container-type:inline-size}
 .espaco > .coluna > .pane:only-child{min-height:0}
 .pane-split-h{height:5px;flex:none;background:var(--line);cursor:row-resize;touch-action:none}
@@ -1768,6 +1790,9 @@ body.arrastando-aba,body.arrastando-aba *{cursor:grabbing !important}
 .cv-uso-motor[data-motor="codex"] .cv-uso-logo,.cv-erro[data-motor="codex"] .cv-uso-logo,.hi-motor[data-motor="codex"]{color:var(--logo-codex,var(--codex))}
 .cv-uso-motor[data-motor="gemini"] .cv-uso-logo,.cv-erro[data-motor="gemini"] .cv-uso-logo,.hi-motor[data-motor="gemini"]{color:var(--logo-gemini,var(--gemini))}
 .cv-uso-motor[data-motor="grok"] .cv-uso-logo,.cv-erro[data-motor="grok"] .cv-uso-logo,.hi-motor[data-motor="grok"]{color:var(--logo-grok,var(--grok))}
+.cv-uso-motor[data-motor="deepseek"] .cv-uso-logo,.cv-erro[data-motor="deepseek"] .cv-uso-logo,.hi-motor[data-motor="deepseek"]{color:var(--logo-deepseek,var(--deepseek))}
+.cv-uso-motor[data-motor="mimo"] .cv-uso-logo,.cv-erro[data-motor="mimo"] .cv-uso-logo,.hi-motor[data-motor="mimo"]{color:var(--logo-mimo,var(--mimo))}
+.cv-uso-motor[data-motor="muse"] .cv-uso-logo,.cv-erro[data-motor="muse"] .cv-uso-logo,.hi-motor[data-motor="muse"]{color:var(--logo-muse,var(--muse))}
 .hi-motor[data-motor="acp"],.cv-erro[data-motor="acp"] .cv-uso-logo{color:var(--acp)}
 /* na linha de resultado de busca o item vira bloco: os logos ficam à esquerda do título,
    na mesma linha, em vez de ganhar uma linha só para eles */
@@ -1777,3 +1802,6 @@ body.arrastando-aba,body.arrastando-aba *{cursor:grabbing !important}
 .msg.bot[data-motor="codex"] .av{color:var(--logo-codex,var(--codex))}
 .msg.bot[data-motor="gemini"] .av{color:var(--logo-gemini,var(--gemini))}
 .msg.bot[data-motor="grok"] .av{color:var(--logo-grok,var(--grok))}
+.msg.bot[data-motor="deepseek"] .av{color:var(--logo-deepseek,var(--deepseek))}
+.msg.bot[data-motor="mimo"] .av{color:var(--logo-mimo,var(--mimo))}
+.msg.bot[data-motor="muse"] .av{color:var(--logo-muse,var(--muse))}

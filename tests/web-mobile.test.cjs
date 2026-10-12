@@ -58,7 +58,7 @@ test('WebSocket exige sessão e mesma origem; desligar remove todos os telefones
   assert.equal((await fim)[0], 1001); assert.equal(ouvintes.size, 0);
 });
 
-test('Senha certa nunca fica trancada, senha no endereço não entra e sessão expira no WebSocket', async t => {
+test('Senha certa nunca fica trancada, senha no endereço não entra e login continua após 8 horas', async t => {
   const { origin, login, tentar, calls } = await servidor(t);
   const cookie = await login();
   for (let i = 0; i < 5; i++) assert.equal((await tentar('errada')).status, 401);
@@ -69,8 +69,59 @@ test('Senha certa nunca fica trancada, senha no endereço não entra e sessão e
   const ws = new WebSocket(origin.replace('http:', 'ws:') + '/ws', { headers: { Origin: origin, Cookie: cookie } });
   await once(ws, 'open');
   const agora = Date.now(); t.mock.method(Date, 'now', () => agora + 9 * 60 * 60 * 1000);
-  const fechado = once(ws, 'close'); ws.send(JSON.stringify({ tipo: 'chamada', id: 1, nome: 'ler' }));
-  assert.equal((await fechado)[0], 1008); assert.equal(calls.length, 0);
+  const resposta = once(ws, 'message'); ws.send(JSON.stringify({ tipo: 'chamada', id: 1, nome: 'sessions:history' }));
+  assert.equal(JSON.parse(String((await resposta)[0])).resposta, 'mesmo histórico');
+  assert.equal(calls.length, 1); ws.close();
+});
+
+test('Login salvo sobrevive ao reinicio e ao tempo; disco nao guarda senha nem cookie utilizavel', async t => {
+  const dir = pastaTemp(t, 'ck-login-');
+  const arquivoSessoes = path.join(dir, 'sessoes.json');
+  const a = await servidor(t, { arquivoSessoes });
+  const entrada = await a.tentar('senha-apenas-de-teste');
+  const cookie = entrada.headers.get('set-cookie').split(';')[0];
+  assert.match(entrada.headers.get('set-cookie'), /Max-Age=34560000; HttpOnly; SameSite=Strict/);
+  const gravado = fs.readFileSync(arquivoSessoes, 'utf8');
+  assert.ok(!gravado.includes(cookie.slice(3)) && !gravado.includes('senha-apenas-de-teste'));
+  assert.equal(fs.statSync(arquivoSessoes).mode & 0o777, 0o600);
+  a.s.fechar(); await once(a.s.servidor, 'close');
+  const b = await servidor(t, { arquivoSessoes });
+  t.mock.method(Date, 'now', () => 20000000000000);
+  const r = await fetch(b.origin, { headers: { Cookie: cookie } });
+  assert.doesNotMatch(await r.text(), /Senha do Cockpit/);
+  assert.match(r.headers.get('set-cookie'), /Max-Age=34560000/);
+  const roubado = 'ck=' + JSON.parse(gravado).sessoes[0];
+  assert.match(await (await fetch(b.origin, { headers: { Cookie: roubado } })).text(), /Senha do Cockpit/);
+});
+
+test('Sair revoga so este aparelho, fecha seu WebSocket e nao volta depois de reiniciar', async t => {
+  const arquivoSessoes = path.join(pastaTemp(t, 'ck-sair-'), 'sessoes.json');
+  const a = await servidor(t, { arquivoSessoes });
+  const cookie = await a.login(), outro = await a.login();
+  const ws = new WebSocket(a.origin.replace('http:', 'ws:') + '/ws', { headers: { Origin: a.origin, Cookie: cookie } });
+  await once(ws, 'open');
+  assert.equal((await fetch(a.origin + '/sair', { headers: { Cookie: cookie } })).status, 405);
+  assert.equal((await fetch(a.origin + '/sair', { method: 'POST', headers: { Cookie: cookie, Origin: 'https://estranho.test' } })).status, 403);
+  assert.doesNotMatch(await (await fetch(a.origin, { headers: { Cookie: cookie } })).text(), /Senha do Cockpit/);
+  const fechou = once(ws, 'close');
+  const r = await fetch(a.origin + '/sair', { method: 'POST', redirect: 'manual', headers: { Cookie: cookie, Origin: a.origin } });
+  assert.equal(r.status, 303); assert.match(r.headers.get('set-cookie'), /Max-Age=0/);
+  assert.equal((await fechou)[0], 1008);
+  a.s.fechar(); await once(a.s.servidor, 'close');
+  const b = await servidor(t, { arquivoSessoes });
+  assert.match(await (await fetch(b.origin, { headers: { Cookie: cookie } })).text(), /Senha do Cockpit/);
+  assert.doesNotMatch(await (await fetch(b.origin, { headers: { Cookie: outro } })).text(), /Senha do Cockpit/);
+});
+
+test('Trocar senha invalida login salvo e falha ao gravar nunca informa login concluido', async t => {
+  const dir = pastaTemp(t, 'ck-senha-'), arquivoSessoes = path.join(dir, 'sessoes.json');
+  const a = await servidor(t, { arquivoSessoes }); const cookie = await a.login();
+  a.s.fechar(); await once(a.s.servidor, 'close');
+  const b = await servidor(t, { arquivoSessoes, senha: 'nova-senha-de-teste' });
+  assert.match(await (await fetch(b.origin, { headers: { Cookie: cookie } })).text(), /Senha do Cockpit/);
+  const c = await servidor(t, { arquivoSessoes: dir }); // alvo e um diretorio: rename deve falhar
+  const falhou = await c.tentar('senha-apenas-de-teste');
+  assert.equal(falhou.status, 503); assert.equal(falhou.headers.get('set-cookie'), null);
 });
 
 test('Telefone só alcança os comandos da tela dele, e cookie de outro site não derruba a sessão', async t => {

@@ -172,7 +172,7 @@ test('R3-032: linkarArquivos reconhece caminho com espaço na pasta e não passa
     miniaturaDaEntrega() {},
     verArquivo() {},
     document: {
-      createElement: (tag) => ({ _tag: tag, className: '', textContent: '', href: '', title: '', onclick: null }),
+      createElement: (tag) => ({ _tag: tag, className: '', textContent: '', href: '', title: '', onclick: null, dataset: {} }),
       createTextNode: (txt) => ({ _tag: '#text', textContent: txt }),
       createDocumentFragment: () => ({ kids: [], appendChild(x) { this.kids.push(x); } }),
     },

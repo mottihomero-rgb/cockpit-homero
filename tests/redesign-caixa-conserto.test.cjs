@@ -271,14 +271,14 @@ test('moldes: "Sempre permitir" à esquerda e a tecla dentro de cada botão, no 
 });
 
 /* ============================ 4. anel de foco ============================ */
-test('anel de foco da caixa some com qualquer camada aberta por cima', () => {
-  const m = /body:has\(([^{]+)\) \.pane\.focus \.pane-cmp\{box-shadow:var\(--shadow-float\)\}/.exec(css);
+test('contorno do chat some com qualquer camada aberta por cima', () => {
+  const m = /body:has\(([^{]+)\) \.pane\.focus::after\{border-color:transparent\}/.exec(css);
   assert.ok(m, 'regra que tira o anel');
   for (const camada of ['.pane .p-modal:not(.hidden)', '.pane .p-visor:not(.hidden)', '#telaAtalhos:not(.hidden)', '#novaAba:not(.hidden)',
     '#modalGrupo:not(.hidden)', '#popGrupo:not(.hidden)', '#qdPainel:not(.hidden)', '#agPainel:not(.hidden)'])
     assert.ok(m[1].includes(camada), 'falta ' + camada);
   // e ela vem DEPOIS do anel (mesma media query do Mac), senão não ganha
-  assert.ok(css.indexOf(m[0]) > css.indexOf('.pane.focus .pane-cmp{border-color:transparent;box-shadow:var(--shadow-float),var(--anel-foco)}'));
+  assert.ok(css.indexOf(m[0]) > css.indexOf('.pane.focus .pane-cmp{border-color:transparent;box-shadow:var(--shadow-float)}'));
 });
 
 /* ============================ 5. botões da barra ============================ */

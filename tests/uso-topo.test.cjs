@@ -102,7 +102,9 @@ test('"Renova" diz o dia e a hora, como no Codenotch', () => {
 });
 
 test('no Mac o uso mora no topo, não na coluna; e o topo não é área de arrastar', () => {
-  assert.match(html, /<div id="abasTopo">\s*<!--[^>]*-->\s*<div id="usoTopo"><\/div>/);
+  // 09/10: a barra virou 3 colunas; o uso das IAs fica na da esquerda e o do computador na da direita
+  assert.match(html, /<div id="abasTopo">\s*<!--[^>]*-->\s*<div id="abasEsq">\s*<!--[^>]*-->\s*<div id="usoTopo"><\/div>/);
+  assert.match(html, /<div id="abasDir">\s*<div id="usoPc"><\/div>/);
   assert.doesNotMatch(html, /id="cvUso"/);
   assert.match(css, /#usoTopo\{[^}]*-webkit-app-region:no-drag/);
 });

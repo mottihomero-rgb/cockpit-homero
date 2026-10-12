@@ -12,6 +12,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+require('./provedores-no-vm.cjs');
 
 const app = fs.readFileSync(path.join(__dirname, '../renderer/app.js'), 'utf8');
 const mobile = fs.readFileSync(path.join(__dirname, '../renderer/mobile.js'), 'utf8');

@@ -62,7 +62,10 @@ test('o basico do iPhone esta no lugar: recorte da tela, icone e cor da barra', 
   assert.match(html, /name="theme-color"/);
   // a cor da barra segue o tema escolhido (automatica, clara ou escura), nao fica cravada
   assert.match(html, /meta\[name="theme-color"\]/, 'falta acertar a cor da barra pelo tema');
-  assert.match(html, /getPropertyValue\('--bg'\)/, 'a cor tem de sair da variavel do tema');
+  assert.match(html, /getPropertyValue\('--bg-window'\)/, 'a cor tem de sair da variavel do tema (a da barra de cima)');
+  // iOS 26 borra o topo do app quando a barra do relogio e transparente
+  assert.match(html, /name="apple-mobile-web-app-status-bar-style" content="default"/,
+    'com black-translucent o iOS 26 deixa o topo embacado');
 
   const png = fs.readFileSync(path.join(raiz, 'renderer/icone-180.png'));
   assert.equal(png.readUInt32BE(16), 180, 'o icone da tela de inicio tem de ter 180 de largura');

@@ -72,7 +72,16 @@ contextBridge.exposeInMainWorld('api', {
   quadroRascunhoLer: () => ipcRenderer.invoke('quadro:rascunhoLer'),
   // R2-025: confirma pro main.js se o pedido do Claude pra abrir o quadro realmente abriu na tela
   quadroAbriu: (ok) => ipcRenderer.invoke('quadro:abriuResultado', ok),
+  // varias janelas (09/10): abrir uma nova (com abas prontas ou vazia), ler o estado inicial, fechar
+  janelaNova: (o) => ipcRenderer.invoke('janela:nova', o),
+  janelaInicial: () => ipcRenderer.invoke('janela:inicial'),
+  janelaFecharAgora: () => ipcRenderer.invoke('janela:fecharAgora'),
+  onJanelaEncerrar: (cb) => ipcRenderer.on('janela:encerrar', () => cb()),
+  // uso do computador (CPU, memoria, disco) para os aneis do topo
+  sistemaUso: () => ipcRenderer.invoke('sistema:uso'),
   verArquivo: (f) => ipcRenderer.invoke('arquivo:ver', f),
+  revisarArquivo: (f) => ipcRenderer.invoke('arquivo:revisar', f),
+  revisaoConferir: (o) => ipcRenderer.invoke('arquivo:revisaoConferir', o),
   // arquivo que mora NA VPS: mesmo formato do verArquivo, mas o conteudo vem por SSH
   verArquivoVps: (f) => ipcRenderer.invoke('arquivo:verVps', f),
   // conversas do Claude que rodaram dentro da VPS (o .jsonl delas nao existe no Mac)
@@ -97,6 +106,10 @@ contextBridge.exposeInMainWorld('api', {
   webEstado: () => ipcRenderer.invoke('web:estado'),
   webLigar: (v) => ipcRenderer.invoke('web:ligar', v),
   contaLer: (e) => ipcRenderer.invoke('conta:ler', e),
+  // IAs de chave (DeepSeek, MiMo, Muse Spark): colar a chave confere e guarda; remover apaga
+  geminiModelos: () => ipcRenderer.invoke('gemini:modelos'),
+  provedorSalvar: (o) => ipcRenderer.invoke('provedor:salvar', o),
+  provedorRemover: (e) => ipcRenderer.invoke('provedor:remover', e),
   usoLer: (e) => ipcRenderer.invoke('uso:ler', e),
   // contas guardadas: alternar entre contas já logadas sem refazer login
   contasListar: (e) => ipcRenderer.invoke('contas:listar', e),

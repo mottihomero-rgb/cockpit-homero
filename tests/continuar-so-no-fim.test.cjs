@@ -5,6 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+require('./provedores-no-vm.cjs');
 const app = fs.readFileSync(path.join(__dirname, '..', 'renderer/app.js'), 'utf8');
 const pegar = (nome) => { const i = app.indexOf('function ' + nome + '('); assert.ok(i >= 0); return app.slice(i, app.indexOf('\n}\n', i) + 2); };
 
@@ -20,7 +21,7 @@ test('qualquer coisa nova do motor tira o Continuar; no Claude o chat volta a tr
   const topo = r.slice(0, r.indexOf('switch (ev.kind)'));
   for (const k of ['text-delta', 'tool-start', 'think-delta', 'busy']) assert.ok(topo.includes("'" + k + "'"), k);
   assert.match(topo, /limparContinuar\(P\);/);
-  assert.match(topo, /if \(!P\.busy && P\.engine === 'claude'/);
+  assert.match(topo, /if \(!P\.busy && \(P\.engine === 'claude'/);
 });
 
 test('a fala dele sai: o Continuar some antes da bolha dela', () => {

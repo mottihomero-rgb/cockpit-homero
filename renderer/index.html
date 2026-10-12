@@ -2,7 +2,7 @@
 <html lang="pt-BR" data-theme="dark">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https: http:; img-src 'self' data: blob: https: http:; font-src 'self' data: blob: https:; worker-src 'self' blob:; connect-src 'self' ws: wss: file:;">
 <title>Cockpit</title>
 <!-- põe o data-theme certo no <html> antes do primeiro quadro pintado (ver aparencia.js) -->
 <script src="aparencia.js"></script>
@@ -23,6 +23,7 @@
 <link rel="stylesheet" href="redesign/lateral.css">
 <link rel="stylesheet" href="redesign/menus.css">
 <link rel="stylesheet" href="redesign/sheets.css">
+<link rel="stylesheet" href="revisar-arquivo.css">
 </head>
 <body>
 
@@ -41,16 +42,23 @@
 <div id="faixaAvisos"></div>
 
 <div id="abasTopo">
-  <!-- uso das IAs (26/09): um anel por IA ao lado dos botões da janela; o mouse abre o cartão -->
-  <div id="usoTopo"></div>
-  <!-- as duas folgas crescem por igual: as abas ficam no meio do topo -->
-  <span class="abas-gap"></span>
-  <div class="abas-lista" id="abasLista"></div>
-  <!-- a aba que está nascendo: só aparece com a sheet "Nova aba" aberta (janela.css) -->
-  <span class="aba-provisoria" aria-hidden="true">Nova aba</span>
-  <button class="aba-mais" id="btnNovaAba" title="Nova aba ⌘⇧T"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3v10M3 8h10"></path></g></svg></button>
-  <span class="abas-gap"></span>
-  <button class="aba-mais canto" id="btnNovoChat" title="Inicie um novo chat ⌘T"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3v10M3 8h10"></path></g></svg><span class="am-txt">Chat</span></button>
+  <!-- 09/10: a barra virou 3 colunas iguais (esquerda | pastas | direita), então as pastas ficam
+       no meio EXATO da janela, não no meio do que sobra. Esquerda = uso das IAs (anel por IA);
+       direita = uso do computador (CPU, memória, disco) + o botão de novo chat. -->
+  <div id="abasEsq">
+    <!-- uso das IAs (26/09): um anel por IA ao lado dos botões da janela; o mouse abre o cartão -->
+    <div id="usoTopo"></div>
+  </div>
+  <div id="abasCentro">
+    <div class="abas-lista" id="abasLista"></div>
+    <!-- a aba que está nascendo: só aparece com a sheet "Nova aba" aberta (janela.css) -->
+    <span class="aba-provisoria" aria-hidden="true">Nova aba</span>
+    <button class="aba-mais" id="btnNovaAba" title="Nova aba ⌘⇧T"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3v10M3 8h10"></path></g></svg></button>
+  </div>
+  <div id="abasDir">
+    <div id="usoPc"></div>
+    <button class="aba-mais canto" id="btnNovoChat" title="Inicie um novo chat ⌘T"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 3v10M3 8h10"></path></g></svg><span class="am-txt">Chat</span></button>
+  </div>
 </div>
 
 <div id="shell">
@@ -116,6 +124,7 @@
                 <button class="mini-op" type="button" role="radio" data-aparencia="auto"><span class="mini-img mini-auto"><span class="mini-lado mini-claro"><span class="mini-barra"></span><span class="mini-jan"><i></i><i></i><i></i></span></span><span class="mini-lado mini-escuro"><span class="mini-barra"></span><span class="mini-jan"><i></i><i></i><i></i></span></span></span><span class="mini-nome">Automático</span></button>
                 <button class="mini-op" type="button" role="radio" data-aparencia="clara"><span class="mini-img mini-claro"><span class="mini-barra"></span><span class="mini-jan"><i></i><i></i><i></i></span></span><span class="mini-nome">Tom claro</span></button>
                 <button class="mini-op" type="button" role="radio" data-aparencia="escura"><span class="mini-img mini-escuro"><span class="mini-barra"></span><span class="mini-jan"><i></i><i></i><i></i></span></span><span class="mini-nome">Tom escuro</span></button>
+                <button class="mini-op" type="button" role="radio" data-aparencia="jornal"><span class="mini-img mini-jornal"><span class="mini-barra"></span><span class="mini-jan"><i></i><i></i><i></i></span></span><span class="mini-nome">Jornal</span></button>
               </div>
             </section>
             <section class="aj aj-miniaturas">
@@ -205,10 +214,6 @@
           <span class="na-ico" id="naIcGemini"></span>
           <span class="na-n">Gemini</span>
         </button>
-        <button class="na-motor" data-motor="grok">
-          <span class="na-ico" id="naIcGrok"></span>
-          <span class="na-n">Grok</span>
-        </button>
       </div>
     </div>
 
@@ -291,6 +296,8 @@
          .aba-tit é o contador de chats (pintarAba). -->
     <span class="aba-dot dot off" aria-hidden="true"></span>
     <span class="aba-ic" aria-hidden="true"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.25" y="2.5" width="11.5" height="4.75" rx="1.25"/><rect x="2.25" y="8.75" width="11.5" height="4.75" rx="1.25"/><circle cx="5" cy="4.9" r=".8" fill="currentColor" stroke="none"/><circle cx="5" cy="11.1" r=".8" fill="currentColor" stroke="none"/></svg></span>
+    <!-- pasta do projeto: ícone de pasta ao lado do nome (09/10); a aba da VPS usa o servidor no lugar -->
+    <span class="aba-pasta" aria-hidden="true"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.25 5.1a1.35 1.35 0 0 1 1.35-1.35h2.55l1.35 1.6h4.9a1.35 1.35 0 0 1 1.35 1.35v4.95a1.35 1.35 0 0 1-1.35 1.35H3.6a1.35 1.35 0 0 1-1.35-1.35z"/></svg></span>
     <span class="aba-proj"></span>
     <span class="aba-tit"></span>
     <button class="aba-x" title="Fechar a aba e os chats dela"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"></path></g></svg></button>
@@ -304,7 +311,6 @@
         <button class="ch-lado" data-motor="claude"><span></span><span class="ch-nome">Claude</span></button>
         <button class="ch-lado" data-motor="codex"><span></span><span class="ch-nome">Codex</span></button>
         <button class="ch-lado" data-motor="gemini"><span></span><span class="ch-nome">Gemini</span></button>
-        <button class="ch-lado" data-motor="grok"><span></span><span class="ch-nome">Grok</span></button>
       </div>
       <!-- redesenho 26/09: seletor à esquerda; à direita branch, medidor e fechar (README, "Painel de chat") -->
       <div class="hd-lado hd-dir">
@@ -383,6 +389,7 @@
 <script src="quadro-texto.js"></script>
 <script src="quadro.js"></script>
 <script src="layout-hugo.js"></script>
+<script src="revisar-arquivo.js"></script>
 <script src="app.js"></script>
 <script src="dica-icone.js"></script>
 </body>

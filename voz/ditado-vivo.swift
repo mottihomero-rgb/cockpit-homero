@@ -6,11 +6,15 @@
 //              arg4 = carencia: espera ANTES da primeira palavra (o silencio so conta depois dela)
 // Parar na mao: escrever "stop" no stdin.
 // Saida: uma linha JSON por evento, no stdout:
+//   {"type":"status","msg":"microfone","dispositivo":"...","outros":["Zoom"]}
+//                                              -> qual microfone e quem MAIS esta usando ele
 //   {"type":"status","msg":"ouvindo"}          -> ja pode falar
 //   {"type":"partial","text":"..."}            -> texto CINZA (ainda muda)
 //   {"type":"final","text":"..."}              -> texto PRETO (fechado)
 //   {"type":"error","msg":"..."}
+import AppKit
 import AVFoundation
+import CoreAudio
 import Foundation
 import Speech
 
@@ -21,6 +25,57 @@ func emit(_ o: [String: Any]) {
     guard let d = try? JSONSerialization.data(withJSONObject: m),
           let s = String(data: d, encoding: .utf8) else { return }
     lock.lock(); print(s); fflush(stdout); lock.unlock()
+}
+
+/* ---------- quem mais esta com o microfone ----------
+   O CoreAudio sabe, por processo, quem esta capturando entrada agora (macOS 14.2+). Lido ANTES
+   de ligar o nosso motor; mesmo assim o nosso proprio PID, o do app pai (Cockpit) e os
+   ajudantes dele ficam de fora. Servicos do sistema que escutam o tempo todo tambem. */
+func endereco(_ sel: AudioObjectPropertySelector) -> AudioObjectPropertyAddress {
+    AudioObjectPropertyAddress(mSelector: sel, mScope: kAudioObjectPropertyScopeGlobal,
+                               mElement: kAudioObjectPropertyElementMain)
+}
+func lerNumero<T>(_ obj: AudioObjectID, _ sel: AudioObjectPropertySelector, _ zero: T) -> T? {
+    var a = endereco(sel); var v = zero; var tam = UInt32(MemoryLayout<T>.size)
+    return AudioObjectGetPropertyData(obj, &a, 0, nil, &tam, &v) == noErr ? v : nil
+}
+func lerTexto(_ obj: AudioObjectID, _ sel: AudioObjectPropertySelector) -> String? {
+    var a = endereco(sel); var ref: Unmanaged<CFString>?; var tam = UInt32(MemoryLayout<CFString?>.size)
+    guard AudioObjectGetPropertyData(obj, &a, 0, nil, &tam, &ref) == noErr, let r = ref else { return nil }
+    return r.takeRetainedValue() as String
+}
+func microfonePadrao() -> (id: AudioObjectID, nome: String)? {
+    guard let id = lerNumero(AudioObjectID(kAudioObjectSystemObject),
+                             kAudioHardwarePropertyDefaultInputDevice, AudioObjectID(0)), id != 0 else { return nil }
+    return (id, lerTexto(id, kAudioObjectPropertyName) ?? "microfone")
+}
+func quemMaisUsaMicrofone() -> [String] {
+    var a = endereco(kAudioHardwarePropertyProcessObjectList); var tam: UInt32 = 0
+    let sys = AudioObjectID(kAudioObjectSystemObject)
+    guard AudioObjectGetPropertyDataSize(sys, &a, 0, nil, &tam) == noErr, tam > 0 else { return [] }
+    var ids = [AudioObjectID](repeating: 0, count: Int(tam) / MemoryLayout<AudioObjectID>.size)
+    guard AudioObjectGetPropertyData(sys, &a, 0, nil, &tam, &ids) == noErr else { return [] }
+    let eu = getpid(), pai = getppid()
+    let sistema = ["com.apple.corespeechd", "com.apple.assistant", "com.apple.siri", "com.apple.speech"]
+    var nomes: [String] = []
+    for o in ids {
+        guard (lerNumero(o, kAudioProcessPropertyIsRunningInput, UInt32(0)) ?? 0) != 0 else { continue }
+        let pid = lerNumero(o, kAudioProcessPropertyPID, pid_t(0)) ?? 0
+        if pid == eu || pid == pai { continue }
+        let bundle = lerTexto(o, kAudioProcessPropertyBundleID) ?? ""
+        let b = bundle.lowercased()
+        if b.hasPrefix("com.adsure.cockpit") || sistema.contains(where: { b.hasPrefix($0) }) { continue }
+        var nome = NSRunningApplication(processIdentifier: pid)?.localizedName ?? ""
+        if nome.isEmpty, !bundle.isEmpty {
+            // "com.google.Chrome.helper.Renderer" -> "Chrome"
+            var partes = bundle.split(separator: ".").map(String.init)
+            if let i = partes.firstIndex(where: { $0.lowercased() == "helper" }), i > 0 { partes = Array(partes[..<i]) }
+            nome = partes.last ?? bundle
+        }
+        if nome.isEmpty { nome = "processo \(pid)" }
+        if !nomes.contains(nome) { nomes.append(nome) }
+    }
+    return nomes
 }
 
 final class Estado: @unchecked Sendable {
@@ -107,6 +162,11 @@ func ditar(idioma: String, silencio: Double, teto: Double, carencia: Double) asy
         }
         if err == nil { envia.yield(AnalyzerInput(buffer: saida)) }
     }
+
+    // diz qual microfone vai ouvir e se mais alguem esta nele (a tela avisa; nao bloqueia)
+    var info: [String: Any] = ["type": "status", "msg": "microfone", "outros": quemMaisUsaMicrofone()]
+    if let m = microfonePadrao() { info["dispositivo"] = m.nome }
+    emit(info)
 
     engine.prepare()
     do { try engine.start() } catch { emit(["type": "error", "msg": "microfone: \(error)"]); return }

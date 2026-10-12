@@ -1,6 +1,7 @@
 'use strict';
 // Funções reais, APIs simuladas. Nunca inicia motor nem altera conta/arquivo do usuário.
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+require('./provedores-no-vm.cjs');
 const assert=require('node:assert/strict'),test=require('node:test');
 const app=fs.readFileSync(path.join(__dirname,'../renderer/app.js'),'utf8');
 function func(nome){const m=new RegExp('^(?:async )?function '+nome+'\\(','m').exec(app);assert.ok(m,nome);const line=app.slice(m.index,app.indexOf('\n',m.index));if(line.endsWith('}'))return line;const t=app.slice(m.index);return t.slice(0,[...t.matchAll(/^}$/mg)][0].index+1);}

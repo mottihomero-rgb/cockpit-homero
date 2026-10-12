@@ -10,6 +10,8 @@ const cacheArq = new Map();
 const TIPOS = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml',
   '.json': 'application/json', '.ico': 'image/x-icon' };
+Object.assign(TIPOS, { '.mjs': 'text/javascript; charset=utf-8', '.wasm': 'application/wasm', '.bcmap': 'application/octet-stream',
+  '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.pfb': 'application/octet-stream' });
 
 /* O que o telefone PODE pedir ao Mac. E a mesma lista que o renderer/web.js usa, ou seja,
    tudo que a tela do celular realmente faz — e nada alem disso. Antes valia qualquer nome de
@@ -37,7 +39,8 @@ const PERMITIDOS = new Set([
   'voz:transcrever',
   'quadro:salvar', 'quadro:rascunhoGravar', 'quadro:rascunhoLer',
   'arquivo:ver', 'arquivo:verVps', 'term:linhaShell',
-  'conta:ler', 'uso:ler', 'agentes:claude', 'agentes:nomes', 'detalhe:perguntar', 'detalhe:cancelar', 'git:status', 'git:diff',
+  'arquivo:revisar', 'arquivo:revisaoConferir',
+  'conta:ler', 'uso:ler', 'gemini:modelos', 'agentes:claude', 'agentes:nomes', 'detalhe:perguntar', 'detalhe:cancelar', 'git:status', 'git:diff',
   'motores:versoes', 'motores:disponiveis', 'rotinas:listar',
   'mcp:list', 'mcp:acao', 'auth:acao',
   /* Estes tres a tela do celular OFERECE no menu, e sem eles aqui o toque so respondia
@@ -251,7 +254,7 @@ function receberUpload(req, res, { temSessao, pasta, endereco }) {
   res.on('close', abortou);
 }
 
-function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somenteTailscale = false, endereco = '', pastaColados = '' }) {
+function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somenteTailscale = false, endereco = '', pastaColados = '', arquivoSessoes }) {
   const { WebSocketServer } = require('ws');
   // R2-041: o main.js sobe com endereco placeholder e troca depois (web.endereco = end),
   // ja que o tailscale responde so depois do boot. Antes esse valor ficava preso no
@@ -259,11 +262,38 @@ function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somente
   // troca e o celular ficava travado pra sempre com "origem invalida". Agora e uma variavel
   // que o getter/setter do retorno atualiza, calculada uma unica vez aqui na criacao.
   let enderecoAtual = endereco || (somenteTailscale ? '' : ('http://' + ipDaRede() + ':' + porta));
-  const sessoes = new Map();
+  // O login fica autorizado ate Sair ou trocar a senha, inclusive depois de reabrir o Mac.
+  // No disco ficam apenas hashes: copiar este arquivo nao permite entrar no Cockpit.
+  if (arquivoSessoes === undefined) {
+    try { arquivoSessoes = path.join(require('electron').app.getPath('userData'), 'sessoes-celular.json'); }
+    catch { arquivoSessoes = ''; } // testes fora do Electron podem usar memoria ou um arquivo isolado
+  }
+  const hash = (v) => crypto.createHash('sha256').update(String(v)).digest('hex');
+  const senhaHash = hash(senha);
+  const sessoes = new Set();
+  if (arquivoSessoes) {
+    try {
+      const salvo = JSON.parse(fs.readFileSync(arquivoSessoes, 'utf8'));
+      if (salvo.versao === 1 && salvo.senhaHash === senhaHash && Array.isArray(salvo.sessoes)) {
+        for (const h of salvo.sessoes) if (typeof h === 'string' && /^[a-f0-9]{64}$/.test(h)) sessoes.add(h);
+      }
+    } catch (e) { if (e.code !== 'ENOENT') aoLog && aoLog('Nao consegui ler os logins do celular. Entre novamente.'); }
+  }
+  const guardarSessoes = () => {
+    if (!arquivoSessoes) return;
+    fs.mkdirSync(path.dirname(arquivoSessoes), { recursive: true, mode: 0o700 });
+    const temporario = arquivoSessoes + '.' + crypto.randomBytes(8).toString('hex') + '.tmp';
+    try {
+      fs.writeFileSync(temporario, JSON.stringify({ versao: 1, senhaHash, sessoes: [...sessoes] }), { mode: 0o600, flag: 'wx' });
+      fs.renameSync(temporario, arquivoSessoes);
+    } finally { try { fs.unlinkSync(temporario); } catch {} }
+  };
   const tentativas = new Map();
   const clientes = new Set();
   let encerrado = false;
-  const VIDA_SESSAO = 8 * 60 * 60 * 1000;
+  // Navegadores limitam cookies permanentes; cada abertura renova o prazo do aparelho.
+  const MAX_AGE_LOGIN = 400 * 24 * 60 * 60;
+  const cookieLogin = (token) => 'ck=' + token + '; Path=/; Max-Age=' + MAX_AGE_LOGIN + '; HttpOnly; SameSite=Strict';
   const JANELA_TENTATIVAS = 15 * 60 * 1000;
   const MAX_TENTATIVAS = 5;
   const ip = (req) => String(req.socket && req.socket.remoteAddress || 'desconhecido');
@@ -284,9 +314,7 @@ function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somente
     return x.length === y.length && crypto.timingSafeEqual(x, y);
   };
   const sessaoValida = (token) => {
-    const ate = sessoes.get(token);
-    if (!ate || ate < Date.now()) { sessoes.delete(token); return false; }
-    return true;
+    return /^[a-f0-9]{64}$/.test(String(token || '')) && sessoes.has(hash(token));
   };
   const podeTentar = (endereco) => {
     const item = tentativas.get(endereco);
@@ -351,9 +379,16 @@ function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somente
         // pagina aberta no navegador do Mac) deixavam o dono 15 minutos de fora do proprio Mac.
         if (igual(campos.get('s'), senha)) {
           const t = crypto.randomBytes(32).toString('hex');
-          sessoes.set(t, Date.now() + VIDA_SESSAO);
+          const anterior = jaDentro && hash(pegarSessao(req.headers.cookie));
+          sessoes.add(hash(t));
+          if (anterior) sessoes.delete(anterior);
+          try { guardarSessoes(); }
+          catch {
+            sessoes.delete(hash(t)); if (anterior) sessoes.add(anterior);
+            return paginaLogin(res, 503, true, 'Não consegui salvar o login. Tente novamente.');
+          }
           tentativas.delete(endereco);
-          res.writeHead(302, { 'Set-Cookie': 'ck=' + t + '; Path=/; Max-Age=28800; HttpOnly; SameSite=Strict', Location: '/' });
+          res.writeHead(302, { 'Set-Cookie': cookieLogin(t), Location: '/', 'Cache-Control': 'no-store' });
           return res.end();
         }
         // agora a trava so pega quem erra a senha, e nem isso para quem ja tem sessao valida
@@ -371,13 +406,39 @@ function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somente
       return mandarArquivo(req, res, pub);
     }
     const t = pegarSessao(req.headers.cookie);
+    if (url.pathname === '/sair') {
+      // POST evita que um pre-carregamento de link deslogue o dono sem ele tocar em Sair.
+      if (req.method !== 'POST') { res.writeHead(405, { Allow: 'POST' }); return res.end('Use o botão Sair.'); }
+      if (!mesmaOrigem(req, enderecoAtual)) { res.writeHead(403); return res.end('Origem não permitida.'); }
+      const h = t && hash(t), tinha = h && sessoes.delete(h);
+      try { if (tinha) guardarSessoes(); }
+      catch {
+        sessoes.add(h); res.writeHead(503, { 'Cache-Control': 'no-store' });
+        return res.end('Não consegui encerrar o login. Tente novamente.');
+      }
+      for (const ws of clientes) if (ws.ck === t) { try { ws.close(1008, 'sessao encerrada'); } catch {} }
+      res.writeHead(303, { Location: '/', 'Set-Cookie': 'ck=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict', 'Cache-Control': 'no-store' });
+      return res.end();
+    }
     // Foto e video do celular entram por aqui. Vem ANTES da pagina de senha porque quem perdeu
     // a sessao precisa receber um erro curto em JSON, e nao a tela de login inteira em HTML
     // (o app leria 200 "deu certo" e anexaria a pagina de login no lugar do video).
     if (url.pathname === '/upload') {
+      if (t && sessaoValida(t)) res.setHeader('Set-Cookie', cookieLogin(t));
       return receberUpload(req, res, { temSessao: !!t && sessaoValida(t), pasta: pastaDeColados(pastaColados), endereco: enderecoAtual });
     }
     if (!t || !sessaoValida(t)) return paginaLogin(res, 200, false);
+    res.setHeader('Set-Cookie', cookieLogin(t));
+    if (url.pathname.startsWith('/revisao/')) {
+      const m = url.pathname.match(/^\/revisao\/([a-f0-9]{48})\/(.+)$/);
+      let recurso;
+      try { recurso = m && decodeURIComponent(m[2]); } catch {}
+      if (!m || !recurso || !handlers['arquivo:revisaoConteudo']) { res.writeHead(404); return res.end('Prévia não encontrada.'); }
+      Promise.resolve().then(() => handlers['arquivo:revisaoConteudo']({ remoto: true }, { ticket: m[1], recurso }))
+        .then(item => require('./revisao-arquivos').responderArquivo(req, res, item))
+        .catch(() => { if (!res.headersSent) res.writeHead(500); res.end('Não consegui abrir esta prévia.'); });
+      return;
+    }
 
     let arq;
     try { arq = url.pathname === '/' ? 'index-web.html' : decodeURIComponent(url.pathname).replace(/^\//, ''); }
@@ -416,8 +477,8 @@ function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somente
     });
     ws.on('message', async (bruto) => {
       // A sessao era conferida uma unica vez, no aperto de mao. Quem ja estava conectado
-      // nunca mais era checado: podia rodar comando no Mac para sempre, mesmo depois das
-      // 8 horas de validade e mesmo depois de desligar o acesso pelo Wi-Fi nos Ajustes.
+      // nunca mais era checado: podia rodar comando no Mac mesmo depois de Sair ou
+      // de desligar o acesso pelo Wi-Fi nos Ajustes.
       if (!sessaoValida(ws.ck)) { try { ws.close(1008, 'sessao expirou'); } catch {} return; }
       let m; try { m = JSON.parse(bruto.toString()); } catch { return; }
       if (!m || typeof m !== 'object' || Array.isArray(m) || m.tipo !== 'chamada' || typeof m.nome !== 'string'
@@ -442,13 +503,11 @@ function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somente
     });
   });
 
-  // varre de minuto em minuto e fecha quem ja venceu, em vez de esperar o telefone
-  // mandar alguma coisa para so entao descobrir que a sessao caiu
+  // Fecha conexoes cujo login foi revogado, mesmo sem o telefone mandar um comando.
   const varredura = setInterval(() => {
     for (const ws of [...clientes]) {
       if (!sessaoValida(ws.ck)) { try { ws.close(1008, 'sessao expirou'); } catch {} ouvintes.delete(ws); }
     }
-    for (const token of sessoes.keys()) sessaoValida(token);
     for (const [endereco, item] of tentativas) if (item.inicio + JANELA_TENTATIVAS < Date.now()) tentativas.delete(endereco);
   }, 60000);
   if (varredura.unref) varredura.unref();
@@ -577,7 +636,7 @@ function paginaSenha(errou, detalhe = '') {
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Cockpit">
 <meta name="theme-color" content="#161617" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">

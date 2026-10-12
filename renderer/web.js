@@ -1,6 +1,11 @@
 /* Ponte para o telefone: o mesmo window.api, só que falando por WebSocket com o Mac. */
 (function () {
   window.SEM_ELECTRON = true;   // estamos no telefone, pelo navegador
+  document.addEventListener('submit', (ev) => {
+    if (ev.target && ev.target.id === 'formSairCelular') {
+      window.dispatchEvent(new CustomEvent('cockpit:salvar-rascunhos'));
+    }
+  });
   const pend = new Map();
   const ouvintes = Object.create(null);
   let seq = 0, ws = null, fila = [], religar = null;
@@ -250,7 +255,7 @@
      da ordem em que os <script defer> rodam. So troca nome antigo: tema vazio continua
      diferente de 'auto' (o Mac escolher de fato continua valendo).
      Sem isto, depois da atualizacao o celular voltava para Escura sozinho. */
-  const NOME_NOVO_DO_TEMA = { escuro: 'escura', claro: 'clara', jornal: 'clara' };
+  const NOME_NOVO_DO_TEMA = { escuro: 'escura', claro: 'clara' };
   const temaNovo = (t) => (Object.prototype.hasOwnProperty.call(NOME_NOVO_DO_TEMA, t) ? NOME_NOVO_DO_TEMA[t] : t);
   const mesmaBase = (k, a, b) => (k === 'tema' ? mesmoValor(temaNovo(a), temaNovo(b)) : mesmoValor(a, b));
   // copia de verdade: a tela mexe nas listas por dentro (splice/push), e sem copiar o retrato
@@ -402,6 +407,15 @@
     quadroRascunhoGravar: (o) => chamar('quadro:rascunhoGravar', o),
     quadroRascunhoLer: () => chamar('quadro:rascunhoLer'),
     verArquivo: (f) => chamar('arquivo:ver', f),
+    revisarArquivo: async (f) => {
+      const r = await chamar('arquivo:revisar', f);
+      if (r && r.ticket && !r.erro) {
+        r.url = location.origin + '/revisao/' + r.ticket + '/arquivo';
+        r.baseUrl = location.origin + '/revisao/' + r.ticket + '/assets/';
+      }
+      return r;
+    },
+    revisaoConferir: (o) => chamar('arquivo:revisaoConferir', o),
     // quem fala com a VPS e sempre o Mac: aqui e so o mesmo cano de pedido
     verArquivoVps: (f) => chamar('arquivo:verVps', f),
     sessionsClaudeRemoto: (r) => chamar('sessions:claudeRemoto', r),
@@ -409,6 +423,9 @@
     termLinhaShell: (cwd) => chamar('term:linhaShell', cwd),
     contaLer: (e) => chamar('conta:ler', e),
     usoLer: (e) => chamar('uso:ler', e),
+    geminiModelos: () => chamar('gemini:modelos'),
+    provedorSalvar: () => Promise.resolve({ error: 'Colar a chave só funciona no Mac.' }),
+    provedorRemover: () => Promise.resolve({ error: 'Remover a chave só funciona no Mac.' }),
     /* Trocar a conta do Mac por um toque no telefone é exatamente o que não pode acontecer: o
        main já barra os cinco, e aqui a resposta sai na hora, com o tipo certo, para o menu não
        ficar 2 minutos esperando. Sem estas linhas o app.js (o MESMO arquivo nos dois) morreria

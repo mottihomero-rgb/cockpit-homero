@@ -1,5 +1,5 @@
 /* Cockpit — tokens de design (macOS 26 / HIG 2026)
-   Aplicar data-theme="dark" | "light" | "dark-hc" | "light-hc" no <html> do app.
+   Aplicar data-theme="dark" | "light" | "light-paper" (Jornal) | "dark-hc" | "light-hc" | "light-paper-hc" no <html> do app.
    No app real, o tema segue a aparência do sistema (ver @media no fim). */
 
 .ck, [data-theme] {
@@ -12,6 +12,9 @@
   --r-control: 8px;   /* controle a 4pt da borda do painel: 12 − 4 */
   --r-mini: 6px;      /* mini/small, raio de reserva */
   --r-capsule: 999px; /* large e x-large */
+
+  /* plano de fundo entre os painéis: acompanha a janela no tema claro */
+  --bg-canvas: var(--bg-window);
 
   /* espaço */
   --s-1: 2px; --s-2: 4px; --s-3: 6px; --s-4: 8px; --s-5: 12px;
@@ -32,6 +35,7 @@
 [data-theme="dark"], [data-theme="dark-hc"] {
   color-scheme: dark;
   --bg-window: #1F1F21;       /* chrome: barra do topo e barra de ícones */
+  --bg-canvas: #28282B;       /* respiro visível entre chats e lateral */
   --bg-content: #161617;      /* conversa */
   --bg-grouped: #1E1E20;      /* blocos de código, cartões dentro do conteúdo */
   --bg-sidebar: rgba(40, 40, 43, .84);
@@ -65,6 +69,7 @@
   --scrim: rgba(0, 0, 0, .45);
   --code-bg: #0E0E0F;
   --logo-claude: #D97757; --logo-codex: #6C9BFF; --logo-gemini: #9B8AFB; --logo-grok: rgba(255,255,255,.92);
+  --logo-deepseek: #6B86FF; --logo-mimo: #FF8A3D; --logo-muse: #4D9BFF;
 }
 
 [data-theme="light"], [data-theme="light-hc"] {
@@ -103,6 +108,54 @@
   --scrim: rgba(0, 0, 0, .20);
   --code-bg: #F6F6F8;
   --logo-claude: #C4623F; --logo-codex: #2F6BEB; --logo-gemini: #6D5CE7; --logo-grok: rgba(0,0,0,.88);
+  --logo-deepseek: #4D6BFE; --logo-mimo: #E85D00; --logo-muse: #0866FF;
+}
+
+[data-theme="light-paper"], [data-theme="light-paper-hc"] {
+  color-scheme: light;
+  --bg-window: #E8DDC2;
+  --bg-content: #F4ECD8;
+  --bg-grouped: #EDE3C9;
+  --bg-sidebar: #F4ECD8;
+  --bg-elevated: #F8F1DF;
+  --glass-regular: rgba(247, 240, 221, .82);
+  --glass-edge: rgba(90, 62, 20, .16);
+  --fill-1: rgba(90, 62, 20, .085);
+  --control-selected: #FBF6E6;
+  --fill-2: rgba(90, 62, 20, .06);
+  --fill-3: rgba(90, 62, 20, .04);
+  --fill-4: rgba(90, 62, 20, .022);
+  --label-1: rgba(44, 32, 14, .92);
+  --label-2: rgba(66, 50, 26, .72);
+  --label-3: rgba(66, 50, 26, .50);
+  --label-4: rgba(66, 50, 26, .26);
+  --separator: rgba(90, 62, 20, .13);
+  --separator-strong: rgba(90, 62, 20, .22);
+  --accent: #1F5FA8;
+  --accent-text: #174E8F;
+  --on-accent: #FFFFFF;
+  --status-wait: #E08A00;
+  --status-wait-text: #935300;
+  --status-wait-line: rgba(224, 138, 0, .45);
+  --highlight: rgba(255, 204, 0, .38);
+  --status-error: #D70015;
+  --status-ok: #248A3D;
+  --diff-add-fg: #1A7F37; --diff-add-bg: rgba(26, 127, 55, .075);
+  --diff-del-fg: #C21F2D; --diff-del-bg: rgba(207, 34, 46, .065);
+  --shadow-float: 0 12px 32px rgba(70,48,12,.16), 0 2px 6px rgba(70,48,12,.08), 0 0 0 .5px rgba(90,62,20,.16);
+  --shadow-window: 0 30px 80px rgba(0,0,0,.18), 0 0 0 .5px rgba(0,0,0,.16);
+  --scrim: rgba(0, 0, 0, .20);
+  --code-bg: #EFE6CE;
+  --logo-claude: #C4623F; --logo-codex: #2F6BEB; --logo-gemini: #6D5CE7; --logo-grok: rgba(0,0,0,.88);
+  --logo-deepseek: #4D6BFE; --logo-mimo: #E85D00; --logo-muse: #0866FF;
+}
+
+[data-theme="light-paper-hc"] {
+  --bg-sidebar: #F4ECD8; --glass-regular: #F8F1DF;
+  --label-1: #1E1508; --label-2: rgba(30,21,8,.80); --label-3: rgba(30,21,8,.62); --label-4: rgba(30,21,8,.40);
+  --separator: rgba(60,40,10,.28); --separator-strong: rgba(60,40,10,.44); --glass-edge: rgba(60,40,10,.42);
+  --accent: #123F7A; --accent-text: #123F7A; --status-wait-text: #7A4400;
+  --blur-glass: none;
 }
 
 /* Aumentar contraste + Reduzir transparência */
@@ -128,6 +181,9 @@
 [data-agent="codex"]  { --agent: var(--logo-codex); }
 [data-agent="gemini"] { --agent: var(--logo-gemini); }
 [data-agent="grok"]   { --agent: var(--logo-grok); }
+[data-agent="deepseek"]   { --agent: var(--logo-deepseek); }
+[data-agent="mimo"]   { --agent: var(--logo-mimo); }
+[data-agent="muse"]   { --agent: var(--logo-muse); }
 
 /* indicador "trabalhando": giro contínuo, sem pulsar; parado em Reduzir movimento */
 @keyframes ck-spin { to { transform: rotate(360deg); } }

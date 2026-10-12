@@ -102,7 +102,7 @@
     if (!Array.isArray(itens)) itens = [];
     // rascunho de mais de um dia não volta, e ainda sai da gaveta pra não ocupar espaço à toa
     const vivos = itens.filter(x => x && typeof x.texto === 'string' && typeof x.cwd === 'string'
-      && ['claude', 'codex', 'acp', 'gemini', 'grok'].includes(x.engine)
+      && ['claude', 'codex', 'acp', 'gemini', 'grok', 'deepseek', 'mimo', 'muse'].includes(x.engine)
       && Date.now() - (Number(x.em) || 0) < VALIDADE);
     if (vivos.length !== itens.length) {
       try {
@@ -226,7 +226,7 @@
       try {
         const ultima = JSON.parse(localStorage.getItem(chaveConversa) || 'null');
         if (ultima?.id && ultima.cwd && Date.now() - (Number(ultima.em) || 0) < VALIDADE
-          && ['claude', 'codex', 'acp', 'gemini', 'grok'].includes(ultima.engine)) await openSession(ultima);
+          && ['claude', 'codex', 'acp', 'gemini', 'grok', 'deepseek', 'mimo', 'muse'].includes(ultima.engine)) await openSession(ultima);
       } catch { /* rascunhos ainda voltam se só a última conversa ficou indisponível */ }
       const focoAnterior = focusPane;
       await reporRascunhos();

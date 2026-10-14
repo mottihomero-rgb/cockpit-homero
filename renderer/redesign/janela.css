@@ -336,6 +336,10 @@ html[data-theme$="-hc"] #usoCartao,body.sem-vidro #usoCartao{background:var(--bg
 /* saldo (IAs de chave) no cartão do topo */
 #usoCartao .uc-saldo{margin-top:6px;font-variant-numeric:tabular-nums}
 #usoCartao .uc-saldo.sem{color:var(--status-error)}
+#usoCartao .uc-top3{margin-top:10px;padding-top:9px;border-top:1px solid var(--separator, var(--fill-2))}
+#usoCartao .uc-item{display:flex;align-items:baseline;justify-content:space-between;gap:10px;font:400 12px/20px var(--font-sans)}
+#usoCartao .uc-nome{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#usoCartao .uc-val{flex:none;color:var(--label-2);font-variant-numeric:tabular-nums}
 
 /* ---------- barra em 3 colunas + uso do computador + pasta na aba (09/10) ----------
    Esquerda | pastas | direita. As duas pontas crescem por igual (1fr), então o bloco das pastas

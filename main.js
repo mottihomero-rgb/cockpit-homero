@@ -1066,6 +1066,18 @@ const paneVivo = (paneId) => paneStarts.has(paneId) || claudePanes.has(paneId) |
 // de que tela e o painel: o telefone poe um "w" na frente dos ids (renderer/app.js:11)
 const telaDoPane = (paneId) => (/^w/.test(String(paneId || '')) ? 'celular' : 'Mac');
 
+/* Recarregar a tela (⌘R ou a tela viva) renumera os chats (p1, p2...) mas NAO desliga os agentes que
+   rodavam com os numeros antigos. A conversa continuava "aberta" num painel que ja nao existe, e a
+   1a mensagem do chat novo era recusada ("ja esta aberta em outro chat desta tela"); so a 2a passava.
+   Cada painel guarda em que "geracao" da tela nasceu: dono de geracao anterior e fantasma, e quem
+   chega assume a conversa na hora, sem recusar. Painel do celular (prefixo w) nao depende da tela. */
+const geracaoDaTela = new WeakMap();
+const geracaoDe = (w) => (w && geracaoDaTela.get(w)) || 0;
+const subirGeracaoDaTela = (w) => { if (w) geracaoDaTela.set(w, geracaoDe(w) + 1); };
+const geracaoDoPane = new Map();   // paneId -> geracao da tela quando assumiu a conversa
+const donoOrfao = (dono) => !!dono && !/^w/.test(String(dono.paneId))
+  && geracaoDoPane.has(dono.paneId) && geracaoDoPane.get(dono.paneId) < geracaoDe(janelaDoId(dono.paneId));
+
 /* Quem esta com esta conversa, se nao for o proprio painel que pergunta. Dono que ja morreu
    (janela fechada, motor derrubado) sai do mapa na hora: trava nao pode virar cadeado. */
 function outroDonoDoFio(fio, paneId) {
@@ -1080,6 +1092,7 @@ function outroDonoDoFio(fio, paneId) {
 function soltarFio(paneId) {
   for (const [fio, dono] of donoDoFio) if (dono.paneId === paneId) donoDoFio.delete(fio);
   insistiuNoFio.delete(paneId);
+  geracaoDoPane.delete(paneId);
 }
 
 // guarda quem esta com a conversa; um painel so pode estar em uma por vez
@@ -1088,6 +1101,7 @@ function marcarDonoDoFio(paneId, fio, engine) {
   const antes = donoDoFio.get(String(fio));
   soltarFio(paneId);
   donoDoFio.set(String(fio), { paneId, engine: engine || (antes && antes.engine) || 'claude' });
+  geracaoDoPane.set(paneId, geracaoDe(janelaDoId(paneId)));
 }
 
 /* ======================= motor CLAUDE ======================= */
@@ -4008,14 +4022,18 @@ handle('mcp:list', async (_e, engine) => {
   const linhas = (r.out + '\n' + r.errout).split('\n').map(l => l.trim()).filter(Boolean);
   const out = [];
   for (const l of linhas) {
-    const m = l.match(/^(.+?):\s+(\S+)\s+-\s+(.+)$/);
+    /* o alvo tem espaço quando é comando ("uv run --script x", "npx pacote") ou "(HTTP)": o \S+ de
+       antes só casava URL pura e a lista inteira sumia, sobrando 1 conector. O estado sempre vem
+       depois de " - " e começa com o sinal (✔ ✘ ! ⏸). */
+    const m = l.match(/^(.+?):\s+(.+?)\s+-\s+([✔✘✗!⏸].*)$/);
     if (!m) continue;
     const st = m[3];
+    const falhou = /Failed/i.test(st);
     out.push({
-      nome: m[1], alvo: m[2],
-      ligado: true,
+      nome: m[1], alvo: m[2].replace(/([?&]secret=)[^&\s]+/g, '$1…'),
+      ligado: !falhou,
       precisaEntrar: /authentication|auth/i.test(st),
-      status: /Connected/i.test(st) ? 'conectado' : /authentication/i.test(st) ? 'precisa entrar' : st.replace(/[✔✗!⏸]/g, '').trim(),
+      status: /Connected/i.test(st) ? 'conectado' : /authentication/i.test(st) ? 'precisa entrar' : falhou ? 'não conectou' : st.replace(/[✔✘✗!⏸]/g, '').trim(),
     });
   }
   return out;
@@ -5349,6 +5367,7 @@ const pastaDaTela = () => telaVivaPasta || path.join(__dirname, 'renderer');
 /* Pedido de recarregar vindo de fora (o script de publicar encosta neste arquivo). Quem esta
    ditando ou com um terminal aberto nao e interrompido no meio de nada que se perca: a tela
    guarda os rascunhos antes, e as abas e os chats voltam do config. */
+let esperandoRecarga = false;
 function vigiarPedidoDeRecarregar() {
   if (!telaVivaPasta) return;
   const pedido = path.join(TELA_VIVA_DIR(), 'recarregar');
@@ -5356,16 +5375,32 @@ function vigiarPedidoDeRecarregar() {
   try {
     fs.watchFile(pedido, { interval: 1000 }, (agora, antes) => {
       if (agora.mtimeMs === antes.mtimeMs) return;
-      anota('tela viva: recarregando a pedido');
-      for (const w of BrowserWindow.getAllWindows()) {
-        try {
-          if (w.isDestroyed() || !/\/renderer\/index\.html/.test(w.webContents.getURL())) continue;
-          w.webContents.executeJavaScript("try{window.dispatchEvent(new Event('cockpit:salvar-rascunhos'))}catch(e){}", true)
-            .catch(() => {}).then(() => setTimeout(() => { try { if (!w.isDestroyed()) w.webContents.reloadIgnoringCache(); } catch {} }, 150));
-        } catch {}
-      }
+      /* Recarregar com agente trabalhando corta o fio entre ele e a tela: o chat parece ter parado
+         "do nada" (o agente segue la atras, sem ninguem ouvindo). Espera o turno acabar, ate 15 min. */
+      if (esperandoRecarga) return;   // varios pedidos juntos viram uma recarga so
+      esperandoRecarga = true;
+      const limite = Date.now() + 15 * 60 * 1000;
+      const aguardar = () => {
+        let ocupado = false;
+        try { for (const st of claudePanes.values()) if (st && st.rodando) { ocupado = true; break; } } catch {}
+        try { if (codex.paneTurn.size) ocupado = true; } catch {}
+        if (ocupado && Date.now() < limite) { setTimeout(aguardar, 3000); return; }
+        esperandoRecarga = false;
+        anota('tela viva: recarregando a pedido');
+        recarregarTelas();
+      };
+      aguardar();
     });
   } catch (e) { anota('tela viva: nao consegui vigiar o pedido de recarregar:', e); }
+}
+function recarregarTelas() {
+  for (const w of BrowserWindow.getAllWindows()) {
+    try {
+      if (w.isDestroyed() || !/\/renderer\/index\.html/.test(w.webContents.getURL())) continue;
+      w.webContents.executeJavaScript("try{window.dispatchEvent(new Event('cockpit:salvar-rascunhos'))}catch(e){}", true)
+        .catch(() => {}).then(() => setTimeout(() => { try { if (!w.isDestroyed()) w.webContents.reloadIgnoringCache(); } catch {} }, 150));
+    } catch {}
+  }
 }
 
 /* ======================= janela ======================= */
@@ -5462,7 +5497,7 @@ function createWindow() {
      nova nasceria sem eles. A cada carga da tela (abertura e ⌘R) tudo que sobrou na caixa e
      anunciado de novo. */
   // ⌘R: a tela nova ainda nao ouve, e nao tem como fechar terminal que ja ficou pra tras (pty orfao)
-  win.webContents.on('did-start-loading', () => { inboxOuvinte = false; for (const id of [...terms.keys()]) if (janelaDoId(id) === win) termMatar(id); });
+  win.webContents.on('did-start-loading', () => { subirGeracaoDaTela(win); inboxOuvinte = false; for (const id of [...terms.keys()]) if (janelaDoId(id) === win) termMatar(id); });
   win.webContents.on('did-finish-load', () => { inboxVistos.clear(); });      // e o que sobrou volta a ser anunciado quando ela avisar
 
   ligarMenuELinks(win);
@@ -5533,7 +5568,7 @@ function criarJanelaExtra(inicial) {
   ligarNavegadorInterno(w);
   ligarMenuELinks(w);
   w.loadFile(path.join(pastaDaTela(), 'index.html'), { query: { j: String(n) } });
-  w.webContents.on('did-start-loading', () => { for (const id of [...terms.keys()]) if (janelaDoId(id) === w) termMatar(id); });
+  w.webContents.on('did-start-loading', () => { subirGeracaoDaTela(w); for (const id of [...terms.keys()]) if (janelaDoId(id) === w) termMatar(id); });
   w.on('focus', zerarBadge);
   /* Fechar uma janela extra: 1) pergunta se tem agente trabalhando nela; 2) pede a ela mesma para
      parar os chats e terminais (ela sabe o motor de cada um); 3) se nao responder em 4 s, fecha. */
@@ -6147,6 +6182,89 @@ function usoDisco() {
 }
 handle('sistema:uso', async () => ({ cpu: { pct: usoCpu(), nucleos: os.cpus().length }, ram: await usoRam(), disco: usoDisco() }));
 
+/* Quem mais pesa (13/10): ao passar o mouse no anel, os 3 maiores de CPU, memoria e disco, com nome
+   simples. CPU/memoria = `ps` agrupado por programa (Chrome e seus 30 ajudantes viram "Chrome").
+   Disco = `du` em segundo plano e com prioridade minima (leva ~1 min), guardado em arquivo por 12 h. */
+const NOMES_PROG = {
+  'google chrome': 'Chrome', 'zoom.us': 'Zoom', 'visual studio code': 'VS Code', 'microsoft edge': 'Edge', 'windowserver': 'Tela do Mac',
+  launchd: 'Sistema', kernel_task: 'Sistema', coreaudiod: 'Áudio do Mac', mds_stores: 'Busca do Mac', mds: 'Busca do Mac',
+  mdworker_shared: 'Busca do Mac', corespotlightd: 'Busca do Mac', claude: 'Claude Code', node: 'Node', npm: 'Node', python: 'Python', python3: 'Python',
+  codex: 'Codex', ffmpeg: 'Vídeo (ffmpeg)', syncthing: 'Sincronização', 'com.apple.webkit.webcontent': 'Páginas do Safari',
+  'com.apple.webkit.networking': 'Páginas do Safari', 'com.apple.webkit.gpu': 'Páginas do Safari', 'cockpit helper': 'Cockpit',
+};
+function nomeDoProcesso(cmd) {
+  const app = /\/([^/]+)\.app(?:\/|$)/.exec(cmd);
+  let n = app ? app[1] : (cmd.split('/').pop() || cmd);
+  if (!app && /^npm /.test(n)) n = 'npm';
+  if (!app && /\/claude(\/|$)/.test(cmd)) n = 'claude';
+  n = n.replace(/ Helper.*$/, '').replace(/ \(.*\)$/, '').trim() || cmd;
+  return NOMES_PROG[n.toLowerCase()] || n;
+}
+let topProcCache = { em: 0, valor: null };
+function topProcessos() {
+  if (Date.now() - topProcCache.em < 2500 && topProcCache.valor) return Promise.resolve(topProcCache.valor);
+  return new Promise((ok) => {
+    require('child_process').execFile('/bin/ps', ['-Axo', 'pcpu=,rss=,comm='], { timeout: 4000, maxBuffer: 16 * 1024 * 1024 }, (err, out) => {
+      const grupos = new Map();
+      for (const l of String(out || '').split('\n')) {
+        const m = /^\s*([\d.]+)\s+(\d+)\s+(.+)$/.exec(l); if (!m) continue;
+        const nome = nomeDoProcesso(m[3]);
+        const g = grupos.get(nome) || { nome, cpu: 0, bytes: 0 };
+        g.cpu += parseFloat(m[1]) || 0; g.bytes += (parseInt(m[2], 10) || 0) * 1024; grupos.set(nome, g);
+      }
+      const lista = [...grupos.values()], nuc = os.cpus().length || 1;
+      const v = {
+        cpu: lista.map((g) => ({ nome: g.nome, pct: g.cpu / nuc })).sort((a, b) => b.pct - a.pct).slice(0, 3).map((g) => ({ nome: g.nome, pct: Math.max(1, Math.round(g.pct)) })),
+        ram: lista.sort((a, b) => b.bytes - a.bytes).slice(0, 3).map((g) => ({ nome: g.nome, bytes: g.bytes })),
+      };
+      topProcCache = { em: Date.now(), valor: v }; ok(v);
+    });
+  });
+}
+const NOMES_PASTA = {
+  '.cache': 'Cache de programas', Projetos: 'Projetos', '.claude': 'Claude', '.android': 'Android', Documents: 'Documentos', '.nvm': 'Node',
+  Robos: 'Robôs', '.codex': 'Codex', '.local': 'Programas locais', '.npm': 'Cache do npm', Downloads: 'Downloads', Desktop: 'Mesa',
+  Movies: 'Vídeos', Pictures: 'Fotos', Music: 'Músicas', '.Trash': 'Lixeira', Entrada: 'Entrada',
+  'Library/Application Support': 'Dados dos apps', 'Library/Containers': 'Dados dos apps', 'Library/Group Containers': 'Dados dos apps',
+  'Library/Caches': 'Cache do Mac', 'Library/Developer': 'Xcode', 'Library/Mobile Documents': 'iCloud', 'Library/Logs': 'Registros do Mac',
+};
+const arqTopDisco = path.join(os.homedir(), '.cockpit', 'disco-top.json');
+let topDisco = { em: 0, itens: null, calculando: false };
+try { const j = JSON.parse(fs.readFileSync(arqTopDisco, 'utf8')); if (j && Array.isArray(j.itens)) topDisco = { em: j.em || 0, itens: j.itens, calculando: false }; } catch {}
+function duLinhas(pasta) {
+  return new Promise((ok) => {
+    require('child_process').execFile('/usr/bin/nice', ['-n', '19', '/usr/bin/du', '-x', '-d', '1', '-k', '-I', 'CloudStorage', pasta],
+      { timeout: 240000, maxBuffer: 8 * 1024 * 1024 }, (err, out) => ok(String(out || '')));
+  });
+}
+async function calcularTopDisco() {
+  if (topDisco.calculando) return;
+  topDisco.calculando = true;
+  try {
+    const casa = os.homedir(), soma = new Map();
+    for (const raiz of [casa, path.join(casa, 'Library')]) {
+      for (const l of (await duLinhas(raiz)).split('\n')) {
+        const m = /^(\d+)\t(.+)$/.exec(l); if (!m) continue;
+        const rel = path.relative(casa, m[2]);
+        if (!rel || rel === 'Library' || rel === 'Drive') continue;
+        const nome = NOMES_PASTA[rel] || path.basename(rel).replace(/^\./, '');
+        soma.set(nome, (soma.get(nome) || 0) + parseInt(m[1], 10) * 1024);
+      }
+    }
+    const itens = [...soma].map(([nome, bytes]) => ({ nome, bytes })).sort((a, b) => b.bytes - a.bytes).slice(0, 3);
+    if (itens.length) {
+      topDisco = { em: Date.now(), itens, calculando: false };
+      try { fs.mkdirSync(path.dirname(arqTopDisco), { recursive: true }); fs.writeFileSync(arqTopDisco, JSON.stringify({ em: topDisco.em, itens })); } catch {}
+    }
+  } catch {}
+  topDisco.calculando = false;
+}
+handle('sistema:top', async () => {
+  if (!topDisco.calculando && Date.now() - topDisco.em > 12 * 3600 * 1000) calcularTopDisco();
+  const p = await topProcessos();
+  return { cpu: p.cpu, ram: p.ram, disco: { itens: topDisco.itens, calculando: topDisco.calculando } };
+});
+
 function codexSettingsFor(paneId, changes = {}) {
   const base = codexProtocol.normalizeSettings(codexPaneSettings.get(paneId) || {}, codexPendingSettings.get(paneId) || {});
   const settings = codexProtocol.normalizeSettings(base, changes);
@@ -6435,7 +6553,8 @@ handle('pane:start', async (_e, data) => {
      Ramificar e a excecao, de proposito: o --fork-session abre uma conversa NOVA levando o
      historico junto, sem escrever dentro da de origem. */
   const donoAtual = data.fork ? null : outroDonoDoFio(resumeId, paneId);
-  if (donoAtual && insistiuNoFio.get(paneId) !== String(resumeId)) {
+  const donoFantasma = donoOrfao(donoAtual);   // sobrou de antes de a tela recarregar: assume sem recusar
+  if (donoAtual && !donoFantasma && insistiuNoFio.get(paneId) !== String(resumeId)) {
     insistiuNoFio.set(paneId, String(resumeId));
     const onde = telaDoPane(donoAtual.paneId) === telaDoPane(paneId)
       ? 'em outro chat desta tela'
@@ -6451,7 +6570,7 @@ handle('pane:start', async (_e, data) => {
     try { await HANDLERS['pane:stop'](null, { paneId: donoAtual.paneId, engine: donoAtual.engine }); }
     catch (e) { anota('nao consegui desligar o dono anterior da conversa:', e && e.message); }
     if (!aberturaAtual()) return false;
-    emit(donoAtual.paneId, 'note', { text: 'Esta conversa foi aberta ' + (telaDoPane(paneId) === 'Mac' ? 'no Mac' : 'no celular') + ' e passou para lá. Este chat parou.', error: true });
+    if (!donoFantasma) emit(donoAtual.paneId, 'note', { text: 'Esta conversa foi aberta ' + (telaDoPane(paneId) === 'Mac' ? 'no Mac' : 'no celular') + ' e passou para lá. Este chat parou.', error: true });
   }
   insistiuNoFio.delete(paneId);
   /* Daqui pra frente a conversa e deste painel. Se o motor nao subir, o paneVivo solta sozinho.

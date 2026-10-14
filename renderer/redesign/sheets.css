@@ -508,6 +508,11 @@ html[data-theme$="-hc"] .cx-terminal .term-link{border-top-color:rgba(255,255,25
      o título dos chats vizinhos passava POR CIMA do topo do visor (navegador interno, PDF, imagem,
      qualquer arquivo). Com o visor aberto, o chat dono sobe para o nível do visor. */
   .pane:has(> .modal.p-visor:not(.hidden)){z-index:380}
+  /* O mesmo vale para a janelinha (Conectores, Conta, Configuração, terminal): ela é fixa na janela
+     inteira, mas mora dentro do chat dono, e o título dos chats vizinhos (z-index:2) passava POR
+     CIMA dela — o nome da conversa de trás aparecia escrito dentro da caixa e comia a lista.
+     Aberta, o chat dono sobe para o nível dela. (Menu .como-menu fica de fora: é pequeno, perto.) */
+  .pane:has(> .modal.p-modal:not(.como-menu):not(.hidden)){z-index:380}
   .visor-cx{width:100%;height:100%;max-height:none;display:flex;flex-direction:column;overflow:hidden}
   .visor-corpo img{max-height:100%}
 

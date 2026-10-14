@@ -4359,7 +4359,6 @@ async function send(P, textoProgramatico, opcoes = {}) {
         ...pedidoCodex,
       });
       if (!painelAindaAtual(P, revisao)) return retorno(false, 'Esta conversa mudou. Reabra o arquivo.');
-      if (inicio === false || inicio && (inicio.error || inicio.ok === false)) throw new Error(inicio && inicio.error || 'O motor não abriu.');
       /* Esta mesma conversa ja esta aberta em outra tela. O Mac recusou subir um segundo agente
          nela — seriam dois mexendo no mesmo historico e na mesma pasta ao mesmo tempo. A fala
          volta inteira pro campo, com os anexos, e o chat conta o que houve. Mandar de novo
@@ -4372,6 +4371,7 @@ async function send(P, textoProgramatico, opcoes = {}) {
           + '. Mande de novo para trazer ela para cá — o chat de lá para.', true);
         return retorno(false, 'Esta conversa já está aberta em outra tela. Seus ajustes continuam salvos.');
       }
+      if (inicio === false || inicio && (inicio.error || inicio.ok === false)) throw new Error(inicio && inicio.error || 'O motor não abriu.');
       // Uma versao antiga podia guardar aqui o numero da conversa do outro motor. O processo
       // principal se recupera abrindo outra; antes de mandar a fala, esta tela repoe o contexto.
       if (inicio && inicio.nova && historicoAnterior && !P.passarContexto) {
@@ -9100,6 +9100,28 @@ const PC_ICONES = {
 const PC_ROTULOS = { cpu: 'CPU', ram: 'Memória', disco: 'Disco' };
 const gbTxt = (b) => (b / 1073741824).toFixed(1).replace('.', ',') + ' GB';
 let usoPcUltimo = null;
+/* Os 3 que mais pesam (13/10): vem do main (sistema:top) ao abrir o cartão; repinta junto com o cartão. */
+let topPcUltimo = null, topPcEm = 0, topPcBusy = false;
+const mbTxt = (b) => b >= 1073741824 ? gbTxt(b) : Math.max(1, Math.round(b / 1048576)) + ' MB';
+function topPcHtml(k) {
+  const t = topPcUltimo && topPcUltimo[k];
+  if (!window.api.sistemaTop || !t) return '';
+  const lista = Array.isArray(t) ? t : t.itens;
+  if (!lista || !lista.length) return t.calculando ? '<div class="uc-top3"><div class="uc-num">Calculando…</div></div>' : '';
+  const lin = lista.map((i) => '<div class="uc-item"><span class="uc-nome">' + escaparAtributo(i.nome) + '</span><span class="uc-val">'
+    + (k === 'cpu' ? i.pct + '%' : mbTxt(i.bytes)) + '</span></div>').join('');
+  return '<div class="uc-top3">' + lin + '</div>';
+}
+async function pedirTopPc(el, k) {
+  if (!window.api.sistemaTop || topPcBusy || Date.now() - topPcEm < 2500) return;
+  topPcBusy = true;
+  try {
+    topPcUltimo = await window.api.sistemaTop(); topPcEm = Date.now();
+    const c = $('#usoCartao');
+    if (c && !c.classList.contains('hidden') && c.dataset.pc === k) abrirCartaoPc(el, k);
+  } catch {}
+  topPcBusy = false;
+}
 function abrirCartaoPc(el, k) {
   clearTimeout(cartaoUsoTimer);
   let cartao = $('#usoCartao');
@@ -9126,7 +9148,8 @@ function abrirCartaoPc(el, k) {
   }
   cartao.dataset.motor = ''; cartao.dataset.pc = k;
   cartao.innerHTML = '<div class="uc-top"><span class="uc-logo">' + PC_ICONES[k] + '</span><span class="uc-tit"></span>'
-    + (plano ? '<span class="uc-plano"></span>' : '') + '</div>' + corpo;
+    + (plano ? '<span class="uc-plano"></span>' : '') + '</div>' + corpo + topPcHtml(k);
+  pedirTopPc(el, k);
   $('.uc-tit', cartao).textContent = titulos[k];
   if (plano) $('.uc-plano', cartao).textContent = plano;
   cartao.classList.remove('hidden');

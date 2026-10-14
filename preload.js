@@ -79,6 +79,7 @@ contextBridge.exposeInMainWorld('api', {
   onJanelaEncerrar: (cb) => ipcRenderer.on('janela:encerrar', () => cb()),
   // uso do computador (CPU, memoria, disco) para os aneis do topo
   sistemaUso: () => ipcRenderer.invoke('sistema:uso'),
+  sistemaTop: () => ipcRenderer.invoke('sistema:top'),
   verArquivo: (f) => ipcRenderer.invoke('arquivo:ver', f),
   revisarArquivo: (f) => ipcRenderer.invoke('arquivo:revisar', f),
   revisaoConferir: (o) => ipcRenderer.invoke('arquivo:revisaoConferir', o),

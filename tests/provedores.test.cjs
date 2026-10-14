@@ -55,7 +55,7 @@ test('chave: validar, guardar com permissão 600, mascarar e remover', () => {
   assert.equal(conta.email, '••••abcd');
   assert.ok(!JSON.stringify(conta).includes('sk-1234567890'), 'a chave inteira nunca sai de ler()');
   const arq = path.join(HOME, '.cockpit', 'provedores.json');
-  assert.equal(fs.statSync(arq).mode & 0o777, 0o600);
+  if (process.platform !== 'win32') assert.equal(fs.statSync(arq).mode & 0o777, 0o600);
   assert.equal(p.chaveDe('deepseek'), 'sk-1234567890abcd');
   assert.equal(p.remover('deepseek').entrou, false);
   assert.equal(p.chaveDe('deepseek'), '');

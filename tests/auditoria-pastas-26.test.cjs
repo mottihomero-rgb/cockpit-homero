@@ -19,7 +19,7 @@ function ambiente(t) {
     handle: (n, fn) => { handlers[n] = fn; }, emit: (...args) => eventos.push(args),
     ehRemoto: cwd => /^vps:\//.test(String(cwd || '')), motorAcp: e => e === 'acp' || e === 'grok',
     outroDonoDoFio: () => { posse.push('consultou'); return null; }, marcarDonoDoFio: () => posse.push('marcou'),
-    insistiuNoFio: new Map(), paneStarts: new Map(),
+    donoOrfao: () => false, insistiuNoFio: new Map(), paneStarts: new Map(),
     claudeStart: (id, opts) => { chamadas.push({ id, ...opts }); return true; },
     loadConfig: () => ctx.config,
   };

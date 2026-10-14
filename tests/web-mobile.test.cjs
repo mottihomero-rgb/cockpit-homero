@@ -83,7 +83,7 @@ test('Login salvo sobrevive ao reinicio e ao tempo; disco nao guarda senha nem c
   assert.match(entrada.headers.get('set-cookie'), /Max-Age=34560000; HttpOnly; SameSite=Strict/);
   const gravado = fs.readFileSync(arquivoSessoes, 'utf8');
   assert.ok(!gravado.includes(cookie.slice(3)) && !gravado.includes('senha-apenas-de-teste'));
-  assert.equal(fs.statSync(arquivoSessoes).mode & 0o777, 0o600);
+  if (process.platform !== 'win32') assert.equal(fs.statSync(arquivoSessoes).mode & 0o777, 0o600);
   a.s.fechar(); await once(a.s.servidor, 'close');
   const b = await servidor(t, { arquivoSessoes });
   t.mock.method(Date, 'now', () => 20000000000000);

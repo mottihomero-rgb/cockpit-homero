@@ -470,6 +470,10 @@ html[data-theme$="-hc"] .cx-terminal .term-link{border-top-color:rgba(255,255,25
      Os véus já começam em --veu-topo (a barra de arrastar a janela fica livre para arrastar e
      para os semáforos); a faixa de cima escurece por um ::before que não pega clique. */
   #novaAba,#telaAtalhos,.modal.global{display:block;padding:0 16px}
+  /* 22/10 (pedido dele): a tela "Nova aba" (ao abrir o app ou uma janela nova) fica no MEIO da
+     janela, na horizontal e na vertical, e não colada embaixo da barra do topo como as outras
+     sheets. Só ela: Atalhos e as janelinhas dos chats seguem como no desenho. */
+  #novaAba{display:grid;place-items:center}
   /* A janelinha do painel sai de dentro do painel: position:fixed na janela inteira, como no
      desenho (a Conta e a Configuração no meio da janela, não espremidas num chat estreito).
      Ela continua MORANDO no .p-modal do painel dono — o Esc, o ⌘W e os fecharModal acham por ali. */

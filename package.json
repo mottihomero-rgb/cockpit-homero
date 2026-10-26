@@ -1,6 +1,6 @@
 {
   "name": "cockpit",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Codex e Claude lado a lado, com acesso a tudo no Mac",
   "main": "main.js",
   "author": "Cliente",
@@ -46,6 +46,7 @@
       "nomes-conversa.js",
       "pastas-conversas.js",
       "nomes-agentes.js",
+      "contas-claude.js",
       "hora-da-fala.js",
       "mais-detalhes.js",
       "som-conclusao.js",

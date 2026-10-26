@@ -475,6 +475,7 @@ function ativarAbaProjeto(A) {
   // ultimo instante em que a aba que sai ainda tem altura: e agora ou nunca pra anotar
   // onde cada conversa dela estava sendo lida (escondida, a medida vale 0)
   if (abaAtiva && abaAtiva !== A) for (const pid of abaAtiva.ordem) guardarRolagem(panes.get(pid));
+  const veioDeOutra = abaAtiva !== A;   // clicar na aba em que ele JÁ está não mexe em rolagem nem em destaque
   abaAtiva = A;
   for (const B of abas.values()) {
     const on = B === A;
@@ -493,11 +494,25 @@ function ativarAbaProjeto(A) {
   // chat que recebeu resposta com a aba escondida precisa voltar rolado pro fim.
   // e chat que foi remontado ENQUANTO a aba estava escondida (arrastar chat de aba)
   // so agora tem altura pra receber de volta o ponto de leitura que ficou pendente
+  /* 22/10 (pedido dele): abrir a pasta deixa TODOS os chats dela rolados até o fim, nas últimas
+     coisas escritas. Antes cada chat voltava ao ponto em que estava sendo lido (e, escondido, o
+     navegador ainda zera a rolagem): ele entrava e dava de cara com o começo da conversa. Roda de
+     novo uns 180 ms depois porque o tamanho do texto só assenta depois que a aba aparece. */
   for (const pid of A.ordem) {
     const q = panes.get(pid);
     if (!q) continue;
-    if (q.precisaRolar) { q.precisaRolar = false; q.rolagemPendente = false; requestAnimationFrame(() => { q.chat.scrollTop = q.chat.scrollHeight; }); }
+    if (veioDeOutra) {
+      q.precisaRolar = false; q.rolagemPendente = false; q.rolagem = { noFim: true };
+      const fim = () => { if (q.chat && q.chat.isConnected && panes.get(q.id) === q && abaAtiva === A) q.chat.scrollTop = q.chat.scrollHeight; };
+      requestAnimationFrame(fim); setTimeout(fim, 180);
+    } else if (q.precisaRolar) { q.precisaRolar = false; q.rolagemPendente = false; requestAnimationFrame(() => { q.chat.scrollTop = q.chat.scrollHeight; }); }
     else if (q.rolagemPendente) requestAnimationFrame(() => { if (devolverRolagem(q)) q.rolagemPendente = false; });
+  }
+  // abriu a pasta: os chats que não são o da resposta pendente ficam apagados, o pendente fica aceso
+  if (veioDeOutra) {
+    for (const pid of A.ordem) { const q = panes.get(pid); if (q) q.apagLiberado = false; }
+    A.apagaOutros = A.ordem.map((id) => panes.get(id)).filter(Boolean).some(painelPendente);
+    pintarDestaqueLeitura();
   }
   pintarMulti();          // a barra de baixo (modelo, modo, envio) segue a aba que abriu:
                           // sem isto, vir de uma aba de 3 chats deixava a de 1 chat comprimida
@@ -917,6 +932,8 @@ function newPane(opts = {}) {
     model: opts.model || modeloNovo(motorDoPainel),
     started: false, busy: false, queued: null, filaMsgs: [], hist: [], passarContexto: null,
     titulo: opts.titulo || '', sessaoId: null, sessaoFile: '', anexos: [],
+    // as notas do popup (notas.js) são desta conversa: este número vale até ela ganhar o id de verdade
+    notasId: opts.notasId || novoIdAleatorio(),
     // 25/09: a conversa de antes da última troca de IA (esperando costura) e as partes mais velhas
     parteAnterior: null, partesAnteriores: [],
     envio: cfg.envioPadrao || 'fila',
@@ -1050,7 +1067,8 @@ function newPane(opts = {}) {
   inp.addEventListener('input', () => {
     const v = inp.value;
     const cursor = inp.selectionStart || v.length;
-    const mm = /@([^\s@]*)$/.exec(v.slice(0, cursor));
+    // so' abre no comeco da palavra: e-mail (fulano@gmail.com) nao dispara a busca de arquivos
+    const mm = /(?:^|[\s(])@([^\s@]*)$/.exec(v.slice(0, cursor));
     if (mm) menuArquivos(P, mm[1]);
     // apagou o "@": fecha o menu e cancela a busca que ainda vinha pela rede (senao ela
     // abriria o menu sozinha segundos depois, por cima do que estivesse na tela)
@@ -1070,8 +1088,8 @@ function newPane(opts = {}) {
       else { const t = v.slice(1); inp.value = ''; inp.style.height = 'auto'; menuSkills(P, t, true); }
     }
   });
-  inp.addEventListener('focus', () => setFocus(P));
-  el.addEventListener('mousedown', () => setFocus(P));
+  inp.addEventListener('focus', () => { P.apagLiberado = true; setFocus(P); });
+  el.addEventListener('mousedown', () => { P.apagLiberado = true; setFocus(P); });
   // colar com cmd+V: imagem da area de transferencia ou arquivo copiado no Finder
   const colar = async (e) => {
     const dt = e.clipboardData;
@@ -1265,7 +1283,7 @@ function serializarChat(P) {
   return {
         engine: P.engine, cwd: P.cwd, model: P.model, mode: P.mode, effort: P.effort,
         serviceTier: P.serviceTier, experimentalContext: P.experimentalContext,
-        collaborationMode: P.collaborationMode,
+        collaborationMode: P.collaborationMode, notasId: P.notasId,
         titulo: P.titulo, larg: P.larguraColuna ? '0 0 ' + P.larguraColuna + 'px' : '',
         /* de quem e o nome: sem guardar, reabrir o app esquecia que ele trocou o nome a mao (e a
            IA voltava a mexer) e parava de acompanhar a conversa que o Cockpit estava nomeando */
@@ -1391,7 +1409,7 @@ async function restaurarAbasCorpo(salvas) {
         engine: c.engine, aba: A, cwd: c.cwd || a.cwd,
         model: c.model, mode: c.mode, effort: c.effort, titulo: c.titulo,
         serviceTier: c.serviceTier, experimentalContext: c.experimentalContext,
-        collaborationMode: c.collaborationMode,
+        collaborationMode: c.collaborationMode, notasId: c.notasId,
         coluna: c.coluna, pesoAltura: c.pesoAltura, plano: c.plano, planoAberto: c.planoAberto,
         larguraColuna: c.larguraColuna || Number((String(c.larg || '').match(/([\d.]+)px$/) || [])[1]) || 0,
       });
@@ -1783,6 +1801,7 @@ function setFocus(P) {
   if (window.SEM_ELECTRON) window.dispatchEvent(new CustomEvent('cockpit:foco', { detail: { paneId: P.id } }));
   // o chat recebeu foco: a resposta nova já foi vista, o ponto azul some (README, "Estados")
   if (P.nova) { P.nova = false; pintarPonto(P); }
+  agendarDestaque();
   if (focusPane === P) return;
   focusPane = P;
   avisarQuemEspera();   // o chat que ele acabou de abrir nao precisa mais de tarja
@@ -1974,6 +1993,7 @@ function setDot(P, state) {
    trabalhando; quem está parado em vermelho está esperando ele. */
 function pintarPonto(P) {
   pintarSeloTorre();
+  agendarDestaque();
   if (!P || !P.el) return;
   const pt = $('.p-dot', P.el);
   if (!pt) return;
@@ -1991,6 +2011,34 @@ function pintarPonto(P) {
    "nova = azul", e só a metade do "nada" tinha chegado. */
 function marcarRespostaNova(P) {
   if (P && P !== focusPane) P.nova = true;
+}
+
+/* ---- destaque de leitura (22/10, pedido dele) ----
+   Ao abrir uma pasta com vários chats, bate o olho e vê QUAL ler: o chat com a resposta pendente
+   (terminou e ele ainda não viu, ou está esperando uma resposta/autorização dele) fica aceso; os
+   outros (trabalhando, ou já lidos) ficam apagados. Pegou o chat (clique ou escrever), ele volta ao
+   normal; leu o pendente, tudo volta ao normal. Só vale com 2 chats ou mais na pasta. */
+function painelPendente(P) {
+  const e = estadoDoPainel(P).cls;
+  return e === 'espera' || (!!P.nova && e !== 'ocupado');
+}
+let destaqueAgendado = 0;
+function agendarDestaque() {
+  if (destaqueAgendado) return;
+  destaqueAgendado = requestAnimationFrame(() => { destaqueAgendado = 0; pintarDestaqueLeitura(); });
+}
+function pintarDestaqueLeitura() {
+  for (const q of panes.values()) q.el.classList.remove('ck-aceso', 'ck-apagado');
+  const A = abaAtiva;
+  if (!A) return;
+  const ps = A.ordem.map((id) => panes.get(id)).filter(Boolean);
+  if (ps.length < 2) return;
+  const pend = ps.filter(painelPendente);
+  if (!pend.length) { A.apagaOutros = false; return; }
+  for (const q of ps) {
+    if (pend.includes(q)) q.el.classList.add('ck-aceso');
+    else if (A.apagaOutros && !q.apagLiberado) q.el.classList.add('ck-apagado');
+  }
 }
 
 /* ============ desenho das mensagens ============ */
@@ -4576,7 +4624,7 @@ function receberEventoPane(ev) {
       // grava o fio no disco NA HORA. Antes so ia junto do proximo salvamento por outro motivo:
       // fechar o app logo depois de a conversa nascer perdia o numero dela, e ao reabrir o chat
       // voltava sem fio — a mesma armadilha de continuar o trabalho de outra conversa.
-      if (mudou) savePanes();
+      if (mudou) { savePanes(); try { window.Notas && window.Notas.sessao(P); } catch {} }
       break;
     }
     // o Claude disse que essa conversa nao existe mais: agora sim o fio se solta
@@ -4641,6 +4689,11 @@ function receberEventoPane(ev) {
     case 'agentes': agentesEvento(P, ev); break;
     case 'voz': vozEvento(P, ev); break;
     case 'note': note(P, ev.text, ev.error); break;
+    /* o Claude bateu o limite e o Cockpit já passou para outra conta: segue o trabalho sozinho.
+       O envio abre o processo novo na conta nova, na mesma conversa (pane:send religa). */
+    case 'conta-continuar':
+      setTimeout(() => { if (panes.get(P.id) === P && !P.busy) enviarContinue(P); }, 900);
+      break;
     case 'turn-end':
       marcarFimDoTurno(P);   // PRIMEIRA linha: o carimbo precisa do P.t0 antes de qualquer limpeza
       avisarQueTerminou(P);
@@ -4708,6 +4761,10 @@ function receberEventoPane(ev) {
   }
 }
 window.api.onPaneEvent(receberEventoPane);
+/* o Cockpit trocou (ou o usuário trocou/adicionou/tirou) a conta do Claude: repinta anel, conta e Ajustes */
+if (window.api.onContasClaude) window.api.onContasClaude(() => {
+  try { contaCache.claude = null; USO_FECHADO.claude = null; lerUso('claude', true); pintarContaLateral('claude', true); pintarContasAjustes(true); } catch {}
+});
 
 /* O pedido de permissao vale so enquanto AQUELE turno daquele motor esta vivo. Sem apagar a
    tarja no fim do turno, na queda e na troca de motor, ela ficava pendurada pedindo autorizacao
@@ -5578,7 +5635,18 @@ function citarTrecho(P, trecho) {
   $('.pc-x', el).onclick = () => { limparCitacao(P); const c = $('.p-input', P.el); if (c) c.focus(); };
   cx.insertBefore(el, cx.firstChild);
   setFocus(P);
-  const campo = $('.p-input', P.el); if (campo) campo.focus();
+  /* 22/10: clicou em Responder, ja pode digitar. O foco e' pedido na hora e conferido de novo
+     no proximo quadro e depois de 80 ms: se qualquer coisa (a selecao sumindo, o chat sendo
+     enquadrado, a barrinha escondendo) tirar o cursor do campo, ele volta, no fim do texto. */
+  const focar = () => {
+    const c = $('.p-input', P.el);
+    if (!c || document.activeElement === c) return;
+    c.focus();
+    const n = c.value.length; c.setSelectionRange(n, n);
+  };
+  focar();
+  requestAnimationFrame(focar);
+  setTimeout(focar, 80);
 }
 /* ---- selecionou um trecho da resposta: barrinha com 3 ações (26/09, pedido dele, igual ao app do
    Codex) — Responder (o trecho vai preso à próxima fala), Mais detalhes (janelinha ao lado que explica
@@ -5632,7 +5700,9 @@ function mostrarBotaoResponder() {
         botaoResponder._sel = null;
         esconderBotaoResponder();
         if (agora && painelAindaAtual(agora.P, agora.revisao) && agora.P.hist === agora.hist) {
-          fazer(agora); try { window.getSelection().removeAllRanges(); } catch {}
+          // limpa a selecao ANTES da acao: ela pode mandar o cursor para o campo de escrever
+          try { window.getSelection().removeAllRanges(); } catch {}
+          fazer(agora);
         }
       });
       botaoResponder.appendChild(b);
@@ -8937,8 +9007,90 @@ async function adicionarConta(eng) {
   let c = contaCache[eng];
   if (!c) { try { c = await window.api.contaLer(eng); } catch {} }
   const entrou = !!(c && c.entrou);
+  // Claude no Mac com conta já vinculada: a nova entra como conta EXTRA (as duas ficam logadas,
+  // e o Cockpit passa de uma para a outra perto do limite). Sem isso, adicionar era trocar.
+  if (eng === 'claude' && entrou && window.api.contasClaudeNova) return adicionarContaClaude();
   if (entrou) await guardarContaSozinha(eng);
   entrarNaConta(eng, entrou, { guardar: true });
+}
+async function adicionarContaClaude() {
+  let r = null;
+  try { r = await window.api.contasClaudeNova(); } catch (e) { r = { error: String((e && e.message) || e) }; }
+  let P = (focusPane && focusPane.engine === 'claude') ? focusPane : [...panes.values()].find((q) => q.engine === 'claude');
+  if (!P) P = focusPane || panes.values().next().value;
+  if (!P) P = novoChatNaAba('claude');
+  if (!P) return;
+  if (!r || r.error) return avisoTemp(P, (r && r.error) || 'Não consegui preparar a conta.', true);
+  document.body.classList.remove('gaveta');
+  setFocus(P);
+  const aoTerminar = async (code, estado) => {
+    if (code) { try { await window.api.contasClaudeCancelar(r.id); } catch {} return estado('falhou'); }
+    estado('conferindo');
+    let c = null;
+    try { c = await window.api.contasClaudeConfirmar(r.id); } catch (e) { c = { error: String((e && e.message) || e) }; }
+    if (c && c.ok) {
+      estado('ok', c.email);
+      avisoTemp(P, 'Conta adicionada: ' + c.email + '. O Cockpit troca sozinho quando a que está em uso passar de 90%.');
+      pintarContasAjustes(true);
+    } else {
+      estado('falhou');
+      avisoTemp(P, (c && c.error) || 'A conta não foi adicionada. Tente de novo.', true);
+    }
+  };
+  janelaTerminal(P, r.terminal, 'Adicionar outra conta do Claude', () => { pintarContasAjustes(true); }, {
+    abrirSozinho: true, vincular: 'claude', aoTerminar,
+    deNovo: () => { try { window.api.contasClaudeCancelar(r.id); } catch {} adicionarContaClaude(); },
+  });
+}
+
+/* As contas do Claude na janela da Conta: as outras entram como radios (um clique passa os
+   PRÓXIMOS chats para ela; o que está rodando termina na conta de antes), com sessão e semana. */
+async function contasClaudeNaJanela(P, modal, lista, acao, mais) {
+  if (!window.api.contasClaudeEstado) return;
+  let est = null;
+  try { est = await window.api.contasClaudeEstado(true); } catch {}
+  if (!est || !est.mac || modal.classList.contains('hidden') || !lista.isConnected) return;
+  const pct = (j) => Math.min(100, Math.max(0, (j && j.pct) || 0)) + '%';
+  for (const c of est.contas) {
+    if (c.ativa) continue;
+    const b = document.createElement('button');
+    b.className = 'ct-linha';
+    b.innerHTML = '<span class="ct-radio"></span><span class="ct-txt"><span class="ct-n"></span><span class="ct-e"></span></span>';
+    $('.ct-n', b).textContent = c.email || (c.principal ? 'Conta principal' : 'Conta do Claude');
+    $('.ct-e', b).textContent = [c.sessao ? 'sessão ' + pct(c.sessao) : '', c.semana ? 'semana ' + pct(c.semana) : '',
+      c.cheia ? 'cheia' : '', (!c.sessao && !c.semana) ? 'limite indisponível' : ''].filter(Boolean).join(' · ');
+    b.title = 'Usar esta conta nos próximos chats';
+    b.onclick = async () => {
+      let r = null;
+      try { r = await window.api.contasClaudeUsar(c.id); } catch (e) { r = { error: String((e && e.message) || e) }; }
+      fecharModal(P);
+      if (r && r.error) return note(P, 'Não consegui trocar: ' + r.error, true);
+      avisoTemp(P, 'O Claude passa a usar ' + (c.email || 'a outra conta') + ' a partir da próxima mensagem. O que está rodando termina na conta de antes.');
+    };
+    lista.appendChild(b);
+  }
+  acao('plus', 'Adicionar outra conta…', () => { fecharModal(P); adicionarContaClaude(); });
+  if (est.contas.length > 1) {
+    acao('check', 'Troca sozinha aos ' + est.limite + '%: ' + (est.auto ? 'ligada' : 'desligada'), async () => {
+      try { await window.api.contasClaudeAuto(!est.auto); } catch {}
+      fecharModal(P);
+      avisoTemp(P, 'Troca sozinha aos ' + est.limite + '%: ' + (est.auto ? 'desligada.' : 'ligada.'));
+    });
+    if (est.contas.some((c) => !c.principal)) {
+      acao('eraser', 'Tirar uma conta extra…', () => { fecharModal(P); menuTirarContaClaude(P, est); });
+    }
+  }
+}
+function menuTirarContaClaude(P, est) {
+  const m = novoMenu(P);
+  m.appendChild(tituloPopup('Tirar conta extra', 'Apaga só o login desta conta aqui no Cockpit. A conta em si e as conversas continuam.'));
+  for (const c of est.contas.filter((x) => !x.principal)) {
+    m.appendChild(elItem({ ic: 'eraser', nome: c.email || 'Conta do Claude', tag: c.ativa ? 'Em uso' : '' }, async () => {
+      const r = await window.api.contasClaudeRemover(c.id);
+      if (!r || r.error) return note(P, 'Não consegui tirar: ' + ((r && r.error) || 'erro'), true);
+      avisoTemp(P, 'Conta ' + (c.email || '') + ' tirada.');
+    }));
+  }
 }
 function pintarAdicionarConta(cx, motores) {
   let linha = $('.aj-conta-add', cx);
@@ -8971,6 +9123,43 @@ function pintarAdicionarConta(cx, motores) {
       adicionarConta(m);
     };
     ias.appendChild(b);
+  }
+}
+
+/* 22/10: o Claude pode ter VÁRIAS contas logadas (troca sozinha aos 90%). A linha do Claude mostra a
+   que está em uso; aqui embaixo dela entra uma linha para cada OUTRA conta, com sessão/semana e o
+   botão "Usar". Sem isto, quem logava a 2ª conta só via a nova e achava que a outra tinha sumido. */
+async function pintarContasExtrasClaude(cx) {
+  if (!window.api.contasClaudeEstado) return;
+  let est = null;
+  try { est = await window.api.contasClaudeEstado(true); } catch {}
+  if (!cx.isConnected) return;
+  for (const l of cx.querySelectorAll('.aj-conta[data-claude-id]')) l.remove();
+  const base = $('.aj-conta[data-motor="claude"]', cx);
+  if (!est || !est.mac || !base || est.contas.length < 2) return;
+  const pct = (j) => Math.min(100, Math.max(0, (j && j.pct) || 0)) + '%';
+  let ancora = base;
+  for (const c of est.contas) {
+    if (c.ativa) continue;
+    const linha = document.createElement('section');
+    linha.className = 'aj aj-conta vinculada';
+    linha.dataset.claudeId = c.id;
+    linha.innerHTML = '<span class="ajc-logo mo-logo" data-motor="claude">' + svgMotor('claude') + '</span>'
+      + '<span class="ajc-txt"><span class="ajc-n">Claude</span><span class="ajc-e"></span></span>'
+      + '<button class="ajc-bt" type="button">Usar</button>';
+    const resumo = [c.sessao ? 'sessão ' + pct(c.sessao) : '', c.semana ? 'semana ' + pct(c.semana) : '', c.cheia ? 'cheia' : ''].filter(Boolean).join(' · ');
+    $('.ajc-e', linha).textContent = [c.email || 'Conta do Claude', resumo].filter(Boolean).join(' · ');
+    linha.title = 'Usar esta conta nos próximos chats';
+    const usar = async (e) => {
+      if (e) e.stopPropagation();
+      let r = null;
+      try { r = await window.api.contasClaudeUsar(c.id); } catch (err) { r = { error: String((err && err.message) || err) }; }
+      if (r && r.error) return mostrarAviso({ id: 'conta-claude', tipo: 'erro', texto: 'Não consegui trocar: ' + r.error });
+      pintarContaLateral('claude', true); pintarContasAjustes(true);
+    };
+    $('.ajc-bt', linha).onclick = usar;
+    linha.onclick = usar;
+    ancora.after(linha); ancora = linha;
   }
 }
 
@@ -9018,6 +9207,7 @@ async function pintarContasAjustes(forcar) {
   // IA que sumiu deste Mac sai da lista
   for (const l of [...cx.children]) if (l.dataset.motor && !motores.includes(l.dataset.motor)) l.remove();
   pintarAdicionarConta(cx, motores);
+  pintarContasExtrasClaude(cx);
 }
 
 /* ---- conta e uso do plano no topo da lista de conversas (25/09) ----
@@ -9413,6 +9603,7 @@ async function janelaConta(P, motorPedido) {
 
   /* as contas GUARDADAS deste motor (as mesmas do menu "Contas guardadas") entram como os
      outros radios: clicar troca na hora, sem navegador — o mesmo trocarParaConta de la. */
+  if (eng === 'claude') await contasClaudeNaJanela(P, modal, lista, acao, mais);
   if (eng !== 'claude' && eng !== 'codex') return;
   let guardadas = [];
   try { const r = await window.api.contasListar(eng); guardadas = Array.isArray(r) ? r : []; } catch {}
@@ -10151,7 +10342,7 @@ function arrobaAindaNoCampo(P, termo) {
   const inp = P && P.el && $('.p-input', P.el);
   if (!inp) return false;
   const v = inp.value;
-  const mm = /@([^\s@]*)$/.exec(v.slice(0, inp.selectionStart || v.length));
+  const mm = /(?:^|[\s(])@([^\s@]*)$/.exec(v.slice(0, inp.selectionStart || v.length));
   return !!mm && mm[1] === termo;
 }
 /* Uma caixinha de "Arquivos" so' com um recado dentro (procurando / deu erro). Vale so' para
@@ -12629,6 +12820,7 @@ function estadoDoPainel(P) {
    o nome em --label-1 e a caixa de escrever com o anel. */
 function irAoChat(P) {
   if (!P || !panes.has(P.id)) return;
+  P.apagLiberado = true;
   setFocus(P);
   const inp = $('.p-input', P.el); if (inp) inp.focus();
 }

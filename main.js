@@ -1228,6 +1228,7 @@ function claudeStart(paneId, opts) {
     if (!args.includes('--setting-sources')) args.push('--setting-sources', 'project,local');
   }
   let proc;
+  let contaId = '';   // conta do Claude em que ESTE processo nasce (fica fixa até ele morrer)
   if (ehRemoto(opts.cwd) && opts.provedor && ehProvedor(opts.provedor)) {
     emit(paneId, 'note', { text: 'O ' + provedoresMod.PROVEDORES[opts.provedor].nome + ' roda numa pasta do Mac, não na VPS. Escolha uma pasta do Mac neste chat.', error: true });
     claudePanes.delete(paneId);
@@ -1250,11 +1251,15 @@ function claudeStart(paneId, opts) {
     if (provedor) {
       try { env = provedores.ambiente(provedor, opts.model, env); }
       catch (e) { emit(paneId, 'note', { text: String(e && e.message || e), error: true }); return false; }
+    } else {
+      const ca = contasClaude.contaAtiva();
+      contaId = ca.id;
+      if (ca.dir) { contasClaude.prepararDir(ca); env = contasClaude.envDaConta(ca, env); }
     }
     proc = spawnBin(CLAUDE_BIN, args, { cwd: opts.cwd || HOME, env, stdio: ['pipe', 'pipe', 'pipe'], detached: !EH_WIN });
   }
   // modo guardado no motor: o pedido de aceite que chega no "sem pedir permissão" é aprovado aqui
-  const st = { proc, buf: '', geracao: ++claudeGeracao, modo, provedor };
+  const st = { proc, buf: '', geracao: ++claudeGeracao, modo, provedor, conta: contaId, opts: { ...opts } };
   const decoder = new StringDecoder('utf8');
   claudePanes.set(paneId, st);
 
@@ -1505,6 +1510,9 @@ function claudeMessage(paneId, m) {
           if (c.text && avisoSinteticoAnterior.get(paneId) !== c.text) {
             avisoSinteticoAnterior.set(paneId, c.text);
             emit(paneId, 'note', { text: c.text, error: true });
+            // limite da conta: troca para outra conta do Claude (se houver) e, no fim do turno, manda "continue"
+            const stL = claudePanes.get(paneId);
+            if (stL && stL.conta && contasClaude.ehLimite(c.text)) stL.trocaLimite = contasClaude.limiteBateu(stL.conta).catch(() => null);
           }
         }
         // R4-003: texto de modelo DE VERDADE no meio da conversa prova que o episodio de erro
@@ -1550,6 +1558,7 @@ function claudeMessage(paneId, m) {
   if (m.type === 'system' && m.subtype === 'init' && m.session_id) {
     // o numero REAL da conversa so aparece aqui (ao ramificar ele nasce diferente do pedido)
     marcarDonoDoFio(paneId, m.session_id, 'claude');
+    { const st1 = claudePanes.get(paneId); if (st1) st1.sessionId = m.session_id; }
     { const st0 = claudePanes.get(paneId); if (st0 && st0.provedor) lembrarProvedorDaConversa(m.session_id, st0.provedor); }
     emit(paneId, 'sessao', { id: m.session_id, file: path.join(CLAUDE_PROJ, encodeCwd(claudeCwd.get(paneId) || HOME), m.session_id + '.jsonl') });
     return;
@@ -1584,6 +1593,8 @@ function claudeMessage(paneId, m) {
     return;
   }
   if (m.type === 'system' && m.subtype === 'background_tasks_changed') {
+    { const st2 = claudePanes.get(paneId);
+      if (st2) st2.fundo = (Array.isArray(m.tasks) ? m.tasks : []).filter(x => x && !/^(completed|failed|killed|stopped|cancelled)$/i.test(String(x.status || ''))).length; }
     emit(paneId, 'agentes', { ev: 'lista', tarefas: Array.isArray(m.tasks) ? m.tasks : [], em: Date.now() });
     return;
   }
@@ -1615,6 +1626,13 @@ function claudeMessage(paneId, m) {
     if (st) st.rodando = false;   // acabou: some do aviso de fechar
     emit(paneId, 'turn-end', { turnId: st && st.somTurno,
       resultado: !m.is_error && (m.is_error === false || m.subtype === 'success') ? 'sucesso' : 'erro' });
+    if (st && st.trocaLimite) {
+      const pendente = st.trocaLimite; st.trocaLimite = null;
+      pendente.then((r) => {
+        if (claudePanes.get(paneId) !== st) return;
+        if (r || contasClaude.contaAtiva().id !== st.conta) emit(paneId, 'conta-continuar', {});
+      });
+    }
   }
 }
 
@@ -2052,23 +2070,74 @@ const BUSCA_PROF_HOME = 2;
 const BUSCA_TETO_HOME = 3000;
 const cacheArquivos = new Map();   // "vps|/caminho" (ou "local|/caminho") -> { quando, lista }
 
+/* A varredura NUNCA roda no processo principal: pasta no iCloud (ou disco de rede) pode levar
+   minutos para responder um readdirSync, e com ele o app inteiro congelava. No Mac/Linux vai
+   para um /usr/bin/find separado, encerrado com SIGKILL no prazo; vale o que ele ja achou. */
+const BUSCA_PRAZO_MS = 1500;
+const buscasEmCurso = new Map();   // raiz -> promessa (nao roda duas buscas na mesma pasta)
+
 function varrerArquivos(raiz, limite) {
-  // R7: pasta remota nao se le com readdirSync. Sem esta linha o erro seria calado e a lista
+  // R7: pasta remota nao se le daqui. Sem esta linha o erro seria calado e a lista
   // vazia entraria no cache, envenenando o "@" daquele painel por 30 segundos.
-  if (!raiz || ehRemoto(raiz)) return [];
+  if (!raiz || ehRemoto(raiz)) return Promise.resolve([]);
+  if (buscasEmCurso.has(raiz)) return buscasEmCurso.get(raiz);
   let naHome = false;
   try { naHome = path.resolve(raiz) === path.resolve(HOME); } catch {}
   const fundo = naHome ? BUSCA_PROF_HOME : BUSCA_PROF;
-  const tetoVisitas = naHome ? 400 : 4000;
   const teto = Math.min(limite || BUSCA_TETO, naHome ? BUSCA_TETO_HOME : BUSCA_TETO);
+  const busca = process.platform === 'win32' ? varrerArquivosWin(raiz, fundo, teto)
+                                              : varrerArquivosFind(raiz, fundo, teto);
+  const p = busca.catch(() => []).finally(() => buscasEmCurso.delete(raiz));
+  buscasEmCurso.set(raiz, p);
+  return p;
+}
+
+function varrerArquivosFind(raiz, fundo, teto) {
+  return new Promise((resolve) => {
+    const poda = [...IGNORE].filter((n) => !n.startsWith('.')).flatMap((n) => ['-o', '-name', n]);
+    const args = [raiz, '-mindepth', '1', '-maxdepth', String(fundo),
+      '(', '(', '-name', '.*', ...PONTO_OK.flatMap((n) => ['!', '-name', n]), ')', ...poda, ')', '-prune',
+      '-o', '-type', 'f', '-print0'];
+    const achados = [];
+    let resto = '';
+    let fim = false;
+    let filho = null;
+    const terminar = () => {
+      if (fim) return;
+      fim = true;
+      clearTimeout(relogio);
+      try { filho && filho.kill('SIGKILL'); } catch {}
+      resolve(achados.slice(0, teto));   // o pedaco final, cortado pelo SIGKILL, fica de fora
+    };
+    const relogio = setTimeout(terminar, BUSCA_PRAZO_MS);
+    try { filho = spawn('/usr/bin/find', args, { stdio: ['ignore', 'pipe', 'ignore'] }); }
+    catch { return terminar(); }
+    filho.stdout.setEncoding('utf8');
+    filho.stdout.on('data', (txt) => {
+      const partes = (resto + txt).split('\0');
+      resto = partes.pop();
+      for (const p of partes) if (p) achados.push(p);
+      if (achados.length >= teto) terminar();
+    });
+    filho.on('error', terminar);
+    filho.on('close', terminar);
+  });
+}
+
+// Windows: sem find. readdir assincrono em largura, com o mesmo prazo de 1,5 s.
+async function varrerArquivosWin(raiz, fundo, teto) {
+  const fim = Date.now() + BUSCA_PRAZO_MS;
   const achados = [];
   const fila = [{ dir: raiz, prof: 0 }];
-  let visitadas = 0;
-  while (fila.length && achados.length < teto && visitadas < tetoVisitas) {
+  while (fila.length && achados.length < teto && Date.now() < fim) {
     const { dir, prof } = fila.shift();
-    visitadas++;
-    let itens = [];
-    try { itens = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    let itens;
+    try {
+      itens = await Promise.race([
+        fs.promises.readdir(dir, { withFileTypes: true }),
+        new Promise((_, no) => setTimeout(no, Math.max(1, fim - Date.now()))),
+      ]);
+    } catch { continue; }
     for (const e of itens) {
       if (e.name.startsWith('.') && !PONTO_OK.includes(e.name)) continue;
       if (IGNORE.has(e.name)) continue;
@@ -2159,7 +2228,7 @@ handle('fs:buscarArquivos', async (_e, d) => {
       if (r.error) return { itens: [], error: r.error };   // falha NAO entra no cache
       lista = r.lista;
     } else {
-      lista = varrerArquivos(raiz, BUSCA_TETO);
+      lista = await varrerArquivos(raiz, BUSCA_TETO);
     }
     c = { quando: agora, lista };
     cacheArquivos.set(chave, c);
@@ -4079,7 +4148,14 @@ handle('mcp:acao', async (_e, { engine, acao, nome, url, comando }) => {
 
 /* ---------- conta e limite de uso ---------- */
 // Mac: Chaveiro. Windows: arquivo de credenciais. Detalhe em plataforma.js
-const tokenDoClaude = plataforma.tokenClaude;
+/* Várias contas do Claude (contas-claude.js): a faixa de uso lê o token da conta EM USO, e cada
+   chat novo abre nela. A principal segue sendo a de sempre (Chaveiro, ~/.claude). */
+const contasClaude = require('./contas-claude').criarContasClaude({
+  HOME, pastaDados: () => app.getPath('userData'), EH_WIN, claudeBin: CLAUDE_BIN,
+  buildEnv: () => plataforma.buildEnv(), anota,
+  rodarCli: (args, o = {}) => rodar(CLAUDE_BIN, args, o.timeout || 60000, { env: o.env, cwd: o.cwd }),
+});
+const tokenDoClaude = () => contasClaude.tokenDaAtiva(plataforma.tokenClaude);
 
 // fica guardado na memoria: assim o Chaveiro so e consultado uma vez por sessao do app,
 // em vez de a cada leitura da faixa de uso
@@ -4521,7 +4597,10 @@ handle('conta:ler', async (_e, engine) => {
   }
   if (engine === 'claude') {
     let conta = {};
-    try { conta = JSON.parse((await rodar(CLAUDE_BIN, ['auth', 'status'], 25000)).out || '{}'); } catch {}
+    try {
+      const ca = contasClaude.contaAtiva();
+      conta = JSON.parse((await rodar(CLAUDE_BIN, ['auth', 'status'], 25000, ca.dir ? { env: contasClaude.envDaConta(ca, buildEnv()) } : {})).out || '{}');
+    } catch {}
     const u = await usoDoClaude();
     const velho = (u && u.velho) || 0;
     return {
@@ -4683,6 +4762,101 @@ handle('auth:acao', async (_e, { engine, acao, cwd }) => {
    janela (modal) e trava o Cockpit inteiro para quem esta na frente do computador. O servidor
    do telefone ja marca a chamada com { remoto: true }; faltava alguem olhar. */
 const souRemoto = (e) => !!(e && e.remoto);
+
+/* ---------- notas do popup (renderer/notas.js) ----------
+   Um arquivo só, notas.json na pasta de dados do app. Gravação atômica + uma cópia (.bak) da versão
+   anterior: é texto que ele escreveu, não pode se perder. Quem grava avisa as OUTRAS janelas. */
+const NOTAS_PATH = () => path.join(app.getPath('userData'), 'notas.json');
+function notasValidas(lista) {
+  if (!Array.isArray(lista)) return null;
+  return lista.slice(0, 5000).filter((n) => n && typeof n.id === 'string' && Array.isArray(n.linhas)).map((n) => ({
+    id: n.id.slice(0, 40),
+    chat: typeof n.chat === 'string' ? n.chat.slice(0, 120) : '',   // de qual CONVERSA é a nota
+    c: Number(n.c) || Date.now(),
+    m: Number(n.m) || Date.now(),
+    linhas: n.linhas.slice(0, 5000).map((l) => ({ c: l && l.c ? 1 : 0, f: l && l.f ? 1 : 0, t: String((l && l.t) || '').slice(0, 20000) })),
+  }));
+}
+handle('notas:ler', async () => {
+  try { return notasValidas(JSON.parse(fs.readFileSync(NOTAS_PATH(), 'utf8'))) || []; } catch { return []; }
+});
+// a conversa ganhou o número de verdade (1ª mensagem): as notas dela mudam de chave junto
+handle('notas:mover', async (_e, dados) => {
+  const de = String((dados && dados.de) || ''), para = String((dados && dados.para) || '');
+  if (!de || !para || de === para) return { ok: true };
+  let lista = [];
+  try { lista = notasValidas(JSON.parse(fs.readFileSync(NOTAS_PATH(), 'utf8'))) || []; } catch { return { ok: true }; }
+  let mudou = false;
+  for (const n of lista) if (n.chat === de) { n.chat = para; mudou = true; }
+  if (!mudou) return { ok: true };
+  try {
+    const arq = NOTAS_PATH(), tmp = arq + '.' + process.pid + '.tmp';
+    try { fs.copyFileSync(arq, arq + '.bak'); } catch {}
+    fs.writeFileSync(tmp, JSON.stringify(lista));
+    fs.renameSync(tmp, arq);
+  } catch (e) { anota('não consegui mover as notas da conversa:', e && e.message); return { error: 'Não consegui mover as notas.' }; }
+  enviarATodas('notas:mudou', { origem: dados.origem || '', notas: lista });
+  return { ok: true };
+});
+handle('notas:salvar', async (_e, dados) => {
+  const lista = notasValidas(dados && dados.notas);
+  if (!lista) return { error: 'Notas inválidas.' };
+  try {
+    const arq = NOTAS_PATH();
+    fs.mkdirSync(path.dirname(arq), { recursive: true });
+    try { if (fs.existsSync(arq)) fs.copyFileSync(arq, arq + '.bak'); } catch {}
+    const tmp = arq + '.' + process.pid + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(lista));
+    fs.renameSync(tmp, arq);
+  } catch (e) { anota('não consegui gravar as notas:', e && e.message); return { error: 'Não consegui gravar as notas.' }; }
+  enviarATodas('notas:mudou', { origem: dados.origem || '', notas: lista });
+  return { ok: true };
+});
+
+/* ---------- várias contas do Claude (contas-claude.js) ---------- */
+handle('contasClaude:estado', async (_e, atualizar) => atualizar ? contasClaude.atualizarTudo() : contasClaude.estado());
+handle('contasClaude:usar', async (_e, id) => {
+  if (souRemoto(_e)) return SO_NO_MAC;
+  return contasClaude.usar(String(id || ''));
+});
+handle('contasClaude:auto', async (_e, ligado) => {
+  if (souRemoto(_e)) return SO_NO_MAC;
+  return contasClaude.ligarAuto(!!ligado);
+});
+handle('contasClaude:nova', async (_e) => {
+  if (souRemoto(_e)) return SO_NO_MAC;
+  return contasClaude.nova(CLAUDE_BIN);
+});
+handle('contasClaude:confirmar', async (_e, id) => {
+  if (souRemoto(_e)) return SO_NO_MAC;
+  const r = await contasClaude.confirmar(String(id || ''));
+  if (r && r.ok) enviarATodas('contas-claude:mudou', {});
+  return r;
+});
+handle('contasClaude:cancelar', async (_e, id) => { if (souRemoto(_e)) return SO_NO_MAC; return contasClaude.cancelar(String(id || '')); });
+handle('contasClaude:remover', async (_e, id) => {
+  if (souRemoto(_e)) return SO_NO_MAC;
+  const r = await contasClaude.remover(String(id || ''));
+  esquecerUso('claude'); enviarATodas('contas-claude:mudou', {});
+  return r;
+});
+function iniciarContasClaude() {
+  contasClaude.iniciar({
+    usoDaAtiva: usoDoClaude,
+    aoTrocar: ({ de, para, paraEmail, motivo }) => {
+      esquecerUso('claude');
+      const deEmail = contasClaude.emailDaConta(de);
+      const porque = motivo === 'perto-do-limite' ? ' (a anterior passou de 90%)' : motivo === 'limite-batido' ? ' (a anterior bateu o limite)' : '';
+      anota('conta do Claude trocada:', de, '->', para, motivo);
+      if (motivo !== 'manual') {
+        for (const [paneId, st] of claudePanes) {
+          if (st && st.conta && !st.provedor) emit(paneId, 'note', { text: 'Claude: troquei' + (deEmail ? ' de ' + deEmail : '') + ' para ' + (paraEmail || 'outra conta') + porque + '. Chats parados passam para a conta nova na próxima mensagem; o que está rodando termina na conta de antes.' });
+        }
+      }
+      enviarATodas('contas-claude:mudou', { de, para, motivo });
+    },
+  });
+}
 
 handle('codex:api-status', async () => estadoAstra());
 handle('codex:api-key:set', async (_e, chave) => {
@@ -6705,6 +6879,22 @@ handle('pane:settings', async (_e, data) => {
   catch (e) { return { ok: false, error: String(e && e.message || e) }; }
 });
 
+/* A conta do Claude mudou (a de antes chegou perto do limite) e este chat está PARADO: o processo
+   dele é refeito na conta nova, na MESMA conversa (--resume; o histórico é arquivo compartilhado).
+   Chat trabalhando, com tarefa em segundo plano, em worktree ou na VPS fica como está: o processo
+   vivo guarda o login e termina o que começou na conta antiga. */
+function religarSeContaMudou(paneId) {
+  const st = claudePanes.get(paneId);
+  if (!st || !st.conta || st.rodando || st.fundo || st.provedor || !st.opts || st.opts.worktree) return false;
+  const ativa = contasClaude.contaAtiva();
+  if (ativa.id === st.conta) return false;
+  const de = contasClaude.emailDaConta(st.conta);
+  const opts = { ...st.opts, resumeId: st.sessionId || st.opts.resumeId, fork: undefined };
+  if (!claudeStart(paneId, opts)) return false;
+  emit(paneId, 'note', { text: 'Conta do Claude trocada' + (de ? ' de ' + de : '') + ' para ' + (contasClaude.emailDaConta(ativa.id) || 'outra conta') + '. A conversa continua de onde estava.' });
+  return true;
+}
+
 handle('pane:send', async (_e, data) => {
   const { paneId, engine, text, attachments = data.anexos || [] } = data;
   if (engine === 'gemini') return cli.enviar(paneId, text, attachments);
@@ -6713,6 +6903,7 @@ handle('pane:send', async (_e, data) => {
      lista de caminhos no fim do texto, feito pelo próprio acp.js. */
   if (motorAcp(engine)) return acp.enviar(paneId, text, attachments || []);
   if (engine === 'claude') {
+    religarSeContaMudou(paneId);
     // No Mac a interface continua usando o texto com a lista de caminhos; na VPS a foto vai
     // embutida em base64 (R2-013), porque o processo remoto nao enxerga o disco do Mac.
     const content = claudeAttachmentContent(text, attachments, ehRemoto(claudeCwd.get(paneId)));
@@ -8090,6 +8281,7 @@ app.whenReady().then(() => { anota('app iniciou'); usarClaudeDeCaminhoFixo(); me
   try { if (app.dock) app.dock.setMenu(Menu.buildFromTemplate([{ label: 'Nova janela', click: () => { if (janelaViva(win)) criarJanelaExtra(null); else createWindow(); } }])); } catch {}
   abrirLimpoSeEncerrou();   // antes da janela: a tela le o config uma vez so, no boot
   try { require('electron').powerMonitor.on('shutdown', () => { macDesligando = true; }); } catch {}
+  iniciarContasClaude();
   prepararTelaViva(); createWindow(); vigiarPedidoDeRecarregar(); vigiarPedidoDoQuadro(); montarIndiceDeFundo();
   limparColadosAntigos();
   /* Atualiza os motores sozinho: 60s depois de abrir (para nao brigar com o arranque) e de

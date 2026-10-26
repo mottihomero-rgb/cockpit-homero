@@ -118,6 +118,20 @@ contextBridge.exposeInMainWorld('api', {
   contasSalvar: (o) => ipcRenderer.invoke('contas:salvar', o),
   contasTrocar: (o) => ipcRenderer.invoke('contas:trocar', o),
   contasEsquecer: (o) => ipcRenderer.invoke('contas:esquecer', o),
+  // várias contas do Claude (troca automática perto do limite)
+  contasClaudeEstado: (atualizar) => ipcRenderer.invoke('contasClaude:estado', !!atualizar),
+  contasClaudeUsar: (id) => ipcRenderer.invoke('contasClaude:usar', id),
+  contasClaudeAuto: (ligado) => ipcRenderer.invoke('contasClaude:auto', !!ligado),
+  contasClaudeNova: () => ipcRenderer.invoke('contasClaude:nova'),
+  contasClaudeConfirmar: (id) => ipcRenderer.invoke('contasClaude:confirmar', id),
+  contasClaudeCancelar: (id) => ipcRenderer.invoke('contasClaude:cancelar', id),
+  contasClaudeRemover: (id) => ipcRenderer.invoke('contasClaude:remover', id),
+  onContasClaude: (cb) => ipcRenderer.on('contas-claude:mudou', (_e, p) => cb(p)),
+  // notas do popup (notas.js)
+  notasLer: () => ipcRenderer.invoke('notas:ler'),
+  notasSalvar: (o) => ipcRenderer.invoke('notas:salvar', o),
+  notasMover: (o) => ipcRenderer.invoke('notas:mover', o),
+  onNotas: (cb) => ipcRenderer.on('notas:mudou', (_e, p) => cb(p)),
   // derruba o app-server do Codex para ele reler a credencial depois da troca
   codexReiniciar: () => ipcRenderer.invoke('codex:reiniciar'),
   // Apps do ChatGPT (conectores da conta, não os MCP deste Mac)

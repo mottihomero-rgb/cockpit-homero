@@ -63,6 +63,7 @@ function montarFoco() {
     function pintarCorFoco() {}
     function marcarAbertas() {}
     function pintarSeloTorre() {}
+    function agendarDestaque() {}
     ${pegar('pintarPonto')}
     ${pegar('marcarRespostaNova')}
     ${pegar('setFocus')}

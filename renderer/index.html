@@ -24,6 +24,8 @@
 <link rel="stylesheet" href="redesign/menus.css">
 <link rel="stylesheet" href="redesign/sheets.css">
 <link rel="stylesheet" href="revisar-arquivo.css">
+<link rel="stylesheet" href="notas.css">
+<link rel="stylesheet" href="destaque-leitura.css">
 </head>
 <body>
 
@@ -367,6 +369,8 @@
         <button class="cb p-plano hidden" aria-pressed="false" title="Planejar antes de executar"></button>
         <!-- a pasta do chat mora aqui como ícone; o nome aparece ao passar o mouse -->
         <button class="cb p-cwd" title="Trocar pasta deste painel"></button>
+        <!-- notas: abre o popup no estilo do app Notas (notas.js) -->
+        <button class="cb p-notas" title="Notas" aria-label="Notas"><svg viewBox="0 0 16 16" class="ic" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 2.5h8A1.5 1.5 0 0 1 13.5 4v8a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 12V4A1.5 1.5 0 0 1 4 2.5z"></path><path d="M5.5 6h5M5.5 8.5h5M5.5 11h2.5"></path></svg></button>
         <span class="cmp-gap"><span class="p-tempo hidden" title="Tempo de trabalho da IA neste chat, somando todas as respostas"></span></span>
         <!-- quanto do plano já foi usado: pequeno e sem cor, do lado do modelo -->
         <span class="p-limite"></span>
@@ -390,6 +394,7 @@
 <script src="quadro.js"></script>
 <script src="layout-hugo.js"></script>
 <script src="revisar-arquivo.js"></script>
+<script src="notas.js"></script>
 <script src="app.js"></script>
 <script src="dica-icone.js"></script>
 </body>

@@ -1061,7 +1061,7 @@ const paneStarts = new Map();    // reserva durante a abertura assíncrona; fech
 
 // painel com motor de pe. E o que separa "aberta agora" de "sobrou de uma janela que fechou".
 const paneVivo = (paneId) => paneStarts.has(paneId) || claudePanes.has(paneId) || codex.paneToThread.has(paneId)
-  || cli.vivo(paneId) || acp.vivo(paneId);
+  || cli.vivo(paneId) || acp.vivo(paneId) || adormecidos.has(paneId);
 
 // de que tela e o painel: o telefone poe um "w" na frente dos ids (renderer/app.js:11)
 const telaDoPane = (paneId) => (/^w/.test(String(paneId || '')) ? 'celular' : 'Mac');
@@ -1109,6 +1109,52 @@ function marcarDonoDoFio(paneId, fio, engine) {
 const claudePanes = new Map();
 let claudeGeracao = 0;  // paneId -> {proc, buf, blocks}
 const avisoSinteticoAnterior = new Map();  // R3-013: paneId -> ultimo texto de erro sintetico avisado, evita nota repetida
+
+/* 29/10: chat parado ADORMECE. Cada `claude` aberto segura de 350 a 500 MB mesmo sem fazer nada.
+   Depois de 1 h sem uso (o cache do prompt ja venceu, entao religar nao gasta token a mais) o
+   processo e encerrado em silencio e o painel continua igual na tela. A proxima mensagem religa
+   na MESMA conversa (--resume), o mesmo caminho do religarSeContaMudou. Nunca adormece com turno
+   rodando, tarefa em segundo plano, pergunta ou aprovacao aberta, despertador agendado
+   (ScheduleWakeup/CronCreate/Monitor), worktree ou VPS. COCKPIT_ADORMECER_MIN muda o prazo (teste). */
+const ADORMECER_MS = (Number(process.env.COCKPIT_ADORMECER_MIN) || 60) * 60 * 1000;
+const FERRAMENTA_DESPERTADOR = /^(ScheduleWakeup|CronCreate|Monitor|RemoteTrigger)$/;
+const adormecidos = new Map();   // paneId -> opts para religar a mesma conversa
+const sonoTimer = new Map();     // paneId -> relogio do sono
+function cancelarSono(paneId) {
+  const t = sonoTimer.get(paneId);
+  if (t) { clearTimeout(t); sonoTimer.delete(paneId); }
+}
+function agendarSono(paneId) {
+  cancelarSono(paneId);
+  const t = setTimeout(() => { sonoTimer.delete(paneId); adormecer(paneId); }, ADORMECER_MS);
+  if (t.unref) t.unref();
+  sonoTimer.set(paneId, t);
+}
+function podeAdormecer(paneId, st) {
+  if (!st || claudePanes.get(paneId) !== st || st.parandoDeProposito) return false;
+  if (st.rodando || st.fundo || st.bashFundo || st.despertador) return false;
+  if (!st.sessionId || !st.opts || st.opts.worktree || ehRemoto(st.opts.cwd)) return false;
+  for (const a of pendingApprovals.values()) if (a && a.paneId === paneId) return false;
+  return true;
+}
+function adormecer(paneId) {
+  const st = claudePanes.get(paneId);
+  if (!st) return;
+  // ainda ocupado (tarefa em segundo plano, pergunta aberta): olha de novo mais tarde
+  if (!podeAdormecer(paneId, st)) { agendarSono(paneId); return; }
+  const opts = { ...st.opts, resumeId: st.sessionId, fork: undefined };
+  claudeStop(paneId);
+  adormecidos.set(paneId, opts);
+  anota('chat adormeceu depois de', Math.round(ADORMECER_MS / 60000), 'min parado:', paneId);
+}
+// religa o chat adormecido na mesma conversa; devolve true se subiu um processo
+function acordar(paneId) {
+  const opts = adormecidos.get(paneId);
+  if (!opts || claudePanes.has(paneId)) return false;
+  adormecidos.delete(paneId);
+  anota('chat acordou:', paneId);
+  return claudeStart(paneId, opts);
+}
 
 const claudeCwd = new Map();
 /* O Claude Code nomeia a pasta da sessao trocando TODO caractere que nao e letra nem numero
@@ -1336,6 +1382,7 @@ function pedidoClaudeAtual(a) {
 
 function claudeStop(paneId) {
   somConclusao.cancelar(paneId);
+  cancelarSono(paneId); adormecidos.delete(paneId);
   const st = claudePanes.get(paneId);
   let matando = Promise.resolve();
   if (st) {
@@ -1359,6 +1406,10 @@ function claudeStop(paneId) {
    num processo que acabou de morrer derrubava o app inteiro. Aqui a escrita e sempre
    protegida, e quando falha o painel recebe "engine-down" em vez de ficar pendurado. */
 function escreverClaude(paneId, obj) {
+  if (!claudePanes.has(paneId) && adormecidos.has(paneId)) {
+    if (!(obj && obj.type === 'user')) return true;
+    acordar(paneId);
+  }
   const st = claudePanes.get(paneId);
   if (!st || !st.proc || !st.proc.stdin || st.proc.stdin.destroyed || !st.proc.stdin.writable) {
     // Nao basta devolver false: sem o 'engine-down' a tela mantem "ja esta ligado" e o envio
@@ -1405,6 +1456,14 @@ function imagensDoResultado(content) {
 
 const ultimoContexto = new Map();   // paneId → { total, modelo } da última chamada do chat principal
 function claudeMessage(paneId, m) {
+  if (m.type === 'assistant' && m.message && Array.isArray(m.message.content)) {
+    const stSono = claudePanes.get(paneId);
+    if (stSono) for (const c of m.message.content) {
+      if (!c || c.type !== 'tool_use') continue;
+      if (FERRAMENTA_DESPERTADOR.test(String(c.name || ''))) stSono.despertador = true;
+      if (c.name === 'Bash' && c.input && c.input.run_in_background) stSono.bashFundo = true;
+    }
+  }
   if (m.type === 'prompt_suggestion') {
     const raw = m.suggestion ?? m.prompt ?? m.text ?? m.value;
     const itens = [...new Set((Array.isArray(raw) ? raw : [raw]).map(x =>
@@ -1594,7 +1653,10 @@ function claudeMessage(paneId, m) {
   }
   if (m.type === 'system' && m.subtype === 'background_tasks_changed') {
     { const st2 = claudePanes.get(paneId);
-      if (st2) st2.fundo = (Array.isArray(m.tasks) ? m.tasks : []).filter(x => x && !/^(completed|failed|killed|stopped|cancelled)$/i.test(String(x.status || ''))).length; }
+      if (st2) {
+        st2.fundo = (Array.isArray(m.tasks) ? m.tasks : []).filter(x => x && !/^(completed|failed|killed|stopped|cancelled)$/i.test(String(x.status || ''))).length;
+        st2.bashFundo = false;   // a lista do CLI ja conta o comando em segundo plano
+      } }
     emit(paneId, 'agentes', { ev: 'lista', tarefas: Array.isArray(m.tasks) ? m.tasks : [], em: Date.now() });
     return;
   }
@@ -1623,7 +1685,7 @@ function claudeMessage(paneId, m) {
     const saidaDoTurno = u.output_tokens || 0;
     if (entradaDoTurno || saidaDoTurno) emit(paneId, 'turno-uso', { entrada: entradaDoTurno, saida: saidaDoTurno });
     const st = claudePanes.get(paneId);
-    if (st) st.rodando = false;   // acabou: some do aviso de fechar
+    if (st) { st.rodando = false; agendarSono(paneId); }   // acabou: some do aviso de fechar
     emit(paneId, 'turn-end', { turnId: st && st.somTurno,
       resultado: !m.is_error && (m.is_error === false || m.subtype === 'success') ? 'sucesso' : 'erro' });
     if (st && st.trocaLimite) {
@@ -6903,6 +6965,8 @@ handle('pane:send', async (_e, data) => {
      lista de caminhos no fim do texto, feito pelo próprio acp.js. */
   if (motorAcp(engine)) return acp.enviar(paneId, text, attachments || []);
   if (engine === 'claude') {
+    cancelarSono(paneId);
+    acordar(paneId);
     religarSeContaMudou(paneId);
     // No Mac a interface continua usando o texto com a lista de caminhos; na VPS a foto vai
     // embutida em base64 (R2-013), porque o processo remoto nao enxerga o disco do Mac.
@@ -6975,6 +7039,7 @@ handle('pane:compactar', async (_e, { paneId, engine }) => {
   if (engine === 'gemini') return { error: 'Comece uma conversa nova no Gemini quando ela ficar longa.' };
   if (motorAcp(engine)) return { error: 'O agente ACP não tem "compactar" por aqui. Comece uma conversa nova quando ela ficar longa.' };
   if (engine === 'claude') {
+    acordar(paneId);
     if (!escreverClaude(paneId, { type: 'user', message: { role: 'user', content: [{ type: 'text', text: '/compact' }] } })) return { error: 'sessão fora do ar' };
     return { ok: true };
   }
@@ -6989,6 +7054,7 @@ handle('pane:steer', async (_e, data) => {
   if (engine === 'gemini') return { error: 'Espere o Gemini terminar ou clique em parar.' };
   if (motorAcp(engine)) return { error: 'Neste motor não dá para falar no meio do trabalho. Espere terminar ou clique em parar.' };
   if (engine === 'claude') {
+    acordar(paneId);
     // Mesmo tratamento remoto do pane:send (R2-013): sem isso, steerar com foto na VPS
     // mandava o caminho local do Mac, que o Claude remoto nao consegue abrir.
     const content = claudeAttachmentContent(text, attachments, ehRemoto(claudeCwd.get(paneId)));

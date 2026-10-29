@@ -4050,14 +4050,41 @@ function mostrarPrintsDoPasso(P, d, imagens) {
     if (!cx) continue;
     const img = document.createElement('img');
     img.className = 'pa-img';
-    img.src = src;
-    img.alt = 'print tirado pelo agente';
     img.title = 'Print que o agente tirou — clique pra ver grande';
     img.addEventListener('click', (e) => { e.stopPropagation(); verImagemGrande(P, src); });
     cx.appendChild(img);
+    const noFim = atBottom(P);
+    miniaturaDoPrint(im).then((mini) => {
+      img.addEventListener('load', () => { if (noFim) scroll(P, true); }, { once: true });
+      img.src = mini || src;
+      img.alt = 'print tirado pelo agente';
+    });
   }
   // Receber um print preserva a escolha do usuário: só o clique abre os comandos.
   scroll(P);
+}
+/* 29/10: o print chega em tamanho cheio (até 3264×2158) para aparecer em 220×150. Decodificado,
+   cada um segurava até 28 MB na tela, e um chat com 16 prints passava de 200 MB. A miniatura tem
+   o dobro do tamanho mostrado (igual na tela Retina); o original só abre no clique (verImagemGrande).
+   Qualquer falha devolve '' e o print entra inteiro, como antes. */
+const MINI_PRINT_W = 440, MINI_PRINT_H = 300;
+async function miniaturaDoPrint(im) {
+  try {
+    const bin = atob(String(im.dados || '').replace(/\s+/g, ''));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const bm = await createImageBitmap(new Blob([bytes], { type: im.mime || 'image/png' }));
+    const k = Math.min(1, MINI_PRINT_W / bm.width, MINI_PRINT_H / bm.height);
+    if (k >= 1) { bm.close(); return ''; }   // já é pequeno: fica o original
+    const tela = document.createElement('canvas');
+    tela.width = Math.max(1, Math.round(bm.width * k));
+    tela.height = Math.max(1, Math.round(bm.height * k));
+    const ctx = tela.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(bm, 0, 0, tela.width, tela.height);
+    bm.close();
+    return tela.toDataURL('image/webp', 0.92);
+  } catch { return ''; }
 }
 function mostrarPrintsDoTurno(P, lista) {
   const corpo = abrirJanelaLarga(P, 'O que ele viu neste turno');
@@ -11042,7 +11069,15 @@ function mapaDasCadeias(lista) {
 
 /* Desenha a lista unica. Quem mudou alguma coisa (lista nova de um motor, estrela, grupo,
    filtro, busca) chama esta, e nunca mais o paintHist de um motor so. */
-function pintarConversas() { return paintHist(VISTA_CONVERSAS, listaUnica()); }
+/* 29/10: com a lateral fechada a lista NÃO fica desenhada (eram 432 linhas e 11 mil elementos
+   guardados sem ninguém ver). Fechada, só marca que mudou; ao abrir, o vigia no fim deste arquivo
+   desenha antes do próximo quadro. */
+var listaPorPintar = false;   // var: a lista pode ser pedida antes desta linha rodar no boot
+function pintarConversas() {
+  if (!lateralAberta()) { listaPorPintar = true; return; }
+  listaPorPintar = false;
+  return paintHist(VISTA_CONVERSAS, listaUnica());
+}
 
 /* O ACP (Qwen, OpenCode…) nao tem botao na barra, mas as conversas dele sao do proprio Cockpit
    e entram na lista unica tambem: antes o ⌘P com um chat ACP em foco abria a coluna dele, e sem
@@ -12635,7 +12670,7 @@ window.addEventListener('cockpit:aparencia', () => pintarCorFoco());
 /* (i) dos Ajustes: um balão só, preso ao body, porque a coluna dos ajustes rola e cortaria
    um balão desenhado dentro dela. Mouse mostra; no celular (sem mouse) o toque liga e desliga. */
 const SVG_INFO = ico('info');   // o (i) do redesenho (icones.js)
-let dicaEl = null, dicaDono = null;
+let dicaEl = null, dicaDono = null, dicaVigia = null;
 function mostrarDica(bt) {
   if (!dicaEl) {
     dicaEl = document.createElement('div');
@@ -12656,8 +12691,15 @@ function mostrarDica(bt) {
   if (y + d.height > innerHeight - m) y = Math.max(m, r.top - d.height - 6);
   dicaEl.style.left = x + 'px'; dicaEl.style.top = y + 'px';
   requestAnimationFrame(() => dicaEl && dicaEl.classList.add('on'));
+  // o painel pode fechar com o mouse/foco ainda no (i): mouseleave e blur não disparam e o balão
+  // ficava preso na tela. Enquanto aberto, confere que o (i) ainda está visível.
+  clearInterval(dicaVigia);
+  dicaVigia = setInterval(() => {
+    if (!dicaDono || !dicaDono.isConnected || !dicaDono.getClientRects().length) esconderDica();
+  }, 250);
 }
 function esconderDica() {
+  clearInterval(dicaVigia);
   if (dicaEl) dicaEl.classList.remove('on');
   if (dicaDono) { dicaDono.classList.remove('aberto'); dicaDono.removeAttribute('aria-describedby'); }
   dicaDono = null;
@@ -13790,4 +13832,24 @@ document.addEventListener('keydown', (e) => {
   window.addEventListener('blur', guardar);
   window.addEventListener('pagehide', guardar);
   window.addEventListener('cockpit:salvar-rascunhos', guardar);
+})();
+
+/* 29/10: vigia da lateral. Fechou: a lista sai da memória. Abriu: volta desenhada antes do
+   próximo quadro (o observador roda antes de a tela pintar), sem lista vazia nem pisca; logo
+   depois o abrirVistaLateral relê as conversas, como sempre fez. */
+(function listaSoComLateralAberta() {
+  const box = caixaHist();
+  const lat = document.getElementById('sidebar');
+  const vista = document.querySelector('.side-view[data-view="conversas"]');
+  if (!box || !lat || typeof MutationObserver !== 'function') return;
+  let aberta = lateralAberta();
+  const ver = () => {
+    const agora = lateralAberta();
+    if (agora === aberta) return;
+    aberta = agora;
+    if (!agora) { if (box.childNodes.length) { box.replaceChildren(); listaPorPintar = true; } return; }
+    if (listaPorPintar) pintarConversas();
+  };
+  const mo = new MutationObserver(ver);
+  for (const alvo of [document.body, lat, vista]) if (alvo) mo.observe(alvo, { attributes: true, attributeFilter: ['class'] });
 })();

@@ -39,6 +39,17 @@ const PROVEDORES = {
       { id: 'meta/muse-spark-1.3', nome: 'Muse Spark 1.3', desc: 'Com a sua chave do OpenRouter, rápido e forte', efforts: [] },
     ],
   },
+  /* 05/11: Jus IA (Jusbrasil). Sem chave: o "endereço" é a ponte local do jusia.js, que fala com o
+     chat do site usando o login da conta. Tudo que é de chave (validar, salvar, saldo) passa reto. */
+  jusia: {
+    nome: 'Jus IA', via: 'Login do site', login: true,
+    base: 'http://127.0.0.1:20131',
+    painel: 'https://ia.jusbrasil.com.br',
+    dica: '',
+    modelos: [
+      { id: 'jusia', nome: 'Jus IA', desc: 'IA jurídica do Jusbrasil', efforts: [], padrao: true },
+    ],
+  },
 };
 
 /* Rota grátis: o OmniRoute (já instalado no Mac, porta 20128) fala o idioma da Anthropic por cima da
@@ -52,7 +63,7 @@ const VARIAVEIS_ANTHROPIC = ['ANTHROPIC_API_KEY', 'ANTHROPIC_AUTH_TOKEN', 'ANTHR
   'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
   'ANTHROPIC_SMALL_FAST_MODEL', 'CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX'];
 
-function criarProvedores({ HOME, fetchFn, spawnFn, buildEnv }) {
+function criarProvedores({ HOME, fetchFn, spawnFn, buildEnv, jusia }) {
   const arquivo = () => path.join(HOME, '.cockpit', 'provedores.json');
   const f = () => fetchFn || globalThis.fetch;
 
@@ -113,6 +124,7 @@ function criarProvedores({ HOME, fetchFn, spawnFn, buildEnv }) {
 
   function ler(id) {
     if (!ehProvedor(id)) return { entrou: false };
+    if (id === 'jusia') return jusia ? jusia.ler() : { entrou: false, nome: 'Jus IA', motivo: 'Jus IA indisponível.' };
     const p = PROVEDORES[id], reg = lerTudo()[id];
     const comChave = !!(reg && reg.chave), gratis = temGratis(id);
     const entrou = comChave || gratis;
@@ -120,7 +132,10 @@ function criarProvedores({ HOME, fetchFn, spawnFn, buildEnv }) {
       base: entrou ? baseDe(id, reg) : p.base, padrao: p.base, painel: p.painel, dica: p.dica,
       motivo: entrou ? '' : 'Cole a sua chave de API para usar o ' + p.nome + '.' };
   }
-  function chaveDe(id) { const reg = lerTudo()[id]; return reg && reg.chave ? String(reg.chave) : ''; }
+  function chaveDe(id) {
+    if (id === 'jusia') return jusia && jusia.ler().entrou ? 'login' : '';   // "tem acesso", não é chave de verdade
+    const reg = lerTudo()[id]; return reg && reg.chave ? String(reg.chave) : '';
+  }
 
   // confere o formato ANTES de gastar uma chamada ou mexer no arquivo; devolve a chave limpa
   function validar(id, { chave, base } = {}) {
@@ -140,6 +155,7 @@ function criarProvedores({ HOME, fetchFn, spawnFn, buildEnv }) {
     return ler(id);
   }
   function remover(id) {
+    if (id === 'jusia') { if (jusia) jusia.sair(); return ler(id); }
     const tudo = lerTudo();
     delete tudo[id];
     gravarTudo(tudo);
@@ -150,6 +166,19 @@ function criarProvedores({ HOME, fetchFn, spawnFn, buildEnv }) {
      haiku, rápido, subagente): o CLI chama o "haiku" para título e sugestão, e sem isto ele
      pediria um modelo da Anthropic que o endereço de fora não conhece. */
   function ambiente(id, modelo, base) {
+    if (id === 'jusia') {
+      if (!jusia || !jusia.ler().entrou) throw new Error('Entre na Jus IA em Ajustes › Contas.');
+      const env = { ...(base || process.env) };
+      for (const k of VARIAVEIS_ANTHROPIC) delete env[k];
+      const m = PROVEDORES.jusia.modelos[0].id;
+      Object.assign(env, {
+        ANTHROPIC_BASE_URL: 'http://127.0.0.1:' + jusia.PORTA, ANTHROPIC_AUTH_TOKEN: 'jusia', ANTHROPIC_API_KEY: '',
+        ANTHROPIC_MODEL: m, ANTHROPIC_DEFAULT_OPUS_MODEL: m, ANTHROPIC_DEFAULT_SONNET_MODEL: m, ANTHROPIC_DEFAULT_HAIKU_MODEL: m,
+        ANTHROPIC_SMALL_FAST_MODEL: m, CLAUDE_CODE_SUBAGENT_MODEL: m,
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', API_TIMEOUT_MS: '3000000',
+      });
+      return env;
+    }
     const p = PROVEDORES[id], reg = lerTudo()[id];
     const m = modelo || (p && (p.modelos.find(x => x.padrao) || p.modelos[0]).id);
     const gratis = ehGratis(id, m);
@@ -211,6 +240,7 @@ function criarProvedores({ HOME, fetchFn, spawnFn, buildEnv }) {
      pct só existe quando há TETO: crédito
      total no OpenRouter, ou o limite que a chave tem. */
   async function saldo(id) {
+    if (id === 'jusia') return null;   // plano do site, sem saldo para ler
     const c = chaveDe(id);
     if (!c) return null;
     const cab = { Authorization: 'Bearer ' + c, Accept: 'application/json' };

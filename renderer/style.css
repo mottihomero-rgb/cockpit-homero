@@ -38,7 +38,7 @@
   /* assistentes: SO no logo. --acp (protocolo antigo, sem marca) fica neutro */
   --claude:var(--logo-claude); --codex:var(--logo-codex); --gemini:var(--logo-gemini);
   --grok:var(--logo-grok); --acp:var(--label-2);
-  --deepseek:var(--logo-deepseek); --mimo:var(--logo-mimo); --muse:var(--logo-muse);
+  --deepseek:var(--logo-deepseek); --mimo:var(--logo-mimo); --muse:var(--logo-muse); --jusia:var(--logo-jusia);
   /* a aba em foco era contornada com a cor do motor; agora com o azul do sistema */
   --aba-neon:var(--accent);
   /* tipografia: so SF Pro e SF Mono */
@@ -1805,3 +1805,16 @@ body.arrastando-aba,body.arrastando-aba *{cursor:grabbing !important}
 .msg.bot[data-motor="deepseek"] .av{color:var(--logo-deepseek,var(--deepseek))}
 .msg.bot[data-motor="mimo"] .av{color:var(--logo-mimo,var(--mimo))}
 .msg.bot[data-motor="muse"] .av{color:var(--logo-muse,var(--muse))}
+
+/* 05/11 Jus IA (Jusbrasil): o logo tem as cores da marca; o azul dela é o destaque do painel */
+.na-motor[data-motor="jusia"]{--motor:var(--jusia)}
+.side-view[data-view="hjusia"] .sc-av{color:var(--jusia)}
+.act.ic-jusia{color:var(--jusia)}
+.pane.eng-jusia{--motor:var(--jusia)}
+.cv-uso-motor[data-motor="jusia"] .cv-uso-logo,.cv-erro[data-motor="jusia"] .cv-uso-logo,.hi-motor[data-motor="jusia"]{color:var(--logo-jusia)}
+.msg.bot[data-motor="jusia"] .av{color:var(--logo-jusia)}
+.ut-ia:not(:disabled)[data-motor="jusia"]:is(:hover,:focus-visible) .ut-anel .ut-logo{color:var(--jusia)}
+.mo-logo[data-motor="jusia"]{--motor:var(--jusia)}
+.ch-lado[aria-pressed="true"][data-motor="jusia"] > span:first-child{color:var(--logo-jusia)}
+.ti-logo[data-motor="jusia"]{color:var(--logo-jusia)}
+.mi[data-motor="jusia"] .mi-logo{color:var(--logo-jusia)}

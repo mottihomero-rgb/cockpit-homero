@@ -69,7 +69,7 @@
   --scrim: rgba(0, 0, 0, .45);
   --code-bg: #0E0E0F;
   --logo-claude: #D97757; --logo-codex: #6C9BFF; --logo-gemini: #9B8AFB; --logo-grok: rgba(255,255,255,.92);
-  --logo-deepseek: #6B86FF; --logo-mimo: #FF8A3D; --logo-muse: #4D9BFF;
+  --logo-deepseek: #6B86FF; --logo-mimo: #FF8A3D; --logo-muse: #4D9BFF; --logo-jusia: #3D82DA;
 }
 
 [data-theme="light"], [data-theme="light-hc"] {
@@ -108,7 +108,7 @@
   --scrim: rgba(0, 0, 0, .20);
   --code-bg: #F6F6F8;
   --logo-claude: #C4623F; --logo-codex: #2F6BEB; --logo-gemini: #6D5CE7; --logo-grok: rgba(0,0,0,.88);
-  --logo-deepseek: #4D6BFE; --logo-mimo: #E85D00; --logo-muse: #0866FF;
+  --logo-deepseek: #4D6BFE; --logo-mimo: #E85D00; --logo-muse: #0866FF; --logo-jusia: #3D82DA;
 }
 
 [data-theme="light-paper"], [data-theme="light-paper-hc"] {
@@ -147,7 +147,7 @@
   --scrim: rgba(0, 0, 0, .20);
   --code-bg: #EFE6CE;
   --logo-claude: #C4623F; --logo-codex: #2F6BEB; --logo-gemini: #6D5CE7; --logo-grok: rgba(0,0,0,.88);
-  --logo-deepseek: #4D6BFE; --logo-mimo: #E85D00; --logo-muse: #0866FF;
+  --logo-deepseek: #4D6BFE; --logo-mimo: #E85D00; --logo-muse: #0866FF; --logo-jusia: #3D82DA;
 }
 
 [data-theme="light-paper-hc"] {
@@ -183,6 +183,7 @@
 [data-agent="grok"]   { --agent: var(--logo-grok); }
 [data-agent="deepseek"]   { --agent: var(--logo-deepseek); }
 [data-agent="mimo"]   { --agent: var(--logo-mimo); }
+[data-agent="jusia"]  { --agent: var(--logo-jusia); }
 [data-agent="muse"]   { --agent: var(--logo-muse); }
 
 /* indicador "trabalhando": giro contínuo, sem pulsar; parado em Reduzir movimento */

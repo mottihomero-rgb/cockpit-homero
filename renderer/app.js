@@ -57,6 +57,10 @@ const LOGOS_MARCA = {
     "viewBox": "0 0 24 24",
     "conteudo": "<path fill-rule=\"evenodd\" d=\"M6.897 4c1.915 0 3.516.932 5.43 3.376l.282-.373c.19-.246.383-.484.58-.71l.313-.35C14.588 4.788 15.792 4 17.225 4c1.273 0 2.469.557 3.491 1.516l.218.213c1.73 1.765 2.917 4.71 3.053 8.026l.011.392.002.25c0 1.501-.28 2.759-.818 3.7l-.14.23-.108.153c-.301.42-.664.758-1.086 1.009l-.265.142-.087.04a3.493 3.493 0 01-.302.118 4.117 4.117 0 01-1.33.208c-.524 0-.996-.067-1.438-.215-.614-.204-1.163-.56-1.726-1.116l-.227-.235c-.753-.812-1.534-1.976-2.493-3.586l-1.43-2.41-.544-.895-1.766 3.13-.343.592C7.597 19.156 6.227 20 4.356 20c-1.21 0-2.205-.42-2.936-1.182l-.168-.184c-.484-.573-.837-1.311-1.043-2.189l-.067-.32a8.69 8.69 0 01-.136-1.288L0 14.468c.002-.745.06-1.49.174-2.23l.1-.573c.298-1.53.828-2.958 1.536-4.157l.209-.34c1.177-1.83 2.789-3.053 4.615-3.16L6.897 4zm-.033 2.615l-.201.01c-.83.083-1.606.673-2.252 1.577l-.138.199-.01.018c-.67 1.017-1.185 2.378-1.456 3.845l-.004.022a12.591 12.591 0 00-.207 2.254l.002.188c.004.18.017.36.04.54l.043.291c.092.503.257.908.486 1.208l.117.137c.303.323.698.492 1.17.492 1.1 0 1.796-.676 3.696-3.641l2.175-3.4.454-.701-.139-.198C9.11 7.3 8.084 6.616 6.864 6.616zm10.196-.552l-.176.007c-.635.048-1.223.359-1.82.933l-.196.198c-.439.462-.887 1.064-1.367 1.807l.266.398c.18.274.362.56.55.858l.293.475 1.396 2.335.695 1.114c.583.926 1.03 1.6 1.408 2.082l.213.262c.282.326.529.54.777.673l.102.05c.227.1.457.138.718.138.176.002.35-.023.518-.073.338-.104.61-.32.813-.637l.095-.163.077-.162c.194-.459.29-1.06.29-1.785l-.006-.449c-.08-2.871-.938-5.372-2.2-6.798l-.176-.189c-.67-.683-1.444-1.074-2.27-1.074z\"/>"
   },
+  "jusia": {
+    "viewBox": "-3 0 32 32",
+    "conteudo": "<path fill-rule=\"evenodd\" clip-rule=\"evenodd\" fill=\"#FC0\" d=\"M26.098 0H12.663c-.508 0-.944.374-1.032.883l-.36 2.09s-.004.016-.004.023L8.768 17.52h5.734c.39 0 .746.216.93.565l6.428 12.342s.077.152.102.272c.016.079.023.134.028.178v.162a1 1 0 0 1-.014.1q.006-.02.01-.04l4.788-27.732.366-2.112A1.067 1.067 0 0 0 26.098 0\"></path><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" fill=\"#3D82DA\" d=\"M6.478 31.181v-.004q-.007-.044-.011-.093v-.016c0-.027-.005-.057-.005-.085v-.03q0-.036.003-.074.001-.026.006-.053.002-.027.007-.055.01-.055.02-.113L8.767 17.52H1.049c-.792.002-1.298.862-.924 1.573l6.428 12.342.01.016a1 1 0 0 1-.085-.27\"></path><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" fill=\"#77B340\" d=\"M21.99 31.038c-.041.584-.58.969-1.026.962H7.536c-.175 0-.356-.046-.356-.046-.557-.152-.82-.676-.681-1.296L8.766 17.52H14.5c.39 0 .747.216.931.565l6.428 12.342s.077.152.102.272.03.19.03.24z\"></path>"
+  },
   "gemini": {
     "viewBox": "0 0 65 65",
     "conteudo": "<path d=\"M57.8647 29.0109C52.865 26.8587 48.4905 23.9061 44.7393 20.1567C40.99 16.4074 38.0373 12.031 35.8851 7.03132C35.0589 5.11516 34.395 3.14552 33.886 1.12608C33.72 0.465846 33.128 0.00109863 32.4475 0.00109863C31.7669 0.00109863 31.1749 0.465846 31.009 1.12608C30.4999 3.14552 29.836 5.11332 29.0098 7.03132C26.8576 12.031 23.905 16.4074 20.1556 20.1567C16.4063 23.9061 12.0299 26.8587 7.03022 29.0109C5.11406 29.8371 3.14442 30.501 1.12498 31.0101C0.464747 31.176 0 31.768 0 32.4486C0 33.1291 0.464747 33.7211 1.12498 33.8871C3.14442 34.3961 5.11222 35.06 7.03022 35.8862C12.0299 38.0384 16.4045 40.9911 20.1556 44.7404C23.9068 48.4897 26.8576 52.8661 29.0098 57.8658C29.836 59.782 30.4999 61.7516 31.009 63.771C31.1749 64.4313 31.7669 64.896 32.4475 64.896C33.128 64.896 33.72 64.4313 33.886 63.771C34.395 61.7516 35.0589 59.7838 35.8851 57.8658C38.0373 52.8661 40.99 48.4916 44.7393 44.7404C48.4886 40.9911 52.865 38.0384 57.8647 35.8862C59.7809 35.06 61.7505 34.3961 63.7699 33.8871C64.4302 33.7211 64.8949 33.1291 64.8949 32.4486C64.8949 31.768 64.4302 31.176 63.7699 31.0101C61.7505 30.501 59.7827 29.8371 57.8647 29.0109Z\" fill=\"white\" /><mask id=\"cockpit-gemini-mask0_10859_4895\" style=\"mask-type:alpha\" maskUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" width=\"65\" height=\"65\"><path d=\"M32.4473 0C33.1278 0 33.7197 0.464783 33.8857 1.125C34.3947 3.14441 35.0586 5.11414 35.8848 7.03027C38.0369 12.0299 40.99 16.406 44.7393 20.1553C48.4903 23.9045 52.8647 26.8576 57.8643 29.0098C59.7821 29.8359 61.7502 30.4998 63.7695 31.0088C64.4297 31.1748 64.8944 31.7668 64.8945 32.4473C64.8945 33.1278 64.4298 33.7198 63.7695 33.8857C61.7502 34.3947 59.7803 35.0586 57.8643 35.8848C52.8646 38.037 48.4885 40.99 44.7393 44.7393C40.99 48.4904 38.037 52.8646 35.8848 57.8643C35.0586 59.7822 34.3947 61.7502 33.8857 63.7695C33.7198 64.4298 33.1278 64.8945 32.4473 64.8945C31.7668 64.8944 31.1748 64.4297 31.0088 63.7695C30.4998 61.7502 29.8359 59.7803 29.0098 57.8643C26.8576 52.8647 23.9063 48.4885 20.1553 44.7393C16.4041 40.99 12.0299 38.0369 7.03027 35.8848C5.1123 35.0586 3.14441 34.3947 1.125 33.8857C0.464783 33.7197 0 33.1278 0 32.4473C8.67651e-05 31.7668 0.464826 31.1748 1.125 31.0088C3.14442 30.4998 5.11413 29.836 7.03027 29.0098C12.03 26.8575 16.406 23.9046 20.1553 20.1553C23.9046 16.406 26.8575 12.03 29.0098 7.03027C29.836 5.11229 30.4998 3.14442 31.0088 1.125C31.1748 0.464826 31.7668 8.67651e-05 32.4473 0Z\" fill=\"black\" /><path d=\"M32.4473 0C33.1278 0 33.7197 0.464783 33.8857 1.125C34.3947 3.14441 35.0586 5.11414 35.8848 7.03027C38.0369 12.0299 40.99 16.406 44.7393 20.1553C48.4903 23.9045 52.8647 26.8576 57.8643 29.0098C59.7821 29.8359 61.7502 30.4998 63.7695 31.0088C64.4297 31.1748 64.8944 31.7668 64.8945 32.4473C64.8945 33.1278 64.4298 33.7198 63.7695 33.8857C61.7502 34.3947 59.7803 35.0586 57.8643 35.8848C52.8646 38.037 48.4885 40.99 44.7393 44.7393C40.99 48.4904 38.037 52.8646 35.8848 57.8643C35.0586 59.7822 34.3947 61.7502 33.8857 63.7695C33.7198 64.4298 33.1278 64.8945 32.4473 64.8945C31.7668 64.8944 31.1748 64.4297 31.0088 63.7695C30.4998 61.7502 29.8359 59.7803 29.0098 57.8643C26.8576 52.8647 23.9063 48.4885 20.1553 44.7393C16.4041 40.99 12.0299 38.0369 7.03027 35.8848C5.1123 35.0586 3.14441 34.3947 1.125 33.8857C0.464783 33.7197 0 33.1278 0 32.4473C8.67651e-05 31.7668 0.464826 31.1748 1.125 31.0088C3.14442 30.4998 5.11413 29.836 7.03027 29.0098C12.03 26.8575 16.406 23.9046 20.1553 20.1553C23.9046 16.406 26.8575 12.03 29.0098 7.03027C29.836 5.11229 30.4998 3.14442 31.0088 1.125C31.1748 0.464826 31.7668 8.67651e-05 32.4473 0Z\" fill=\"url(#cockpit-gemini-paint0_linear_10859_4895)\" /></mask><g mask=\"url(#cockpit-gemini-mask0_10859_4895)\"><g filter=\"url(#cockpit-gemini-filter0_f_10859_4895)\"><ellipse cx=\"14.4072\" cy=\"16.9504\" rx=\"14.4072\" ry=\"16.9504\" transform=\"matrix(0.942341 0.334654 -0.334652 0.942342 -8.09058 13.9664)\" fill=\"#FFE432\" /></g><g filter=\"url(#cockpit-gemini-filter1_f_10859_4895)\"><ellipse cx=\"27.4329\" cy=\"2.5869\" rx=\"18.6516\" ry=\"19.0617\" fill=\"#FC413D\" /></g><g filter=\"url(#cockpit-gemini-filter2_f_10859_4895)\"><ellipse cx=\"18.9512\" cy=\"57.3856\" rx=\"19.4934\" ry=\"25.2529\" transform=\"rotate(-2.79865 18.9512 57.3856)\" fill=\"#00B95C\" /></g><g filter=\"url(#cockpit-gemini-filter3_f_10859_4895)\"><ellipse cx=\"18.9512\" cy=\"57.3856\" rx=\"19.4934\" ry=\"25.2529\" transform=\"rotate(-2.79865 18.9512 57.3856)\" fill=\"#00B95C\" /></g><g filter=\"url(#cockpit-gemini-filter4_f_10859_4895)\"><ellipse cx=\"20.0204\" cy=\"56.2114\" rx=\"19.1065\" ry=\"21.0345\" transform=\"rotate(-31.3178 20.0204 56.2114)\" fill=\"#00B95C\" /></g><g filter=\"url(#cockpit-gemini-filter5_f_10859_4895)\"><ellipse cx=\"67.391\" cy=\"25.3267\" rx=\"18.3463\" ry=\"17.6668\" fill=\"#3186FF\" /></g><g filter=\"url(#cockpit-gemini-filter6_f_10859_4895)\"><ellipse cx=\"21.222\" cy=\"22.3842\" rx=\"21.222\" ry=\"22.3842\" transform=\"matrix(0.795985 0.605316 -0.605314 0.795987 -2.85815 -7.53723)\" fill=\"#FBBC04\" /></g><g filter=\"url(#cockpit-gemini-filter7_f_10859_4895)\"><ellipse cx=\"24.4687\" cy=\"22.6039\" rx=\"24.4687\" ry=\"22.6039\" transform=\"matrix(0.824033 0.566542 -0.566539 0.824035 40.1882 0.315002)\" fill=\"#3186FF\" /></g><g filter=\"url(#cockpit-gemini-filter8_f_10859_4895)\"><path d=\"M54.9838 -2.33625C57.8168 1.51558 54.1765 9.00477 46.8529 14.3913C39.5293 19.7779 31.2957 21.022 28.4627 17.1702C25.6296 13.3184 29.27 5.82919 36.5935 0.442635C43.9171 -4.94392 52.1507 -6.18807 54.9838 -2.33625Z\" fill=\"#749BFF\" /></g><g filter=\"url(#cockpit-gemini-filter9_f_10859_4895)\"><ellipse cx=\"19.9023\" cy=\"3.35597\" rx=\"27.9712\" ry=\"17.3877\" transform=\"rotate(-42.848 19.9023 3.35597)\" fill=\"#FC413D\" /></g><g filter=\"url(#cockpit-gemini-filter10_f_10859_4895)\"><ellipse cx=\"13.5831\" cy=\"46.7501\" rx=\"14.9887\" ry=\"8.71667\" transform=\"rotate(35.592 13.5831 46.7501)\" fill=\"#FFEE48\" /></g></g><defs><filter id=\"cockpit-gemini-filter0_f_10859_4895\" x=\"-19.8236\" y=\"13.1523\" width=\"39.2739\" height=\"43.2171\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"2.45965\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter1_f_10859_4895\" x=\"-15.001\" y=\"-40.257\" width=\"84.8677\" height=\"85.6878\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"11.8911\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter2_f_10859_4895\" x=\"-20.7758\" y=\"11.9273\" width=\"79.454\" height=\"90.9166\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"10.1086\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter3_f_10859_4895\" x=\"-20.7758\" y=\"11.9273\" width=\"79.454\" height=\"90.9166\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"10.1086\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter4_f_10859_4895\" x=\"-19.8449\" y=\"15.459\" width=\"79.7306\" height=\"81.5048\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"10.1086\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter5_f_10859_4895\" x=\"29.8324\" y=\"-11.5524\" width=\"75.1172\" height=\"73.7582\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"9.60613\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter6_f_10859_4895\" x=\"-38.5827\" y=\"-16.2526\" width=\"78.1352\" height=\"78.7578\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"8.70591\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter7_f_10859_4895\" x=\"8.1068\" y=\"-5.96578\" width=\"78.877\" height=\"77.5394\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"7.77473\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter8_f_10859_4895\" x=\"13.5873\" y=\"-18.4881\" width=\"56.2718\" height=\"51.8102\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"6.95694\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter9_f_10859_4895\" x=\"-15.5259\" y=\"-31.297\" width=\"70.8565\" height=\"69.3059\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"5.87598\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><filter id=\"cockpit-gemini-filter10_f_10859_4895\" x=\"-14.1676\" y=\"20.9644\" width=\"55.5015\" height=\"51.5714\" filterUnits=\"userSpaceOnUse\" color-interpolation-filters=\"sRGB\"><feFlood flood-opacity=\"0\" result=\"BackgroundImageFix\" /><feBlend mode=\"normal\" in=\"SourceGraphic\" in2=\"BackgroundImageFix\" result=\"shape\" /><feGaussianBlur stdDeviation=\"7.27253\" result=\"effect1_foregroundBlur_10859_4895\" /></filter><linearGradient id=\"cockpit-gemini-paint0_linear_10859_4895\" x1=\"18.4474\" y1=\"43.4202\" x2=\"52.1528\" y2=\"15.0035\" gradientUnits=\"userSpaceOnUse\"><stop stop-color=\"#4893FC\" /><stop offset=\"0.27\" stop-color=\"#4893FC\" /><stop offset=\"0.776981\" stop-color=\"#969DFF\" /><stop offset=\"1\" stop-color=\"#BD99FE\" /></linearGradient></defs>"
@@ -119,23 +123,27 @@ const PROVEDORES_UI = {
       { id: 'nvidia/meta/muse-glimmer-30b', nome: 'Muse Glimmer 30B (grátis)', desc: 'Muse aberto da Meta, pela NVIDIA, sem custo', efforts: [], padrao: true },
       { id: 'meta/muse-spark-1.3', nome: 'Muse Spark 1.3', desc: 'Com a sua chave do OpenRouter, rápido e forte', efforts: [] },
     ] },
+  /* 05/11: Jus IA (Jusbrasil). Não tem chave: entra pelo LOGIN do site, lido do Chrome da conta
+     (jusia.js no main). login: true troca o "Colar chave" por "Entrar". Só conversa: não mexe em arquivo. */
+  jusia: { nome: 'Jus IA', painel: 'https://ia.jusbrasil.com.br', dica: '', login: true,
+    modelos: [{ id: 'jusia', nome: 'Jus IA', desc: 'IA jurídica do Jusbrasil, com pesquisa de jurisprudência', efforts: [], padrao: true }] },
 };
 const PROVEDORES_IDS = Object.keys(PROVEDORES_UI);
 // as conversas das IAs de chave moram na lista do Claude Code (só o logo muda)
 const motorDaLista = (e) => (Object.prototype.hasOwnProperty.call(PROVEDORES_UI, e) ? 'claude' : e);
 const EH_PROVEDOR = (e) => Object.prototype.hasOwnProperty.call(PROVEDORES_UI, e);
 const NOME_MOTOR = { claude: 'Claude', codex: 'Codex', acp: 'ACP', gemini: 'Gemini', grok: 'Grok',
-  deepseek: 'DeepSeek', mimo: 'MiMo', muse: 'Muse Spark' };
+  deepseek: 'DeepSeek', mimo: 'MiMo', muse: 'Muse Spark', jusia: 'Jus IA' };
 const nomeDoMotor = (eng) => NOME_MOTOR[eng] || 'Claude';
 const MOTORES = ['claude', 'codex', 'acp', 'gemini', 'grok'];
 // ACP continua no histórico antigo; as escolhas novas são marcas, não protocolos.
 /* 09/10: DeepSeek e Muse Spark saíram da vista (ficam só as 5: Claude, Codex, Gemini, Grok, MiMo). O código
    deles continua aqui para as conversas antigas abrirem; só não aparecem mais para escolher. */
-const MOTORES_VISIVEIS = ['claude', 'codex', 'gemini'];
+const MOTORES_VISIVEIS = ['claude', 'codex', 'gemini', 'jusia'];
 // sem motor salvo (1º boot ou config resetado), o padrão é Claude, não Codex.
 const motorVisivel = (eng) => MOTORES_VISIVEIS.includes(eng) ? eng : 'claude';
 const CAIXA_MOTOR = { claude: 'Claude', codex: 'Codex', acp: 'Acp', gemini: 'Gemini', grok: 'Grok',
-  deepseek: 'Deepseek', mimo: 'Mimo', muse: 'Muse' };
+  deepseek: 'Deepseek', mimo: 'Mimo', muse: 'Muse', jusia: 'Jusia' };
 /* 25/09: a coluna de conversas e UMA so, com todas as IAs juntas. Qualquer motor escreve na
    mesma caixa — e a lista que ela mostra e montada por pintarConversas(), nunca por motor. */
 const VISTA_CONVERSAS = 'todas';
@@ -1548,7 +1556,7 @@ function motorIndisponivelNaPasta(engine, cwd) {
   if (EH_PROVEDOR(engine)) {
     if (NA_VPS(cwd)) return nomeDoMotor(engine) + ' roda numa pasta do Mac. Escolha uma pasta do Mac para usar o ' + nomeDoMotor(engine) + '.';
     if (MOTORES_OK?.[engine] === false) return 'O Claude Code não está instalado neste Mac.';
-    if (semChaveDoProvedor(engine)) return 'Cole a chave do ' + nomeDoMotor(engine) + ' em Ajustes › Contas.';
+    if (semChaveDoProvedor(engine)) return PROVEDORES_UI[engine].login ? 'Entre na ' + nomeDoMotor(engine) + ' em Ajustes › Contas.' : 'Cole a chave do ' + nomeDoMotor(engine) + ' em Ajustes › Contas.';
     return '';
   }
   // R2-016: o Grok roda pelo ACP, que o backend recusa na VPS igual ao Gemini — sem isto a
@@ -8962,6 +8970,7 @@ const semChaveDoProvedor = (engine) => { const c = contaCache[engine]; return !!
 async function abrirChaveProvedor(engine) {
   const p = PROVEDORES_UI[engine];
   if (!p) return;
+  if (p.login) return abrirLoginProvedor(engine);
   fecharMenus();
   let c = contaCache[engine];
   try { c = await window.api.contaLer(engine); contaCache[engine] = c; } catch {}
@@ -9009,6 +9018,48 @@ async function abrirChaveProvedor(engine) {
   };
   $('.mo-x', cx).onclick = () => fecharModalGlobal();
   setTimeout(() => inp.focus(), 50);
+}
+
+/* ---- IA de LOGIN (Jus IA, 05/11): não tem chave. "Entrar" relê o login do site no Chrome da
+   conta (~/.cockpit/jusia-renovar.py, sem senha nem clique) e confere. Rótulo e número, sem frase. */
+async function abrirLoginProvedor(engine) {
+  const p = PROVEDORES_UI[engine];
+  fecharMenus();
+  let c = contaCache[engine];
+  try { c = await window.api.contaLer(engine); contaCache[engine] = c; } catch {}
+  const entrou = !!(c && c.entrou);
+  const cx = abrirModalGlobal();
+  cx.classList.add('cx-chave');
+  cx.innerHTML = '<div class="mo-top"><span class="mo-logo" data-motor="' + engine + '">' + svgMotor(engine) + '</span>'
+    + '<span class="mo-tit"></span><button class="mo-x" title="Fechar">' + ico('x') + '</button></div>'
+    + '<div class="mo-sub chv-estado"></div><div class="mo-erro hidden" id="chvErro"></div>'
+    + '<div class="mo-rodape chv-rodape"><button type="button" class="mo-btn" id="chvPegar">Abrir site</button>'
+    + (entrou ? '<button type="button" class="mo-btn perigo" id="chvRemover">Sair</button>' : '')
+    + '<span class="mo-gap"></span><button type="button" class="mo-btn destaque" id="chvOk"></button></div>';
+  $('.mo-tit', cx).textContent = p.nome;
+  const estado = $('.chv-estado', cx), erro = $('#chvErro', cx), ok = $('#chvOk', cx);
+  estado.textContent = entrou ? [c.email, c.plano].filter(Boolean).join(' · ') : 'Sem login';
+  const rotulo = entrou ? 'Renovar login' : 'Entrar';
+  ok.textContent = rotulo;
+  ok.onclick = async () => {
+    erro.classList.add('hidden'); ok.disabled = true; ok.textContent = 'Entrando…';
+    let r = null;
+    try { r = await window.api.provedorSalvar({ engine, chave: '' }); } catch (err) { r = { error: String((err && err.message) || err) }; }
+    if (!r || r.error) { erro.textContent = (r && r.error) || 'Não deu certo.'; erro.classList.remove('hidden'); ok.disabled = false; ok.textContent = rotulo; return; }
+    contaCache[engine] = r.conta || null; contaLidaEm[engine] = Date.now();
+    fecharModalGlobal();
+    pintarContaLateral(engine, true); pintarContasAjustes(true);
+    mostrarAviso({ id: 'chave-' + engine, tipo: 'info', texto: p.nome + ' conectada.' });
+  };
+  $('#chvPegar', cx).onclick = () => { try { window.api.abrirLink(p.painel); } catch {} };
+  const rem = $('#chvRemover', cx);
+  if (rem) rem.onclick = async () => {
+    if (!confirm('Sair da ' + p.nome + ' neste Mac?')) return;
+    try { await window.api.provedorRemover(engine); } catch {}
+    contaCache[engine] = { entrou: false }; fecharModalGlobal();
+    pintarContaLateral(engine, true); pintarContasAjustes(true);
+  };
+  $('.mo-x', cx).onclick = () => fecharModalGlobal();
 }
 
 /* ---- "+ Adicionar conta" (29/09) ----
@@ -9217,7 +9268,7 @@ async function pintarContasAjustes(forcar) {
       $('.ajc-n', linha).textContent = motor;
       $('.ajc-e', linha).textContent = !conta ? '…' : entrou ? (conta.email || conta.nome || conta.plano || 'Vinculada') : 'Não vinculada';
       const bt = $('.ajc-bt', linha);
-      bt.textContent = EH_PROVEDOR(m) ? (entrou ? 'Trocar chave' : 'Colar chave') : (entrou ? 'Vincular outra' : 'Vincular uma conta');
+      bt.textContent = EH_PROVEDOR(m) ? (PROVEDORES_UI[m].login ? (entrou ? 'Renovar login' : 'Entrar') : (entrou ? 'Trocar chave' : 'Colar chave')) : (entrou ? 'Vincular outra' : 'Vincular uma conta');
       bt.title = entrou ? (EH_PROVEDOR(m) ? 'Colar outra chave do ' + motor : 'Entrar em outra conta do ' + motor) : '';
       bt.onclick = (e) => { e.stopPropagation(); entrarNaConta(m, entrou); };
       linha.title = entrou ? [conta.email, conta.plano].filter(Boolean).join(' · ') : '';

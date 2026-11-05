@@ -43,6 +43,7 @@
       "site-preload.js",
       "plataforma.js",
       "provedores.js",
+      "jusia.js",
       "nomes-conversa.js",
       "pastas-conversas.js",
       "nomes-agentes.js",

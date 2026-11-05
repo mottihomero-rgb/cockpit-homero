@@ -15,10 +15,10 @@ const ler = (f) => fs.readFileSync(path.join(raiz, f), 'utf8');
 const casa = () => fs.mkdtempSync(path.join(os.tmpdir(), 'ck-prov-'));
 const resposta = (status, corpo) => ({ status, ok: status >= 200 && status < 300, json: async () => corpo });
 
-test('as três IAs existem, com modelo padrão e endereço https', () => {
-  assert.deepEqual(Object.keys(PROVEDORES), ['deepseek', 'mimo', 'muse']);
+test('as IAs existem, com modelo padrão; as de chave em https, a de login (Jus IA) na ponte local', () => {
+  assert.deepEqual(Object.keys(PROVEDORES), ['deepseek', 'mimo', 'muse', 'jusia']);
   for (const [id, p] of Object.entries(PROVEDORES)) {
-    assert.match(p.base, /^https:\/\//, id);
+    assert.match(p.base, p.login ? /^http:\/\/127\.0\.0\.1:\d+$/ : /^https:\/\//, id);
     assert.equal(p.modelos.filter(m => m.padrao).length, 1, id + ' precisa de 1 modelo padrão');
     assert.ok(ehProvedor(id));
   }
@@ -177,7 +177,8 @@ test('tela: logo e cor existem para cada IA; botão do chat e da nova aba só pa
   const aVista = JSON.parse(/const MOTORES_VISIVEIS = (\[[^\]]*\]);/.exec(app)[1].replace(/'/g, '"'));
   const tokens = ler('renderer/cockpit-tokens.css'), estilo = ler('renderer/style.css');
   for (const id of Object.keys(PROVEDORES)) {
-    assert.match(app, new RegExp('\\n  "' + id + '": \\{\\n    "viewBox": "0 0 24 24"'), 'logo de ' + id);
+    // a Jus IA usa o desenho da marca dela (grade própria); as de chave, a grade de 24
+    assert.match(app, new RegExp('\\n  "' + id + '": \\{\\n    "viewBox": "' + (PROVEDORES[id].login ? '[-\\d ]+' : '0 0 24 24') + '"'), 'logo de ' + id);
     assert.match(tokens, new RegExp('--logo-' + id + ': #'), 'cor de ' + id);
     assert.match(estilo, new RegExp('\\.na-motor\\[data-motor="' + id + '"\\]'), 'css de ' + id);
     for (const html of ['renderer/index.html', 'renderer/index-web.html']) {
@@ -190,7 +191,7 @@ test('tela: logo e cor existem para cada IA; botão do chat e da nova aba só pa
     }
   }
   // o boot preenche #naIc<Nome> para todo motor visível: CAIXA_MOTOR tem de bater com o HTML
-  assert.match(app, /deepseek: 'Deepseek', mimo: 'Mimo', muse: 'Muse'/);
+  assert.match(app, /deepseek: 'Deepseek', mimo: 'Mimo', muse: 'Muse', jusia: 'Jusia'/);
 });
 
 test('conversa de IA de chave volta com o logo certo: o main rotula pela lista do Claude Code', () => {

@@ -37,7 +37,9 @@ const contasCli = require('./contas-cli').criarContasCli({ HOME, pastaDados: () 
   buildEnv: () => plataforma.buildEnv(), ehWindows: EH_WIN });
 /* DeepSeek, MiMo e Muse Spark: chave de API, motor é o Claude Code apontado para outro endereço */
 const provedoresMod = require('./provedores');
-const provedores = provedoresMod.criarProvedores({ HOME, buildEnv: () => plataforma.buildEnv() });
+/* Jus IA (05/11): sem API. A ponte local (jusia.js) fala com o chat do site pelo login da conta */
+const jusia = require('./jusia').criarJusia({ HOME, buildEnv: () => plataforma.buildEnv() });
+const provedores = provedoresMod.criarProvedores({ HOME, buildEnv: () => plataforma.buildEnv(), jusia });
 const ehProvedor = provedoresMod.ehProvedor;
 // no Mac o Claude mora sempre no mesmo lugar; no Windows a gente procura
 let CLAUDE_BIN = EH_WIN ? acharBin('claude') : path.join(HOME, '.local/bin/claude');
@@ -4600,6 +4602,13 @@ async function contaDoProvedor(id, forcar) {
 handle('provedor:salvar', async (_e, { engine, chave, base } = {}) => {
   if (souRemoto(_e)) return { error: 'Colar a chave só funciona no Mac.' };
   if (!ehProvedor(engine)) return { error: 'IA desconhecida.' };
+  // Jus IA: "Entrar" = reler o login do site no Chrome da conta e conferir (sem chave)
+  if (engine === 'jusia') {
+    const r = await jusia.entrar();
+    if (!r.ok) return { error: r.erro || 'Não consegui entrar na Jus IA.' };
+    delete usoProv[engine];
+    return { ok: true, conta: await contaDoProvedor(engine, true) };
+  }
   const c = String(chave || '').trim();
   try { provedores.validar(engine, { chave: c, base }); } catch (e) { return { error: String(e && e.message || e) }; }
   const t = await provedores.testar(engine, { chave: c, base });
@@ -6846,6 +6855,11 @@ handle('pane:start', async (_e, data) => {
         return false;
       }
     }
+    // Jus IA: liga a ponte local antes (se já estiver de pé, volta na hora)
+    if (data.provedor === 'jusia' && !(await jusia.garantir())) {
+      emit(paneId, 'note', { text: 'Não consegui ligar a ponte da Jus IA (porta ' + jusia.PORTA + ' ocupada?).', error: true });
+      return false;
+    }
     return claudeStart(paneId, { cwd, model, approval, resumeId, effort, provedor: data.provedor, fork: data.fork ? true : undefined });
   }
   if (engine === 'claude' && data.worktree) return claudeStart(paneId, { cwd, model, approval, resumeId, effort, fork: data.fork || undefined, worktree: data.worktree });
@@ -7539,7 +7553,7 @@ handle('motores:disponiveis', () => ({
   claude: fs.existsSync(CLAUDE_BIN) || temBin('claude'),
   // as IAs de chave usam o Claude Code como motor: existem onde ele existe
   deepseek: fs.existsSync(CLAUDE_BIN) || temBin('claude'), mimo: fs.existsSync(CLAUDE_BIN) || temBin('claude'),
-  muse: fs.existsSync(CLAUDE_BIN) || temBin('claude'),
+  muse: fs.existsSync(CLAUDE_BIN) || temBin('claude'), jusia: fs.existsSync(CLAUDE_BIN) || temBin('claude'),
   codex: temBin('codex'),
   gemini: temBin('agy') || temBin('gemini'), grok: temBin('grok'),
   // o comando do agente ACP e configuravel: "disponivel" = ha com que rodar o preset padrao

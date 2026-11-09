@@ -4797,9 +4797,64 @@ function receberEventoPane(ev) {
 }
 window.api.onPaneEvent(receberEventoPane);
 /* o Cockpit trocou (ou o usuário trocou/adicionou/tirou) a conta do Claude: repinta anel, conta e Ajustes */
-if (window.api.onContasClaude) window.api.onContasClaude(() => {
+if (window.api.onContasClaude) window.api.onContasClaude((p) => {
   try { contaCache.claude = null; USO_FECHADO.claude = null; lerUso('claude', true); pintarContaLateral('claude', true); pintarContasAjustes(true); } catch {}
+  try { if (p && TROCA_SOZINHA.has(p.motivo)) avisarTrocaDeConta(p); } catch {}
 });
+
+/* 09/11: a troca SOZINHA (passou de 90% ou bateu o limite) vira um aviso de vidro no canto de
+   cima, por cima do uso do computador: logo do Claude, "Conta do Claude trocada" e o e-mail da
+   conta nova. Some em 12 s (mouse em cima segura; clique fecha). Com o Cockpit fora de foco, o
+   relógio só começa quando a janela volta, para o aviso não sumir sem ser visto. Troca manual
+   (Usar, tirar conta) não avisa: foi o próprio usuário. */
+const TROCA_SOZINHA = new Set(['perto-do-limite', 'limite-batido']);
+let avisoContaTimer = null;
+async function avisarTrocaDeConta(p) {
+  let email = '';
+  try {
+    const e = await window.api.contasClaudeEstado(false);
+    const c = e && Array.isArray(e.contas) ? e.contas.find(x => x.id === p.para) : null;
+    email = (c && c.email) || '';
+  } catch {}
+  let el = $('#avisoConta');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'avisoConta';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    el.addEventListener('click', () => fecharAvisoConta());
+    el.addEventListener('mouseenter', () => clearTimeout(avisoContaTimer));
+    el.addEventListener('mouseleave', () => agendarFimAvisoConta());
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '<span class="ac-logo mo-logo" data-motor="claude">' + svgMotor('claude') + '</span>'
+    + '<span class="ac-txt"><span class="ac-tit">Conta do Claude trocada</span><span class="ac-email"></span></span>';
+  $('.ac-email', el).textContent = 'para ' + (email || 'outra conta');
+  // preso no canto direito do topo, em cima do uso do computador (sem ele, no canto da janela)
+  const pc = $('#usoPc'), topo = $('#abasTopo');
+  const rPc = pc && pc.offsetParent ? pc.getBoundingClientRect() : null;
+  const rTopo = topo && topo.offsetParent ? topo.getBoundingClientRect() : null;
+  el.style.right = (rPc && rPc.width ? Math.max(8, Math.round(window.innerWidth - rPc.right)) : 12) + 'px';
+  el.style.top = (rTopo ? Math.round(rTopo.top + 4) : 8) + 'px';
+  el.classList.remove('hidden', 'saindo');
+  el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+  agendarFimAvisoConta();
+}
+function agendarFimAvisoConta() {
+  clearTimeout(avisoContaTimer);
+  if (document.hidden || !document.hasFocus()) {
+    window.addEventListener('focus', agendarFimAvisoConta, { once: true });
+    return;
+  }
+  avisoContaTimer = setTimeout(fecharAvisoConta, 12000);
+}
+function fecharAvisoConta() {
+  clearTimeout(avisoContaTimer);
+  const el = $('#avisoConta');
+  if (!el || el.classList.contains('hidden')) return;
+  el.classList.add('saindo');
+  setTimeout(() => { if (el.classList.contains('saindo')) el.classList.add('hidden'); }, 180);
+}
 
 /* O pedido de permissao vale so enquanto AQUELE turno daquele motor esta vivo. Sem apagar a
    tarja no fim do turno, na queda e na troca de motor, ela ficava pendurada pedindo autorizacao

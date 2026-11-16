@@ -296,10 +296,12 @@
         if (sincDeNovo) { sincDeNovo = false; sincronizar(); }
       }
     }
-    function aplicar(r) {
+    function aplicar(r, aoVivo) {
       if (r.meta) aplicarMeta(r.meta);
       let faltou = false;
-      for (const z of r.zonas || []) if (aplicarZona(z) === false) faltou = true;
+      animar = !!aoVivo && !r.tudo && !document.hidden;
+      try { for (const z of r.zonas || []) if (aplicarZona(z) === false) faltou = true; }
+      finally { animar = false; }
       if (typeof r.v === 'number') versao = r.v;
       if (faltou) { versao = 0; sincDeNovo = true; }
     }
@@ -415,7 +417,37 @@
       t.innerHTML = h;
       return t.content.firstElementChild;
     }
-    // troca so o que mudou: o que gira (icone de trabalhando, spinner) nao recomeca a cada pedaco
+    // troca so o que mudou: o que gira (icone de trabalhando, spinner) nao recomeca a cada pedaco.
+    // animar = pedaco ao vivo da resposta: o texto que cresceu ganha um <span class="mv-pal"> que
+    // surge suave (movimento.css), como no app do Claude. Esses spans so existem aqui no celular;
+    // por isso os filhos sao lidos "logicamente" (texto + spans que o seguem = um texto so).
+    let animar = false;
+    function grupos(el) {
+      const g = [];
+      for (const n of [...el.childNodes]) {
+        if (n.nodeType === 1 && n.dataset && n.dataset.mvf === '1' && g.length && g[g.length - 1].n.nodeType === 3) g[g.length - 1].f.push(n);
+        else if (n.nodeType === 1 && n.dataset && n.dataset.mvf === '1') { const t = document.createTextNode(n.textContent); n.replaceWith(t); g.push({ n: t, f: [] }); }
+        else g.push({ n, f: [] });
+      }
+      return g;
+    }
+    function crescerTexto(item, novo) {
+      const agora = Date.now();
+      const atual = item.n.nodeValue + item.f.map(x => x.textContent).join('');
+      if (novo === atual) return;
+      if (!animar || !novo.startsWith(atual)) { item.n.nodeValue = novo; item.f.forEach(x => x.remove()); return; }
+      // pedacos que ja terminaram de surgir voltam a ser texto comum
+      while (item.f.length && agora - item.f[0].__t > 700) { item.n.nodeValue += item.f[0].textContent; item.f.shift().remove(); }
+      const sp = document.createElement('span');
+      sp.dataset.mvf = '1'; sp.className = 'mv-pal'; sp.__t = agora;
+      sp.textContent = novo.slice(atual.length);
+      (item.f.length ? item.f[item.f.length - 1] : item.n).after(sp);
+      item.f.push(sp);
+    }
+    function surgir(n) {
+      if (!animar || !n.animate) return;
+      n.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 450, easing: 'ease-out' });
+    }
     function morfar(a, b) {
       if (a.nodeType !== b.nodeType || a.nodeName !== b.nodeName) { a.replaceWith(b); return; }
       if (a.nodeType !== 1) { if (a.nodeValue !== b.nodeValue) a.nodeValue = b.nodeValue; return; }
@@ -426,11 +458,21 @@
         if (a.value !== v) a.value = v;
         if (a.type === 'checkbox' || a.type === 'radio') a.checked = b.hasAttribute('checked');
       }
-      const ac = [...a.childNodes], bc = [...b.childNodes];
+      const ag = grupos(a), bc = [...b.childNodes];
       for (let i = 0; i < bc.length; i++) {
-        if (i < ac.length) morfar(ac[i], bc[i]); else a.appendChild(bc[i]);
+        const item = ag[i], bn = bc[i];
+        if (!item) {
+          if (animar && bn.nodeType === 3 && bn.nodeValue.trim()) {
+            const sp = document.createElement('span'); sp.dataset.mvf = '1'; sp.className = 'mv-pal'; sp.__t = Date.now();
+            sp.textContent = bn.nodeValue; a.appendChild(document.createTextNode('')); a.appendChild(sp);
+          } else { a.appendChild(bn); if (bn.nodeType === 1) surgir(bn); }
+          continue;
+        }
+        if (item.n.nodeType === 3 && bn.nodeType === 3) { crescerTexto(item, bn.nodeValue); continue; }
+        item.f.forEach(x => x.remove());
+        morfar(item.n, bn);
       }
-      for (let i = bc.length; i < ac.length; i++) ac[i].remove();
+      for (let i = bc.length; i < ag.length; i++) { ag[i].f.forEach(x => x.remove()); ag[i].n.remove(); }
     }
 
     function aplicarZona(z) {
@@ -467,7 +509,8 @@
           ref = el.nextSibling;
         }
         for (const e of proprios) chat.appendChild(e);
-        if (noFim) chat.scrollTop = chat.scrollHeight;
+        // acompanhar a resposta deslizando (movimento.js); sem ele, pula direto pro fim
+        if (noFim) { if (animar && window.MV && window.MV.seguirFim) window.MV.seguirFim(chat); else chat.scrollTop = chat.scrollHeight; }
       } else {
         const cmp = P.el.querySelector(':scope > .pane-cmp');
         for (const el of novos) if (el.nextElementSibling !== cmp || el.parentElement !== P.el) P.el.insertBefore(el, cmp);
@@ -481,7 +524,7 @@
     api.onEspelho && api.onEspelho((lote) => {
       if (!pronto && !lote.tudo) return;
       if (lote.antes !== versao && !lote.tudo) { sincronizar(); return; }
-      aplicar(lote);
+      aplicar(lote, true);
     });
 
     // ---- mandar ----

@@ -1,0 +1,126 @@
+/* ============ Movimento do celular (16/11/2026) ============
+   Medido quadro a quadro na gravacao do app oficial do Claude no iPhone que ele mandou:
+   - painel de baixo (anexar, menus): sobe em ~0,27 s com mola curta, fundo escurece junto
+   - mensagem enviada: voa da caixa de escrever ate o topo em ~0,25 s, com um quique leve
+   - resposta: as palavras novas surgem suaves (opacidade), nao "pulam" na tela
+   - botao: enviar vira parar com troca suave; todo toque afunda um pouco o botao
+   So vale no telefone (este arquivo so e carregado no index-web.html). */
+:root{
+  /* mola curta (quase sem passar do ponto): paineis, menus, gaveta */
+  --mv-mola:cubic-bezier(.2,.85,.25,1);
+  /* mola com quique leve: bolha que voa, botao que aparece */
+  --mv-quique:cubic-bezier(.2,.9,.3,1.12);
+  --mv-saida:cubic-bezier(.4,0,1,1);
+}
+@supports (transition-timing-function: linear(0, 1)) {
+  :root{
+    --mv-mola:linear(0, 0.043, 0.1435, 0.2692, 0.3997, 0.5227, 0.6315, 0.7236, 0.7987, 0.8581, 0.9037, 0.9377, 0.9623, 0.9795, 0.9911, 0.9985, 1.0029, 1.0052, 1.0062, 1.0062, 1.0058, 1.005, 1.0042, 1.0034, 1.0027, 1.002, 1.0015, 1.0011, 1);
+    --mv-quique:linear(0, 0.0488, 0.1645, 0.3108, 0.4628, 0.6045, 0.7271, 0.8269, 0.9038, 0.9596, 0.9975, 1.021, 1.0335, 1.0381, 1.0376, 1.0338, 1.0285, 1.0226, 1.017, 1.012, 1.0079, 1.0046, 1.0022, 1.0005, 0.9994, 0.9988, 0.9986, 0.9985, 1);
+  }
+}
+
+@media (max-width: 820px), (pointer: coarse) and (max-width: 1100px) {
+  html{-webkit-tap-highlight-color:transparent}
+
+  /* ---- toque: o botao afunda e volta com mola ---- */
+  .cb,.p-send,.p-stop,.p-close,.p-model,.p-compactar,.ch-lado,.aba,.mi,.hist-item,.bt-copiar,
+  #btnGaveta,.mv-folha button,.pp-btns button,.pane-perguntas button,.sug-chip{
+    transition:transform .32s var(--mv-quique),opacity .2s ease,background-color .2s ease;
+    touch-action:manipulation}
+  .cb:active,.p-send:active,.p-stop:active,.p-close:active,.p-model:active,.p-compactar:active,
+  .ch-lado:active,#btnGaveta:active,.bt-copiar:active,.mv-folha button:active,
+  .pp-btns button:active,.pane-perguntas button:active,.sug-chip:active{
+    transform:scale(.9);transition-duration:.08s}
+  .aba:active,.mi:active,.hist-item:active{transform:scale(.97);transition-duration:.08s}
+
+  /* ---- enviar <-> parar ---- */
+  .p-stop:not(.hidden){animation:mv-pop .34s var(--mv-quique) both}
+  .p-send{transition:transform .32s var(--mv-quique),opacity .22s ease,filter .22s ease}
+  .pane:not(.mv-tem-texto) .p-send{opacity:.45;filter:saturate(.4)}
+  .pane.mv-tem-texto .p-send{opacity:1;filter:none}
+  .pane.mv-tem-texto .p-send.mv-acendeu{animation:mv-pop .34s var(--mv-quique)}
+
+  /* ---- caixa de escrever cresce suave quando quebra linha ---- */
+  .p-input{transition:height .18s var(--mv-mola)}
+  .p-anexos:not(.hidden){animation:mv-entra .32s var(--mv-mola) both}
+
+  /* ---- "Pensando…": o texto brilha passando da esquerda para a direita ---- */
+  .trab:not(.espera) .trab-txt{
+    background:linear-gradient(90deg,var(--fg-dim,#888) 0%,var(--fg-dim,#888) 35%,var(--fg-strong,#fff) 50%,var(--fg-dim,#888) 65%,var(--fg-dim,#888) 100%);
+    background-size:250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+    animation:mv-brilho 1.6s linear infinite}
+  /* o "Pensando" espera a mensagem chegar no topo antes de aparecer */
+  .trab{animation:mv-entra .32s var(--mv-mola) .3s both}
+
+  /* ---- palavras novas da resposta surgem suaves (espelho.js marca o pedaco novo) ---- */
+  .mv-pal{animation:mv-pal .5s ease-out both}
+
+  /* ---- menus do chat (o "/", modelo, permissao): sobem do rodape com mola ---- */
+  .modal.como-menu:not(.hidden){animation:mv-veu .22s ease both}
+  .modal.como-menu:not(.hidden) .modal-cx{animation:mv-sobe .42s var(--mv-mola) both}
+
+  /* ---- gaveta da lista de conversas ---- */
+  #activitybar,#sidebar{transition:transform .38s var(--mv-mola) !important}
+  body.gaveta::before{animation:mv-veu .25s ease both}
+
+  /* ---- troca de aba: o chat novo aparece em vez de piscar ---- */
+  .espaco:not(.oculta){animation:mv-aparece .2s ease both}
+
+  /* ---- painel de anexar (movimento.js) ---- */
+  .mv-veu{position:fixed;inset:0;z-index:1000;background:#000;opacity:0;
+    transition:opacity .27s ease;touch-action:none}
+  .mv-veu.aberto{opacity:.32}
+  .mv-folha{position:fixed;left:0;right:0;bottom:0;z-index:1001;
+    background:var(--bg2,#1c1c1e);color:var(--fg,#eee);
+    border-radius:22px 22px 0 0;padding:6px 16px calc(18px + var(--sab,0px));
+    box-shadow:0 -10px 40px #0005;transform:translateY(105%);
+    transition:transform .42s var(--mv-mola);will-change:transform;touch-action:none}
+  .mv-folha.aberto{transform:translateY(0)}
+  .mv-folha.saindo{transition:transform .24s var(--mv-saida)}
+  .mv-alca{width:38px;height:5px;border-radius:3px;background:var(--line,#444);margin:4px auto 10px;opacity:.9}
+  .mv-cab{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;margin-bottom:14px}
+  .mv-cab h3{margin:0;text-align:center;font-size:16px;font-weight:600;color:var(--fg-strong,#fff)}
+  .mv-x{width:36px;height:36px;border-radius:50%;border:0;background:var(--bg3,#2c2c2e);color:inherit;
+    display:grid;place-items:center;font-size:18px;line-height:1}
+  .mv-blocos{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .mv-bloco{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    min-height:92px;border:0;border-radius:16px;background:var(--bg3,#2c2c2e);color:var(--fg,#eee);
+    font:inherit;font-size:13px}
+  .mv-bloco svg{width:26px;height:26px}
+  .mv-bloco:nth-child(1){animation:mv-entra .4s var(--mv-mola) .04s both}
+  .mv-bloco:nth-child(2){animation:mv-entra .4s var(--mv-mola) .08s both}
+  .mv-bloco:nth-child(3){animation:mv-entra .4s var(--mv-mola) .12s both}
+  .mv-nota{margin:12px 2px 0;font-size:12px;color:var(--fg-dim,#999);text-align:center}
+
+  /* ---- arquivo subindo: aparece NA HORA, com miniatura e barra de progresso ---- */
+  .mv-subindo{display:flex;gap:8px;padding:8px 10px 0;overflow-x:auto;scrollbar-width:none}
+  .mv-subindo:empty{display:none}
+  .mv-ficha{position:relative;flex:none;width:64px;height:64px;border-radius:12px;overflow:hidden;
+    background:var(--bg3,#2c2c2e);display:grid;place-items:center;font-size:11px;color:var(--fg-dim,#aaa);
+    animation:mv-pop .38s var(--mv-quique) both}
+  .mv-ficha img,.mv-ficha video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+  .mv-ficha .mv-nome{position:relative;padding:4px;text-align:center;word-break:break-all;line-height:1.15;max-height:100%;overflow:hidden}
+  .mv-ficha::after{content:"";position:absolute;inset:0;background:#0006;transition:opacity .3s ease}
+  .mv-ficha.feito::after{opacity:0}
+  .mv-barra{position:absolute;left:6px;right:6px;bottom:6px;height:4px;border-radius:2px;background:#fff4;z-index:1;overflow:hidden}
+  .mv-barra i{display:block;height:100%;width:0;background:#fff;border-radius:2px;transition:width .2s ease}
+  .mv-pct{position:absolute;z-index:1;color:#fff;font-size:12px;font-weight:600;text-shadow:0 1px 2px #0008}
+  .mv-ficha.erro{outline:2px solid var(--red,#e5484d)}
+  .mv-ficha.erro .mv-pct{font-size:10px;padding:0 4px;text-align:center}
+
+  /* ---- mensagem que acabou de chegar (resposta, passo, aviso) ---- */
+  .mv-entrou{animation:mv-entra .34s var(--mv-mola) both}
+}
+
+@keyframes mv-pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes mv-entra{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+@keyframes mv-sobe{from{transform:translateY(100%)}to{transform:none}}
+@keyframes mv-veu{from{opacity:0}to{opacity:1}}
+@keyframes mv-aparece{from{opacity:.4}to{opacity:1}}
+@keyframes mv-pal{from{opacity:0;filter:blur(2px)}to{opacity:1;filter:none}}
+@keyframes mv-brilho{from{background-position:100% 0}to{background-position:-150% 0}}
+
+@media (prefers-reduced-motion: reduce){
+  .mv-folha,.mv-veu,.p-input,#activitybar,#sidebar{transition:none !important}
+  .mv-pal,.mv-entrou,.trab,.trab-txt,.p-stop,.mv-ficha,.mv-bloco,.modal.como-menu .modal-cx{animation:none !important}
+}

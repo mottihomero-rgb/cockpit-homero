@@ -92,6 +92,18 @@ function pastaDeColados(caminho) {
    nao valem nada (num nome cabe "../../" e um ".mov" pode ser qualquer coisa por dentro),
    entao o tipo sai daqui. Cobre o que um iPhone manda: foto (png, jpg, gif, webp, heic) e
    video (mov, mp4, webm). */
+/* 16/11: documento tambem entra pelo celular (antes: "outro tipo de arquivo, so pelo Mac").
+   O conteudo continua mandando: PDF pela assinatura, Office pelo "PK" do zip, e texto so quando
+   o nome diz que e texto E nao ha byte zero no comeco. Script sem nome continua recusado. */
+const EXT_OFFICE = new Set(['docx', 'xlsx', 'pptx', 'zip', 'pages', 'numbers', 'key']);
+const EXT_TEXTO = new Set(['txt', 'md', 'csv', 'tsv', 'json']);
+function tipoDocumento(b, extNome) {
+  const txt = (i, f) => b.subarray(i, f).toString('latin1');
+  if (b.length >= 5 && txt(0, 5) === '%PDF-') return 'pdf';
+  if (b.length >= 4 && txt(0, 4) === 'PK\x03\x04') return EXT_OFFICE.has(extNome) ? extNome : 'zip';
+  if (EXT_TEXTO.has(extNome) && b.length && !b.subarray(0, 4096).includes(0)) return extNome;
+  return '';
+}
 function tipoPelosBytes(b) {
   if (b.length < 12) return '';
   const txt = (i, f) => b.subarray(i, f).toString('latin1');
@@ -189,7 +201,16 @@ function receberUpload(req, res, { temSessao, pasta, endereco }) {
   if (!mesmaOrigem(req, endereco)) return responder(403, { error: 'origem inválida' }, true);
 
   const grande = 'arquivo grande demais (o limite é 500 MB)';
-  const soFotoVideo = 'só foto ou vídeo (png, jpg, gif, webp, heic, mov, mp4, webm)';
+  const soFotoVideo = 'só foto ou vídeo, ou documento (pdf, docx, xlsx, pptx, txt, md, csv)';
+  let extNome = '', apelido = '';
+  try {
+    const nomeDeFora = decodeURIComponent(String(req.headers['x-nome'] || new URL(req.url, 'http://x').searchParams.get('nome') || ''));
+    extNome = (nomeDeFora.match(/\.([a-z0-9]{1,8})$/i) || [])[1] || '';
+    extNome = extNome.toLowerCase();
+    // o nome de fora so empresta um apelido limpo (letras, numeros e hifen): sem barra, sem ponto
+    apelido = nomeDeFora.replace(/\.[^.]*$/, '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+  } catch {}
   if (Number(req.headers['content-length'] || 0) > LIMITE_UPLOAD) return responder(413, { error: grande }, true);
 
   const tipo = String(req.headers['content-type'] || '');
@@ -216,14 +237,20 @@ function receberUpload(req, res, { temSessao, pasta, endereco }) {
     if (!fluxo) {
       cabeca = cabeca.length ? Buffer.concat([cabeca, dados]) : dados;
       if (cabeca.length < 12) return;                        // ainda nao da para saber o que e'
-      const ext = tipoPelosBytes(cabeca);
-      if (!ext) return desistir(415, soFotoVideo);
+      if (!abrirDestino(tipoPelosBytes(cabeca) || tipoDocumento(cabeca, extNome))) return;
+      dados = cabeca; cabeca = Buffer.alloc(0);
+    }
+    // segura a torneira quando o disco fica para tras (video grande)
+    if (!fluxo.write(dados)) { req.pause(); fluxo.once('drain', () => { try { req.resume(); } catch {} }); }
+  });
+  function abrirDestino(ext) {
+      if (!ext) { desistir(415, soFotoVideo); return false; }
       try {
         fs.mkdirSync(pasta, { recursive: true });
         const raiz = fs.realpathSync(pasta);
         // o nome nasce AQUI. Nada do que veio do telefone entra nele: e' por nome de fora que
         // se escapa da pasta com ../../
-        const nome = 'celular-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex') + '.' + ext;
+        const nome = 'celular-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex') + (apelido ? '-' + apelido : '') + '.' + ext;
         const caminho = path.resolve(raiz, nome);
         // e ainda assim confere DEPOIS de resolver: tem de cair dentro de colados/
         if (path.dirname(caminho) !== raiz) return desistir(400, 'caminho inválido');
@@ -234,17 +261,19 @@ function receberUpload(req, res, { temSessao, pasta, endereco }) {
         destino = caminho;
         fluxo = fs.createWriteStream(destino, { fd });
         fluxo.on('error', () => desistir(500, 'não consegui gravar o arquivo no Mac'));
-      } catch { return desistir(500, 'não consegui gravar o arquivo no Mac'); }
-      dados = cabeca; cabeca = Buffer.alloc(0);
-    }
-    // segura a torneira quando o disco fica para tras (video grande)
-    if (!fluxo.write(dados)) { req.pause(); fluxo.once('drain', () => { try { req.resume(); } catch {} }); }
-  });
+      } catch { desistir(500, 'não consegui gravar o arquivo no Mac'); return false; }
+      return true;
+  }
 
   req.on('end', () => {
     if (falhou || pronto) return;
     if (cortar.terminou && !cortar.terminou()) return desistir(400, 'o arquivo chegou incompleto; tente anexar de novo');
-    if (!fluxo) return desistir(400, cabeca.length ? soFotoVideo : 'não chegou nenhum arquivo');
+    // arquivo de texto pequeno (menos de 12 bytes) so se resolve aqui no fim
+    if (!fluxo && cabeca.length) {
+      if (!abrirDestino(tipoDocumento(cabeca, extNome))) return;
+      fluxo.write(cabeca); cabeca = Buffer.alloc(0);
+    }
+    if (!fluxo) return desistir(400, 'não chegou nenhum arquivo');
     pronto = true;
     const f = fluxo, caminho = destino; fluxo = null;
     f.end(() => responder(200, { arquivo: caminho, bytes: total }));

@@ -42,20 +42,57 @@
     const el = document.createElement('div'); el.className = 'mv-folha';
     el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Anexar');
     el.innerHTML = '<div class="mv-alca"></div>'
-      + '<div class="mv-cab"><button class="mv-x" aria-label="Fechar">×</button><h3>Anexar</h3><span></span></div>'
+      + '<div class="mv-cab"><button class="mv-x" aria-label="Fechar">×</button><h3>Adicionar</h3><span></span></div>'
       + '<div class="mv-blocos">'
       + '<button class="mv-bloco" data-t="fotos">' + ICONES.fotos + 'Fotos e vídeos</button>'
       + '<button class="mv-bloco" data-t="camera">' + ICONES.camera + 'Câmera</button>'
       + '<button class="mv-bloco" data-t="arquivo">' + ICONES.arquivo + 'Arquivos</button>'
-      + '</div><p class="mv-nota">Foto, vídeo, PDF, Word, Excel ou texto. Vai direto para o Mac.</p>';
+      + '</div>' + listaDoResto(P);
     document.body.append(veu, el);
     folha = { el, veu, P };
     requestAnimationFrame(() => requestAnimationFrame(() => { el.classList.add('aberto'); veu.classList.add('aberto'); }));
     veu.addEventListener('click', () => fecharFolha());
     qs('.mv-x', el).addEventListener('click', () => fecharFolha());
     el.querySelectorAll('.mv-bloco').forEach(b => b.addEventListener('click', () => escolher(P, b.dataset.t)));
+    // cada linha aperta o botao de verdade (escondido na caixa): o menu dele abre como sempre abriu
+    el.querySelectorAll('.mv-linha').forEach(l => l.addEventListener('click', () => {
+      const bt = qs('.cmp-bar .' + l.dataset.bt, P.el);
+      fecharFolha(true);
+      if (bt) setTimeout(() => bt.click(), 30);
+    }));
     arrastarParaFechar(el, veu);
   }
+  /* O que saiu da caixa de escrever mora aqui: o "+" passa a ter tudo, como no app do Claude.
+     Nao copia o que cada botao faz: a linha so aperta o botao original, que continua no lugar
+     (escondido). Botao novo que alguem puser na caixa precisa entrar nesta lista. */
+  const RESTO = [
+    ['p-slash', 'Comandos e ações'],
+    ['p-model', 'Modelo e esforço'],
+    ['p-modo', 'Permissão'],
+    ['p-modoenvio', 'Se ele estiver trabalhando'],
+    ['p-plano', 'Planejar antes de executar'],
+    ['p-agentes', 'Time de agentes'],
+    ['p-quadro', 'Quadro branco'],
+    ['p-cwd', 'Pasta deste chat'],
+    ['p-mais', 'Mais opções'],
+  ];
+  const esc = (t) => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function listaDoResto(P) {
+    const linhas = [];
+    for (const [cls, nome] of RESTO) {
+      const bt = qs('.cmp-bar .' + cls, P.el);
+      if (!bt || bt.classList.contains('hidden')) continue;
+      const svg = bt.querySelector('svg');
+      let valor = (bt.textContent || '').replace(/\s+/g, ' ').trim();
+      if (cls === 'p-cwd') valor = (P.cwd || '').split('/').filter(Boolean).pop() || '';
+      if (valor.length > 32) valor = valor.slice(0, 31) + '…';
+      linhas.push('<button class="mv-linha" data-bt="' + cls + '"><span class="mv-li-ic">' + (svg ? svg.outerHTML : '') + '</span>'
+        + '<span class="mv-li-n">' + esc(nome) + '</span>' + (valor ? '<span class="mv-li-v">' + esc(valor) + '</span>' : '')
+        + '<span class="mv-li-seta">›</span></button>');
+    }
+    return linhas.length ? '<div class="mv-lista">' + linhas.join('') + '</div>' : '';
+  }
+
   function arrastarParaFechar(el, veu) {
     let y0 = null, dy = 0, t0 = 0;
     el.addEventListener('touchstart', (e) => {
@@ -283,6 +320,23 @@
       if (b && tem) { b.classList.remove('mv-acendeu'); void b.offsetWidth; b.classList.add('mv-acendeu'); }
     }, 120);
   }
+
+  /* Teclado aberto: a tela visivel encolhe bem mais que a janela. Liga a classe que tira a folga
+     da barrinha do iPhone e recolhe abas e cabecalho (movimento.css). */
+  const vv = window.visualViewport;
+  // a altura da tela SEM teclado: a maior que ja vimos com nenhum campo em foco (zera ao girar)
+  let cheia = vv ? vv.height : innerHeight, largura = innerWidth;
+  function conferirTeclado() {
+    const a = document.activeElement;
+    const campo = !!(a && a.matches && a.matches('textarea, input[type="text"], input:not([type]), [contenteditable="true"]'));
+    const h = vv ? vv.height : innerHeight;
+    if (innerWidth !== largura) { largura = innerWidth; cheia = h; }
+    if (!campo || h > cheia) cheia = Math.max(h, campo ? cheia : h);
+    document.body.classList.toggle('mv-teclado', campo && cheia - h > 150);
+  }
+  if (vv) { vv.addEventListener('resize', conferirTeclado); vv.addEventListener('scroll', conferirTeclado); }
+  document.addEventListener('focusin', () => setTimeout(conferirTeclado, 60));
+  document.addEventListener('focusout', () => setTimeout(conferirTeclado, 60));
 
   window.MV = { seguirFim, abrirFolha };
   if (window.__cockpitPronto) iniciar(); else window.addEventListener('cockpit:pronto', iniciar, { once: true });

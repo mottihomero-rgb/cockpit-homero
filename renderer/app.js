@@ -139,7 +139,7 @@ const MOTORES = ['claude', 'codex', 'acp', 'gemini', 'grok'];
 // ACP continua no histórico antigo; as escolhas novas são marcas, não protocolos.
 /* 09/10: DeepSeek e Muse Spark saíram da vista (ficam só as 5: Claude, Codex, Gemini, Grok, MiMo). O código
    deles continua aqui para as conversas antigas abrirem; só não aparecem mais para escolher. */
-const MOTORES_VISIVEIS = ['claude', 'codex', 'gemini', 'jusia'];
+const MOTORES_VISIVEIS = ['claude', 'codex']; // 10/11/2026: Gemini e Jus IA removidos a pedido dele
 // sem motor salvo (1º boot ou config resetado), o padrão é Claude, não Codex.
 const motorVisivel = (eng) => MOTORES_VISIVEIS.includes(eng) ? eng : 'claude';
 const CAIXA_MOTOR = { claude: 'Claude', codex: 'Codex', acp: 'Acp', gemini: 'Gemini', grok: 'Grok',
@@ -202,11 +202,11 @@ const EF_DESC_PT = {
 // esforço com que TODA conversa nova nasce (não muda quando você mexe na barra de um painel)
 const EF_NOVO = 'xhigh';
 /* O que toda conversa NOVA do Claude e do Codex traz marcado (pedido do usuário, 15/09/2026):
-   Codex no Sol, Claude no Sonnet 5.5 (06/10/2026; antes Opus 5.5 sem o 1M), os dois no Alto. Vale para aba nova, "nova
+   Codex no Sol, Claude no Opus 5.5 1M (11/11/2026; entre 06/10 e 11/11 foi Sonnet 5.5), os dois no Alto. Vale para aba nova, "nova
    conversa" e troca de motor no mesmo chat; conversa restaurada mantém o que estava salvo.
    Se o modelo sumir da lista do motor, cai no padrão dele (fillModels). */
 const PADRAO_NOVO = {
-  claude: { model: 'claude-sonnet-5-5', effort: 'high' },
+  claude: { model: 'claude-opus-5-5[1m]', effort: 'high' },
   codex: { model: 'gpt-6-sol', effort: 'high' },
 };
 const modeloNovo = (eng) => {
@@ -214,7 +214,7 @@ const modeloNovo = (eng) => {
   const salvo = (PADRAO_NOVO[eng] && PADRAO_NOVO[eng].model) || '';
   const lista = eng === 'claude' ? MODELOS_CLAUDE : eng === 'codex' ? MODELOS_CODEX : null;
   if (!lista?.length || lista.some(m => m.id === salvo)) return salvo;
-  const familia = eng === 'claude' ? /^claude-sonnet-[\d-]+$/ : /^gpt-[\d.]+-sol$/;
+  const familia = eng === 'claude' ? /^claude-opus-[\d-]+(\[1m\])?$/ : /^gpt-[\d.]+-sol$/;
   return (lista.find(m => familia.test(m.id)) || lista[0]).id;
 };
 const esforcoNovo = (eng) => (PADRAO_NOVO[eng] && PADRAO_NOVO[eng].effort) || EF_NOVO;
@@ -13823,7 +13823,6 @@ document.addEventListener('keydown', (e) => {
     naPintar();
   }).catch(() => {});
   if (!noTelefone && window.api.catalogoEstado) window.api.catalogoEstado().then(aplicarCatalogoModelos).catch(() => {});
-  if (window.api.geminiModelos) Promise.resolve(window.api.geminiModelos()).then(aplicarModelosGemini).catch(() => {});
   if (!noTelefone) window.api.codexModels().then(ms => {
     if (ms && ms.length) { MODELOS_CODEX = traduzCodex(ms); for (const P of panes.values()) if (P.engine === 'codex') fillModels(P); }
   });

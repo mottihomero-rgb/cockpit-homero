@@ -208,3 +208,9 @@ body.sem-mac::after{content:"reconectando ao Mac…";position:fixed;left:0;right
   .pl-corpo,.empilhado .pl-corpo{max-height:88px}
   .sug-chip{min-height:32px}
 }
+
+/* espelho do Mac (16/11): no chat espelhado, a pilha de baixo (permissao, aviso de limite) que
+   vale e a que veio do Mac (data-esp); as daqui ficam escondidas para nao aparecer duas */
+.pane.espelho > .pane-perm:not([data-esp]),
+.pane.espelho > .p-uso:not([data-esp]),
+.pane.espelho > .pane-perguntas:not([data-esp]) { display: none !important; }

@@ -21,6 +21,8 @@ Object.assign(TIPOS, { '.mjs': 'text/javascript; charset=utf-8', '.wasm': 'appli
    e rodar programa. Pelo celular esses cinco agora respondem "so funciona no Mac".
    Mexeu no renderer/web.js? Ponha o nome novo aqui tambem, senao o telefone nao alcanca. */
 const PERMITIDOS = new Set([
+  // espelho do Mac (16/11): ler o retrato dos chats e pedir que o MAC faca (enviar, parar...)
+  'espelho:estado', 'espelho:cmd',
   'config:get', 'sys:home', 'sys:pessoal', 'fs:list', 'fs:read', 'fs:buscarArquivos',
   'pane:start', 'pane:send', 'pane:respond', 'pane:perguntas', 'pane:plano', 'sessions:tempo', 'pane:settings', 'pane:steer',
   'pane:compactar', 'pane:interrupt', 'pane:stop', 'pane:approve',
@@ -429,6 +431,8 @@ function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somente
     }
     if (!t || !sessaoValida(t)) return paginaLogin(res, 200, false);
     res.setHeader('Set-Cookie', cookieLogin(t));
+    // espelho (16/11): foto/video que aparece num chat do Mac. Só imagem e video, só arquivo que existe.
+    if (url.pathname === '/espelho-arquivo') return mandarMidiaDoMac(req, res, url.searchParams.get('c') || '');
     if (url.pathname.startsWith('/revisao/')) {
       const m = url.pathname.match(/^\/revisao\/([a-f0-9]{48})\/(.+)$/);
       let recurso;
@@ -599,6 +603,27 @@ function criar({ pastaRenderer, handlers, ouvintes, porta, senha, aoLog, somente
     get endereco() { return enderecoAtual; },
     set endereco(v) { enderecoAtual = v; },
   };
+}
+
+const TIPOS_MIDIA = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+  '.webp': 'image/webp', '.heic': 'image/heic', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.m4v': 'video/mp4' };
+function mandarMidiaDoMac(req, res, caminho) {
+  const tipo = TIPOS_MIDIA[path.extname(String(caminho)).toLowerCase()];
+  if (!tipo || !path.isAbsolute(caminho) || caminho.includes('\0')) { res.writeHead(404); return res.end(); }
+  let st; try { st = fs.statSync(caminho); } catch { res.writeHead(404); return res.end(); }
+  if (!st.isFile()) { res.writeHead(404); return res.end(); }
+  const cab = { 'Content-Type': tipo, 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, max-age=600', 'X-Content-Type-Options': 'nosniff' };
+  // o Safari so toca video se o servidor entregar pedacos (Range)
+  const m = /^bytes=(\d*)-(\d*)$/.exec(String(req.headers.range || ''));
+  if (m && (m[1] || m[2])) {
+    let ini = m[1] ? Number(m[1]) : Math.max(0, st.size - Number(m[2]));
+    let fim = m[1] && m[2] ? Math.min(Number(m[2]), st.size - 1) : st.size - 1;
+    if (ini > fim || ini >= st.size) { res.writeHead(416, { 'Content-Range': 'bytes */' + st.size }); return res.end(); }
+    res.writeHead(206, { ...cab, 'Content-Range': 'bytes ' + ini + '-' + fim + '/' + st.size, 'Content-Length': fim - ini + 1 });
+    return fs.createReadStream(caminho, { start: ini, end: fim }).on('error', () => res.destroy()).pipe(res);
+  }
+  res.writeHead(200, { ...cab, 'Content-Length': st.size });
+  fs.createReadStream(caminho).on('error', () => res.destroy()).pipe(res);
 }
 
 function mandarArquivo(req, res, arq) {

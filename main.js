@@ -411,6 +411,102 @@ function avisarWeb(canal, dados) {
   for (const ws of ouvintesWeb) { try { ws.send(JSON.stringify({ tipo: 'evento', canal, dados })); } catch {} }
 }
 
+/* ======================= espelho Mac <-> celular (16/11) =======================
+   A janela principal (renderer/espelho.js) manda o retrato dos chats em pedacos com chave; aqui
+   fica a ultima copia de cada pedaco com o numero da versao em que mudou. O celular que volta
+   do fundo pede "desde a versao N" e recebe so o que mudou. Pedido do celular (enviar, parar,
+   clique repassado...) vai para a janela do Mac, que faz como se ele tivesse clicado ali. */
+const espelho = { ativo: false, v: 0, meta: null, metaV: 0, panes: new Map(), esperandoTudo: [], semCelularDesde: 0, pedidos: new Map(), seq: 0 };
+function espelhoAoMac(c) { if (janelaViva(win)) { try { win.webContents.send('espelho:cmd', c); } catch {} } }
+// sem celular olhando por 30 min: para de copiar (economiza memoria); volta no 1o pedido.
+// O relogio so nasce quando o espelho liga: nada de timer rodando so por abrir o app.
+let espelhoRelogio = null;
+function espelhoLigar() {
+  espelho.ativo = true; espelhoAoMac({ tipo: 'ligar' });
+  if (!espelhoRelogio) {
+    espelhoRelogio = setInterval(() => {
+      if (ouvintesWeb.size) { espelho.semCelularDesde = 0; return; }
+      if (!espelho.semCelularDesde) espelho.semCelularDesde = Date.now();
+      else if (Date.now() - espelho.semCelularDesde > 30 * 60 * 1000) espelhoDesligar();
+    }, 5000);
+    if (espelhoRelogio && espelhoRelogio.unref) espelhoRelogio.unref();
+  }
+}
+function espelhoDesligar() {
+  espelho.ativo = false; espelho.meta = null; espelho.panes.clear(); espelho.semCelularDesde = 0;
+  if (espelhoRelogio) { clearInterval(espelhoRelogio); espelhoRelogio = null; }
+  espelhoAoMac({ tipo: 'desligar' });
+}
+// pelo handle (e nao ipcMain.on) como o resto do app; o celular nao alcanca: fora do PERMITIDOS
+handle('espelho:mac', (e, lote) => {
+  if (!e || !janelaViva(win) || e.sender !== win.webContents || !lote || typeof lote !== 'object') return false;
+  if (lote.ola) { if (espelho.ativo) espelhoLigar(); return true; }     // tela recarregada: liga de novo
+  if (!espelho.ativo) return false;
+  const antes = espelho.v, v = ++espelho.v;
+  if (lote.tudo) espelho.panes.clear();
+  if (lote.meta && typeof lote.meta === 'object') {
+    espelho.meta = lote.meta; espelho.metaV = v;
+    const vivos = new Set(Object.keys(lote.meta.panes || {}));
+    for (const id of [...espelho.panes.keys()]) if (!vivos.has(id)) espelho.panes.delete(id);
+  }
+  for (const z of Array.isArray(lote.zonas) ? lote.zonas : []) {
+    if (!z || typeof z.paneId !== 'string' || (z.zona !== 'chat' && z.zona !== 'pilha') || !Array.isArray(z.ordem)) continue;
+    let p = espelho.panes.get(z.paneId);
+    if (!p) { p = { chat: { ordem: [], ordemV: 0, itens: new Map() }, pilha: { ordem: [], ordemV: 0, itens: new Map() } }; espelho.panes.set(z.paneId, p); }
+    const zz = p[z.zona], ordem = z.ordem.map(String);
+    if (ordem.join('\u0001') !== zz.ordem.join('\u0001')) { zz.ordem = ordem; zz.ordemV = v; }
+    const vivos = new Set(ordem);
+    for (const [k, h] of Object.entries(z.html || {})) if (vivos.has(k) && typeof h === 'string') zz.itens.set(k, { html: h, v });
+    for (const k of [...zz.itens.keys()]) if (!vivos.has(k)) zz.itens.delete(k);
+  }
+  if (lote.tudo && espelho.meta) espelho.esperandoTudo.splice(0).forEach(f => f());
+  if (ouvintesWeb.size) avisarWeb('espelho', { ...lote, v, antes });
+  return true;
+});
+handle('espelho:resposta', (e, msg) => {
+  if (!e || !janelaViva(win) || e.sender !== win.webContents || !msg) return false;
+  const f = espelho.pedidos.get(msg.id);
+  if (f) { espelho.pedidos.delete(msg.id); f(msg.r && typeof msg.r === 'object' ? msg.r : { ok: true }); }
+  return true;
+});
+handle('espelho:estado', async (_e, arg = {}) => {
+  arg = arg && typeof arg === 'object' ? arg : {};
+  if (arg.sonda) return { ok: true };
+  if (!janelaViva(win)) return { error: 'A janela do Cockpit no Mac está fechada.' };
+  if (!espelho.ativo || !espelho.meta) {
+    const chegou = new Promise(ok => {
+      const t = setTimeout(ok, 6000);
+      espelho.esperandoTudo.push(() => { clearTimeout(t); ok(); });
+    });
+    if (!espelho.ativo) espelhoLigar();
+    await chegou;
+    if (!espelho.meta) return { error: 'O Mac não mandou os chats a tempo.' };
+  }
+  let desde = Number(arg.desde) || 0;
+  if (desde > espelho.v) desde = 0;               // o Mac reabriu e a contagem recomecou
+  const r = { v: espelho.v, zonas: [], tudo: !desde };
+  if (!desde || espelho.metaV > desde) r.meta = espelho.meta;
+  for (const [paneId, p] of espelho.panes) for (const zona of ['chat', 'pilha']) {
+    const zz = p[zona], html = {};
+    for (const [k, it] of zz.itens) if (!desde || it.v > desde) html[k] = it.html;
+    if (!desde || zz.ordemV > desde || Object.keys(html).length) r.zonas.push({ paneId, zona, ordem: zz.ordem, html });
+  }
+  return r;
+});
+const ESPELHO_PEDIDOS = new Set(['enviar', 'rascunho', 'clique', 'valor', 'tecla', 'parar', 'fechar', 'motor', 'novoChat', 'abrirSessao']);
+handle('espelho:cmd', async (_e, c = {}) => {
+  if (!c || typeof c !== 'object' || !ESPELHO_PEDIDOS.has(c.tipo)) return { error: 'Pedido desconhecido.' };
+  if (!janelaViva(win)) return { error: 'A janela do Cockpit no Mac está fechada.' };
+  const id = ++espelho.seq;
+  const prazo = ['enviar', 'novoChat', 'abrirSessao', 'fechar', 'motor'].includes(c.tipo) ? 90000 : 15000;
+  return await new Promise(ok => {
+    const t = setTimeout(() => { espelho.pedidos.delete(id); ok({ error: 'O Mac não respondeu.' }); }, prazo);
+    espelho.pedidos.set(id, (r) => { clearTimeout(t); ok(r); });
+    espelhoAoMac({ ...c, id });
+  });
+});
+
+
 /* ======================= motor CODEX =======================
    Um `codex app-server` por DESTINO: um no Mac e um dentro da VPS (por SSH).
    Cada painel e uma thread, e o painel lembra em qual destino ele vive. */
@@ -4480,6 +4576,7 @@ function janelasDoGemini(dados, velho) {
   return { sessao, semana, semSessao: !sessao && !!semana };
 }
 async function usoDoGemini() {
+  return null; // 10/11/2026: Gemini removido (a consulta falhava a cada 6 min)
   const agora = Date.now();
   if (usoGemini.dados && agora - usoGemini.quando < USO_VALE_MS) return usoGemini.dados;
   if (agora < usoGemini.pausaAte) return ultimoBomGemini() || { limitado: true, voltaEm: usoGemini.pausaAte };
@@ -5887,9 +5984,11 @@ async function shutdown() {
    senha permanente e podia voltar para sempre, mesmo depois de trocar a sessao. A tela do Mac
    nao usa nenhuma destas chaves (quem mostra a senha e o web:estado), entao nada quebra.
    O disco continua com tudo; o que sai daqui e uma copia sem elas. */
-handle('config:get', () => {
+handle('config:get', (_e) => {
   const d = { ...loadConfig() };
   for (const k of CHAVES_DO_MAIN) delete d[k];
+  // espelho (16/11): o celular fica sabendo que este Mac espelha os chats sem pedir nada a mais
+  if (_e && _e.remoto) d.espelhoDoMac = true;
   corrigirPastasSumidas(d);
   return d;
 });
@@ -7553,9 +7652,9 @@ handle('motores:disponiveis', () => ({
   claude: fs.existsSync(CLAUDE_BIN) || temBin('claude'),
   // as IAs de chave usam o Claude Code como motor: existem onde ele existe
   deepseek: fs.existsSync(CLAUDE_BIN) || temBin('claude'), mimo: fs.existsSync(CLAUDE_BIN) || temBin('claude'),
-  muse: fs.existsSync(CLAUDE_BIN) || temBin('claude'), jusia: fs.existsSync(CLAUDE_BIN) || temBin('claude'),
+  muse: fs.existsSync(CLAUDE_BIN) || temBin('claude'), jusia: false,
   codex: temBin('codex'),
-  gemini: temBin('agy') || temBin('gemini'), grok: temBin('grok'),
+  gemini: false, grok: temBin('grok'),
   // o comando do agente ACP e configuravel: "disponivel" = ha com que rodar o preset padrao
   // (gemini) ou com que baixar um adaptador (npx)
   acp: ['gemini', 'npx', 'opencode', 'qwen'].some((b) => temBin(b)),
@@ -8171,7 +8270,8 @@ async function reconciliarWeb() {
       geracao = webGeracao;
       tentativa = require('./servidor-web.js').criar({
         pastaRenderer: pastaDaTela(), handlers: HANDLERS, ouvintes: ouvintesWeb,
-        porta: 7788, senha: senhaDoTelefone(), somenteTailscale: true, endereco,
+        porta: Number(process.env.COCKPIT_PORTA_WEB) || 7788, senha: senhaDoTelefone(), somenteTailscale: true,
+        endereco: process.env.COCKPIT_ENDERECO_WEB || endereco,
       });
       webPendente = tentativa;
       if (tentativa.pronto) await tentativa.pronto;

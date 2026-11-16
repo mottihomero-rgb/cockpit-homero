@@ -178,6 +178,11 @@ contextBridge.exposeInMainWorld('api', {
   onTermEvent: (cb) => ipcRenderer.on('term:event', (_e, p) => cb(p)),
 
   onPaneEvent: (cb) => ipcRenderer.on('pane:event', (_e, p) => cb(p)),
+  // espelho Mac <-> celular (16/11): a janela principal manda o retrato dos chats e recebe os
+  // pedidos que o celular faz (enviar, parar, clique repassado, rascunho)
+  espelhoMac: (lote) => ipcRenderer.invoke('espelho:mac', lote).catch(() => false),
+  espelhoResposta: (id, r) => ipcRenderer.invoke('espelho:resposta', { id, r }).catch(() => false),
+  onEspelhoCmd: (cb) => ipcRenderer.on('espelho:cmd', (_e, c) => cb(c)),
   onCodexEvent: (cb) => ipcRenderer.on('codex:event', (_e, p) => cb(p)),
   onMenu: (cb) => ipcRenderer.on('menu', (_e, action) => cb(action)),
   // erro interno do processo principal: em vez de o app sumir da tela, aparece um aviso

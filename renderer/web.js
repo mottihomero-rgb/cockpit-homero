@@ -10,6 +10,11 @@
   const ouvintes = Object.create(null);
   let seq = 0, ws = null, fila = [], religar = null;
   let jaConectou = false;
+  /* 16/11: voltar do fundo derruba o cano por 1 ou 2 segundos e a faixa "reconectando ao Mac"
+     piscava toda vez, parecendo que tinha desconectado. A faixa so aparece se a queda durar. */
+  let faixaRel = 0;
+  const mostrarSemMac = () => { clearTimeout(faixaRel); faixaRel = setTimeout(() => document.body.classList.add('sem-mac'), 2500); };
+  const esconderSemMac = () => { clearTimeout(faixaRel); faixaRel = 0; document.body.classList.remove('sem-mac'); };
 
   function encerrarPedido(id, erro, resposta) {
     const p = pend.get(id);
@@ -26,7 +31,7 @@
     const conexao = ws;
     ws.onopen = () => {
       if (ws !== conexao) return;
-      document.body.classList.remove('sem-mac');
+      esconderSemMac();
       const aguardando = fila; fila = [];
       aguardando.forEach(x => {
         if (!pend.has(x.id)) return;
@@ -38,14 +43,14 @@
     };
     ws.onclose = (ev) => {
       if (ws !== conexao) return;
-      document.body.classList.add('sem-mac');
+      mostrarSemMac();
       // Nunca repetir um envio que talvez já tenha chegado ao Mac.
       for (const id of [...pend.keys()]) encerrarPedido(id, 'A conexão com o Mac caiu. Confira a conversa antes de enviar de novo.');
       if (ev.code === 1008 && /sessao/.test(ev.reason || '')) {
         window.dispatchEvent(new CustomEvent('cockpit:salvar-rascunhos'));
         location.replace('/'); return;
       }
-      religar = setTimeout(ligar, 1500);
+      religar = setTimeout(ligar, document.hidden ? 1500 : 400);
     };
     ws.onmessage = (ev) => {
       if (ws !== conexao) return;
@@ -77,7 +82,24 @@
   });
 
   window.addEventListener('online', ligar);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) ligar(); });
+  /* 16/11: o iPhone congela a pagina no fundo e, ao voltar, as vezes entrega um WebSocket que
+     diz "aberto" mas morreu no caminho. Sem conferir, nada chegava e nada saia ate ele recarregar.
+     Agora: voltou, pergunta algo bobo ao Mac; sem resposta em 2,5 s, derruba e liga de novo. */
+  let conferindo = false;
+  function conferirCano() {
+    if (!ws || ws.readyState !== 1 || conferindo) { ligar(); return; }
+    conferindo = true;
+    const velho = ws;
+    let respondeu = false;
+    chamar('sys:home').then(() => { respondeu = true; }).catch(() => {}).finally(() => { conferindo = false; });
+    setTimeout(() => {
+      if (respondeu || ws !== velho) return;
+      try { velho.close(); } catch (_) {}
+      if (ws === velho) { ws = null; ligar(); }
+    }, 2500);
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) conferirCano(); });
+  window.addEventListener('pageshow', () => conferirCano());
 
   /* ---- escolher foto ou video pelo telefone ----
      O <input type="file"> e a unica janela de arquivo que o Safari abre. O que ele escolher sobe
@@ -277,6 +299,12 @@
 
   async function lerConfig() {
     const doMac = (await chamar('config:get')) || {};
+    /* 16/11 (espelho): se o Mac sabe espelhar, as abas e os chats daqui vem DELE, ao vivo
+       (espelho.js). Sem isto o celular remontava as abas do config como chats proprios e,
+       ao mandar mensagem, brigava com o Mac pela mesma conversa. Mac antigo: segue como era. */
+    window.ESPELHO = doMac.espelhoDoMac === true;
+    delete doMac.espelhoDoMac;
+    if (window.ESPELHO) { doMac.abas = []; doMac.abaAberta = 0; }
     comoOMacEstava = {};
     for (const k of AJUSTES_DO_TELEFONE) if (doMac[k] !== undefined) comoOMacEstava[k] = copiar(doMac[k]);
     const g = lerGaveta();
@@ -507,6 +535,10 @@
     webLigar: () => Promise.resolve({ ligado: true, endereco: location.origin, senha: '' }),
     openUrl: (u) => { window.open(u, '_blank'); return Promise.resolve(); },
     onPaneEvent: (cb) => { (ouvintes['pane:event'] = ouvintes['pane:event'] || []).push(cb); },
+    // espelho do Mac (espelho.js): o retrato e as mudancas dos chats da janela principal
+    espelhoEstado: (o) => chamar('espelho:estado', o),
+    espelhoCmd: (o) => chamar('espelho:cmd', o),
+    onEspelho: (cb) => { (ouvintes['espelho'] = ouvintes['espelho'] || []).push(cb); },
     onCodexEvent: (cb) => { (ouvintes['codex:event'] = ouvintes['codex:event'] || []).push(cb); },
     onMenu: () => {},
   };

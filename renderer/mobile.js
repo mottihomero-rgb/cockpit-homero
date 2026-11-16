@@ -149,6 +149,8 @@
   window.addEventListener('cockpit:salvar-rascunhos', guardarRascunhos);
 
   async function atualizar() {
+    // espelho (16/11): a conversa vem pronta do Mac; reler do disco aqui apagaria o que ele mostra
+    if (window.ESPELHO) return;
     if (!pronto || document.hidden || atualizando || document.body.classList.contains('sem-mac')) return;
     const P = focusPane;
     // Um painel com motor próprio recebe os eventos em tempo real. Nunca substituir
@@ -222,6 +224,8 @@
   }
   window.addEventListener('cockpit:pronto', async () => {
     pronto = true; reabrindo = true;
+    // espelho (16/11): quem diz o que fica aberto e o Mac; aqui nao reabre nada por conta propria
+    if (window.ESPELHO) { reabrindo = false; return; }
     try {
       try {
         const ultima = JSON.parse(localStorage.getItem(chaveConversa) || 'null');

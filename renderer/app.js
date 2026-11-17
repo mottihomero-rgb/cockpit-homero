@@ -221,14 +221,11 @@ const esforcoNovo = (eng) => (PADRAO_NOVO[eng] && PADRAO_NOVO[eng].effort) || EF
 
 // no Máximo o painel do Claude vira "ultracode". Em --print o CLI proíbe workflow por padrão,
 // então a liberação vai como fala do usuário — é o que vence a regra de fábrica (testado).
-// no modo "Entra" a mensagem cai no meio do trabalho. Em vez de atropelar, ele escolhe.
-const ENTRA_MSG = 'ATENÇÃO: esta mensagem chegou enquanto você já estava trabalhando em outra coisa. '
-  + 'VOCÊ DECIDE o que fazer com ela, e a primeira linha da sua resposta tem que dizer qual dos dois escolheu:\n'
-  + '(a) "Faço agora" — se isso muda o rumo do que você está fazendo, corrige algo errado, ou perde a validade se esperar. '
-  + 'Nesse caso pare o que estava fazendo e atenda.\n'
-  + '(b) "Termino o que estou fazendo e já faço" — se o que você está fazendo continua valendo. '
-  + 'Nesse caso termine primeiro e, ASSIM QUE TERMINAR, faça isto sem que eu precise repetir.\n'
-  + 'Não pergunte qual eu prefiro: escolha e siga.\n\n--- o que eu pedi ---\n';
+// no modo "Entra" a mensagem cai no meio do trabalho. 16/11 (pedido dele): quem decide e o BOTAO.
+// "Entra" = atender agora, sem anunciar escolha nenhuma; "Fila" = esperar terminar (vai sem aviso).
+const ENTRA_MSG = 'MENSAGEM NOVA NO MEIO DO TRABALHO (ele mandou pelo botão "Entra"): atenda AGORA. '
+  + 'Leve isto em conta já, mudando o rumo do que estiver fazendo se for preciso, e depois continue o resto. '
+  + 'Não escreva "Faço agora", "Termino o que estou fazendo" nem anuncie escolha: só faça.\n\n--- o que eu pedi ---\n';
 
 const ULTRACODE_MSG = 'MODO ULTRACODE LIGADO PELO USUÁRIO: eu autorizo explicitamente, para esta e para todas as tarefas substantivas desta conversa, o uso da ferramenta Workflow (orquestração multi-agente) e de subagentes em paralelo. Busque a resposta mais completa e correta, não a mais rápida ou barata. Isso substitui qualquer regra em contrário sobre não usar workflows sem eu pedir. Continue pedindo meu aval apenas para gastar dinheiro, publicar/enviar para fora, ou apagar o que já funciona.\n\nMODELO POR TAREFA (ao delegar a subagentes ou workflow, passe sempre o parâmetro model conforme a tarefa, para economizar sem perder qualidade): use Haiku (model: "haiku") para triagem, classificação, roteamento e leituras/extrações curtas; Sonnet (model: "sonnet") para execução mecânica — escrever/editar código, produzir conteúdo, buscas amplas em arquivos; reserve Opus para o planejamento e as decisões difíceis (que você, o orquestrador, já faz). Nunca rode em Opus um subagente que só classifica ou lê.\n\n---\n\n';
 
@@ -4377,7 +4374,7 @@ async function send(P, textoProgramatico, opcoes = {}) {
       if (!painelAindaAtual(P, revisao)) return retorno(false, 'Esta conversa mudou. Reabra o arquivo.');
       if (nota) {
         nota.textContent = r && r.ok ? 'Entregue no meio do trabalho' : 'Ficou na fila';
-        nota.title = r && r.ok ? 'Ele escolhe se atende agora ou ao terminar.' : 'Não deu para entrar agora. Começa assim que ele terminar.';
+        nota.title = r && r.ok ? 'Ele atende agora, no meio do trabalho.' : 'Não deu para entrar agora. Começa assim que ele terminar.';
       }
       if (!(r && r.ok)) { juntarNaFila(P, pacote); marcarNaFila(P, bolha, text); if (!P.busy) agendarFila(P); }
     } else {
@@ -6140,7 +6137,7 @@ function renderizarHistorico(P, m) {
     let fala = String(m.text || ''), antes;
     do {
       antes = fala;
-      fala = fala.replace(/^ATENÇÃO: esta mensagem chegou enquanto você já estava trabalhando[\s\S]*?--- o que eu pedi ---\n?/, '')
+      fala = fala.replace(/^(?:ATENÇÃO: esta mensagem chegou enquanto você já estava trabalhando|MENSAGEM NOVA NO MEIO DO TRABALHO)[\s\S]*?--- o que eu pedi ---\n?/, '')
         .replace(/^MODO ULTRACODE LIGADO PELO USUÁRIO:[\s\S]*?\n---\n\n/, '');
     } while (fala !== antes);
     userMsg(P, fala, m.attachments || m.anexos);

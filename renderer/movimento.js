@@ -453,6 +453,35 @@
     if (lista) new MutationObserver(() => { ligarPontes(); }).observe(lista, { childList: true, subtree: true, characterData: true });
   }, 400);
 
+  /* ======================= 6. bolinhas de pagina (HIG: page control) =======================
+     Uma bolinha por chat da pasta aberta, centralizadas logo acima da caixa de escrever; a cheia
+     e a que esta na tela. Atualiza enquanto ele desliza. Com 1 chat so, nao aparece. */
+  const pontos = document.createElement('div');
+  pontos.className = 'mv-pontos escondido';
+  document.body.appendChild(pontos);
+  let pintarPend = 0;
+  function pintarPontos() {
+    pintarPend = 0;
+    const A = abaAtiva;
+    const lista = A ? A.ordem.map(id => panes.get(id)).filter(Boolean) : [];
+    if (lista.length < 2 || lista.length > 12) { pontos.classList.add('escondido'); return; }
+    const c = A.corpoEl.getBoundingClientRect();
+    const meio = c.left + c.width / 2;
+    let atual = 0, melhor = Infinity;
+    lista.forEach((P, i) => { const r = P.el.getBoundingClientRect(); const d = Math.abs(r.left + r.width / 2 - meio); if (d < melhor) { melhor = d; atual = i; } });
+    if (pontos.children.length !== lista.length) pontos.replaceChildren(...lista.map(() => document.createElement('i')));
+    [...pontos.children].forEach((b, i) => b.classList.toggle('atual', i === atual));
+    const cmp = lista[atual].el.querySelector('.pane-cmp');
+    const topo = cmp ? cmp.getBoundingClientRect().top : innerHeight - 90;
+    pontos.style.bottom = Math.max(0, Math.round(innerHeight - topo + 6)) + 'px';
+    pontos.classList.remove('escondido');
+  }
+  const agendarPontos = () => { if (!pintarPend) pintarPend = requestAnimationFrame(pintarPontos); };
+  document.addEventListener('scroll', agendarPontos, true);
+  window.addEventListener('resize', agendarPontos);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', agendarPontos);
+  setInterval(agendarPontos, 700);   // aba trocada, chat aberto/fechado, caixa que cresceu
+
   window.MV = { seguirFim, abrirFolha, irPara, centralizar };
   if (window.__cockpitPronto) iniciar(); else window.addEventListener('cockpit:pronto', iniciar, { once: true });
 })();

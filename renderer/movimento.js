@@ -338,6 +338,93 @@
   document.addEventListener('focusin', () => setTimeout(conferirTeclado, 60));
   document.addEventListener('focusout', () => setTimeout(conferirTeclado, 60));
 
-  window.MV = { seguirFim, abrirFolha };
+  /* ======================= 5. deslizar entre pastas ======================= */
+  const ordemDasAbas = () => [...document.querySelectorAll('#abasLista > [data-aid]')].map(e => abas.get(e.dataset.aid)).filter(A => A && A.ordem.length);
+  function vizinha(A, passo) { const l = ordemDasAbas(); const i = l.indexOf(A); return i < 0 ? null : l[i + passo] || null; }
+  function ponte(A, lado) {
+    const B = vizinha(A, lado === 'depois' ? 1 : -1);
+    let el = A.corpoEl.querySelector(':scope > .mv-ponte.' + lado);
+    if (!B) { if (el) el.remove(); return null; }
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'mv-ponte ' + lado;
+      el.innerHTML = '<span class="mv-pt-seta"></span><span class="mv-pt-nome"></span><span class="mv-pt-sub"></span>';
+    }
+    const n = B.ordem.length;
+    el.querySelector('.mv-pt-seta').textContent = lado === 'depois' ? '→' : '←';
+    el.querySelector('.mv-pt-nome').textContent = nomeProjeto(B.cwd);
+    el.querySelector('.mv-pt-sub').textContent = n + (n === 1 ? ' chat' : ' chats') + (lado === 'depois' ? ' · continue deslizando' : ' · deslize para voltar');
+    el.__aba = B;
+    if (lado === 'depois' ? A.corpoEl.lastElementChild !== el : A.corpoEl.firstElementChild !== el) {
+      if (lado === 'depois') A.corpoEl.appendChild(el); else A.corpoEl.prepend(el);
+    }
+    return el;
+  }
+  function pontes(A) {
+    if (!A || !A.corpoEl) return;
+    const tinhaAntes = !!A.corpoEl.querySelector(':scope > .mv-ponte.antes');
+    const depois = ponte(A, 'depois'), antes = ponte(A, 'antes');
+    A.corpoEl.classList.toggle('mv-tem-proxima', !!depois);
+    // a ponte de tras acabou de nascer na frente: o chat que estava na tela nao pode ser empurrado
+    if (antes && !tinhaAntes && A === abaAtiva && focusPane && abaDe(focusPane) === A) {
+      requestAnimationFrame(() => { const d = focusPane.el.getBoundingClientRect().left - A.corpoEl.getBoundingClientRect().left; A.corpoEl.scrollLeft += d; });
+    }
+  }
+  function todasAsPontes() { for (const A of abas.values()) pontes(A); }
+
+  let dedo = false, conferir = 0, trocando = false;
+  function irPara(B, frente) {
+    if (!B || trocando) return;
+    trocando = true;
+    const alvo = panes.get(frente ? B.ordem[0] : B.ordem[B.ordem.length - 1]);
+    if (alvo) B.ativo = alvo.id;
+    try { ativarAbaProjeto(B); } catch {}
+    if (alvo) { try { setFocus(alvo); } catch {} }
+    requestAnimationFrame(() => {
+      if (alvo) { const d = alvo.el.getBoundingClientRect().left - B.corpoEl.getBoundingClientRect().left; B.corpoEl.scrollLeft += d; }
+      if (!calmo && B.corpoEl.animate) B.corpoEl.animate([
+        { transform: 'translateX(' + (frente ? 60 : -60) + 'px)', opacity: .5 },
+        { transform: 'none', opacity: 1 },
+      ], { duration: 360, easing: MOLA });
+      setTimeout(() => { trocando = false; }, 400);
+    });
+  }
+  function conferirPonte(corpo) {
+    if (dedo || trocando) return;
+    const A = [...abas.values()].find(x => x.corpoEl === corpo);
+    if (!A || A !== abaAtiva) return;
+    const c = corpo.getBoundingClientRect();
+    for (const el of corpo.querySelectorAll(':scope > .mv-ponte')) {
+      const r = el.getBoundingClientRect();
+      const visivel = Math.max(0, Math.min(r.right, c.right) - Math.max(r.left, c.left)) / c.width;
+      if (visivel > .55) { irPara(el.__aba, el.classList.contains('depois')); return; }
+    }
+  }
+  function vigiarCorpo(A) {
+    const corpo = A.corpoEl;
+    if (!corpo || corpo.__mvPonte) return;
+    corpo.__mvPonte = true;
+    corpo.addEventListener('touchstart', () => { dedo = true; }, { passive: true });
+    const soltou = () => { dedo = false; clearTimeout(conferir); conferir = setTimeout(() => conferirPonte(corpo), 140); };
+    corpo.addEventListener('touchend', soltou, { passive: true });
+    corpo.addEventListener('touchcancel', soltou, { passive: true });
+    corpo.addEventListener('scroll', () => { clearTimeout(conferir); conferir = setTimeout(() => conferirPonte(corpo), 140); }, { passive: true });
+    corpo.addEventListener('scrollend', () => conferirPonte(corpo));
+    // remontar as colunas apaga as pontes (replaceChildren): voltam na hora
+    new MutationObserver(() => { if (!corpo.querySelector(':scope > .mv-ponte') || corpo.lastElementChild.classList.contains('mv-ponte') === false) pontes(A); })
+      .observe(corpo, { childList: true });
+  }
+  function ligarPontes() {
+    for (const A of abas.values()) vigiarCorpo(A);
+    todasAsPontes();
+  }
+  if (window.__cockpitPronto) setTimeout(ligarPontes, 300); else window.addEventListener('cockpit:pronto', () => setTimeout(ligarPontes, 300), { once: true });
+  // aba nova, aba fechada, ordem trocada, chat que entrou ou saiu: refaz as pontes
+  setTimeout(() => {
+    const lista = document.getElementById('abasLista');
+    if (lista) new MutationObserver(() => { ligarPontes(); }).observe(lista, { childList: true, subtree: true, characterData: true });
+  }, 400);
+
+  window.MV = { seguirFim, abrirFolha, irPara };
   if (window.__cockpitPronto) iniciar(); else window.addEventListener('cockpit:pronto', iniciar, { once: true });
 })();

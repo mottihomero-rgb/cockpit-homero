@@ -163,3 +163,27 @@
   .mv-linha .mv-li-seta{color:var(--fg-dim,#777);font-size:18px;line-height:1}
   .mv-linha:active{background:var(--bg2,#1c1c1e)}
 }
+
+/* ============ Deslizar entre chats e entre pastas (16/11, 3a rodada) ============
+   Pedido dele: aparecer um pouquinho do chat do lado, mostrando que tem mais; e, chegando no
+   ultimo chat da pasta e continuando a deslizar, seguir para os chats da proxima pasta, na ordem
+   das abas do topo. Cada chat agora tem a tela menos 28px: a borda do proximo fica a vista.
+   Depois do ultimo (e antes do primeiro) entra a "ponte" com o nome da pasta vizinha. */
+@media (max-width: 820px), (pointer: coarse) and (max-width: 1100px) {
+  .espaco{gap:6px;scroll-snap-type:x mandatory;scroll-padding-left:0;background:var(--bg0,#000)}
+  .espaco > .coluna > .pane,.espaco > .pane{
+    flex:0 0 calc(100vw - 28px) !important;width:calc(100vw - 28px) !important;min-width:calc(100vw - 28px) !important;
+    scroll-snap-align:start;border-radius:0 14px 14px 0;overflow:hidden}
+  .pane + .pane{border-left:none}
+  /* o ultimo chat da pasta sem pasta seguinte: sobra a mesma borda, entao ele ainda alinha */
+  .espaco::after{content:"";flex:0 0 16px}
+  .espaco.mv-tem-proxima::after{display:none}
+
+  .mv-ponte{flex:0 0 calc(100vw - 28px);scroll-snap-align:start;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:10px;border-radius:14px;background:var(--bg2,#1c1c1e);
+    color:var(--fg-dim,#999);text-align:center;padding:24px;box-sizing:border-box}
+  .mv-ponte.antes{border-radius:14px}
+  .mv-ponte .mv-pt-seta{font-size:28px;line-height:1;color:var(--fg,#ddd)}
+  .mv-ponte .mv-pt-nome{font-size:22px;font-weight:600;color:var(--fg-strong,#fff)}
+  .mv-ponte .mv-pt-sub{font-size:13px}
+}

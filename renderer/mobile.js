@@ -56,7 +56,9 @@
       if (!focusPane || !matchMedia('(max-width: 820px), (pointer: coarse) and (max-width: 1100px)').matches) return;
       const corpo = abaDe(focusPane)?.corpoEl;
       if (!corpo) return;
-      const deslocamento = focusPane.el.getBoundingClientRect().left - corpo.getBoundingClientRect().left;
+      // 16/11: o chat fica no meio (aparece um pouquinho dos dois vizinhos, movimento.css)
+      const deslocamento = focusPane.el.getBoundingClientRect().left - corpo.getBoundingClientRect().left
+        - (corpo.clientWidth - focusPane.el.offsetWidth) / 2;
       corpo.scrollTo({ left: corpo.scrollLeft + deslocamento, behavior: 'instant' });
       if (pronto && !reabrindo) guardarConversa();
     });

@@ -332,13 +332,31 @@
     const h = vv ? vv.height : innerHeight;
     if (innerWidth !== largura) { largura = innerWidth; cheia = h; }
     if (!campo || h > cheia) cheia = Math.max(h, campo ? cheia : h);
+    const antes = document.body.classList.contains('mv-teclado');
     document.body.classList.toggle('mv-teclado', campo && cheia - h > 150);
+    if (antes !== document.body.classList.contains('mv-teclado')) { requestAnimationFrame(alinharFoco); setTimeout(alinharFoco, 420); }
   }
   if (vv) { vv.addEventListener('resize', conferirTeclado); vv.addEventListener('scroll', conferirTeclado); }
-  document.addEventListener('focusin', () => setTimeout(conferirTeclado, 60));
+  document.addEventListener('focusin', (e) => {
+    setTimeout(conferirTeclado, 60);
+    if (e.target && e.target.closest && e.target.closest('.pane-cmp')) { setTimeout(alinharFoco, 80); setTimeout(alinharFoco, 450); }
+  });
   document.addEventListener('focusout', () => setTimeout(conferirTeclado, 60));
 
   /* ======================= 5. deslizar entre pastas ======================= */
+  // o chat fica no meio da tela: sobra o mesmo pedacinho dos dois lados
+  function centralizar(corpo, el) {
+    if (!corpo || !el) return;
+    const c = corpo.getBoundingClientRect(), r = el.getBoundingClientRect();
+    corpo.scrollLeft += (r.left - c.left) - (c.width - r.width) / 2;
+  }
+  // o teclado abrindo (ou o iPhone puxando o campo para a vista) escorregava a fila de lado e o
+  // chat ficava torto, com faixa preta: volta ele pro meio
+  function alinharFoco() {
+    const P = focusPane; if (!P || !P.el.isConnected) return;
+    const A = abaDe(P); if (!A || A !== abaAtiva) return;
+    centralizar(A.corpoEl, P.el);
+  }
   const ordemDasAbas = () => [...document.querySelectorAll('#abasLista > [data-aid]')].map(e => abas.get(e.dataset.aid)).filter(A => A && A.ordem.length);
   function vizinha(A, passo) { const l = ordemDasAbas(); const i = l.indexOf(A); return i < 0 ? null : l[i + passo] || null; }
   function ponte(A, lado) {
@@ -367,7 +385,7 @@
     A.corpoEl.classList.toggle('mv-tem-proxima', !!depois);
     // a ponte de tras acabou de nascer na frente: o chat que estava na tela nao pode ser empurrado
     if (antes && !tinhaAntes && A === abaAtiva && focusPane && abaDe(focusPane) === A) {
-      requestAnimationFrame(() => { const d = focusPane.el.getBoundingClientRect().left - A.corpoEl.getBoundingClientRect().left; A.corpoEl.scrollLeft += d; });
+      requestAnimationFrame(() => centralizar(A.corpoEl, focusPane.el));
     }
   }
   function todasAsPontes() { for (const A of abas.values()) pontes(A); }
@@ -381,7 +399,7 @@
     try { ativarAbaProjeto(B); } catch {}
     if (alvo) { try { setFocus(alvo); } catch {} }
     requestAnimationFrame(() => {
-      if (alvo) { const d = alvo.el.getBoundingClientRect().left - B.corpoEl.getBoundingClientRect().left; B.corpoEl.scrollLeft += d; }
+      if (alvo) centralizar(B.corpoEl, alvo.el);
       if (!calmo && B.corpoEl.animate) B.corpoEl.animate([
         { transform: 'translateX(' + (frente ? 60 : -60) + 'px)', opacity: .5 },
         { transform: 'none', opacity: 1 },
@@ -425,6 +443,6 @@
     if (lista) new MutationObserver(() => { ligarPontes(); }).observe(lista, { childList: true, subtree: true, characterData: true });
   }, 400);
 
-  window.MV = { seguirFim, abrirFolha, irPara };
+  window.MV = { seguirFim, abrirFolha, irPara, centralizar };
   if (window.__cockpitPronto) iniciar(); else window.addEventListener('cockpit:pronto', iniciar, { once: true });
 })();

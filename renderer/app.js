@@ -6130,10 +6130,23 @@ document.addEventListener('mousedown', (e) => {
 }, true);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && memoriaAberta) { e.stopPropagation(); fecharMemoriaDaConversa(); } }, true);
 
+/* 16/11: o aviso do modo "Entra" (ENTRA_MSG) e o do ULTRACODE vao colados na frente da fala dele
+   para a IA, e ficam gravados assim na conversa. Ao reabrir, o balao mostrava esse texto como se
+   ele tivesse escrito ("eu nao escrevi isso"). Na tela sai so o que ele escreveu; a IA continua
+   recebendo tudo. */
+const AVISOS_DA_FALA = [
+  /^ATENÇÃO: esta mensagem chegou enquanto você já estava trabalhando[\s\S]*?--- o que eu pedi ---\n?/,
+  /^MODO ULTRACODE LIGADO PELO USUÁRIO:[\s\S]*?\n---\n\n/,
+];
+function falaSemAvisos(t) {
+  let s = String(t || ''), antes;
+  do { antes = s; for (const re of AVISOS_DA_FALA) s = s.replace(re, ''); } while (s !== antes);
+  return s;
+}
 function renderizarHistorico(P, m) {
   const role = m.role || m.kind || m.type;
   if (role === 'user') {
-    userMsg(P, m.text || '', m.attachments || m.anexos);
+    userMsg(P, falaSemAvisos(m.text || ''), m.attachments || m.anexos);
     // Instruções de sistema/skill podem existir em históricos antigos: mantêm o visual,
     // mas nunca são contadas como pedido do usuário para escolher o nome.
     if ((m.isMeta || m.is_meta) && P.hist.length) P.hist[P.hist.length - 1].isMeta = true;

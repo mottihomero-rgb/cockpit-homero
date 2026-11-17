@@ -363,20 +363,32 @@
     const B = vizinha(A, lado === 'depois' ? 1 : -1);
     let el = A.corpoEl.querySelector(':scope > .mv-ponte.' + lado);
     if (!B) { if (el) el.remove(); return null; }
-    if (!el) {
-      el = document.createElement('div');
-      el.className = 'mv-ponte ' + lado;
-      el.innerHTML = '<span class="mv-pt-seta"></span><span class="mv-pt-nome"></span><span class="mv-pt-sub"></span>';
-    }
-    const n = B.ordem.length;
-    el.querySelector('.mv-pt-seta').textContent = lado === 'depois' ? '→' : '←';
-    el.querySelector('.mv-pt-nome').textContent = nomeProjeto(B.cwd);
-    el.querySelector('.mv-pt-sub').textContent = n + (n === 1 ? ' chat' : ' chats') + (lado === 'depois' ? ' · continue deslizando' : ' · deslize para voltar');
+    if (!el) { el = document.createElement('div'); el.className = 'mv-ponte ' + lado; el.setAttribute('aria-hidden', 'true'); }
+    /* 16/11 (pedido dele: "nao quero essa tela de transicao"): a ponte nao e mais um cartao com o
+       nome da pasta. E uma COPIA parada do chat que vem (o 1o da proxima pasta, ou o ultimo da
+       anterior). Deslizou ate ela, a pasta troca por baixo e o chat de verdade ja esta ali. */
+    const fonte = panes.get(lado === 'depois' ? B.ordem[0] : B.ordem[B.ordem.length - 1]);
+    if (fonte && (el.__fonte !== fonte.id || Date.now() - (el.__t || 0) > 2500)) copiarChat(el, fonte);
     el.__aba = B;
     if (lado === 'depois' ? A.corpoEl.lastElementChild !== el : A.corpoEl.firstElementChild !== el) {
       if (lado === 'depois') A.corpoEl.appendChild(el); else A.corpoEl.prepend(el);
     }
     return el;
+  }
+  function copiarChat(el, P) {
+    const c = P.el.cloneNode(true);
+    c.removeAttribute('data-id');
+    c.classList.remove('foco', 'espelho');
+    c.querySelectorAll('.p-modal, .p-visor, .mv-subindo').forEach(x => x.remove());
+    c.querySelectorAll('[id]').forEach(x => x.removeAttribute('id'));
+    const chat = c.querySelector('.pane-chat');
+    if (chat) { const filhos = [...chat.children]; filhos.slice(0, Math.max(0, filhos.length - 14)).forEach(x => x.remove()); }
+    // o texto que ele escreveu no campo de verdade (value nao vem na copia)
+    const inpV = P.el.querySelector('.p-input'), inpC = c.querySelector('.p-input');
+    if (inpV && inpC) inpC.value = inpV.value;
+    el.replaceChildren(c);
+    el.__fonte = P.id; el.__t = Date.now();
+    requestAnimationFrame(() => { const ch = el.querySelector('.pane-chat'); if (ch) ch.scrollTop = ch.scrollHeight; });
   }
   function pontes(A) {
     if (!A || !A.corpoEl) return;
@@ -390,7 +402,7 @@
   }
   function todasAsPontes() { for (const A of abas.values()) pontes(A); }
 
-  let dedo = false, conferir = 0, trocando = false;
+  let dedo = false, conferir = 0, trocando = false, ultimoToque = 0;
   function irPara(B, frente) {
     if (!B || trocando) return;
     trocando = true;
@@ -398,17 +410,15 @@
     if (alvo) B.ativo = alvo.id;
     try { ativarAbaProjeto(B); } catch {}
     if (alvo) { try { setFocus(alvo); } catch {} }
-    requestAnimationFrame(() => {
-      if (alvo) centralizar(B.corpoEl, alvo.el);
-      if (!calmo && B.corpoEl.animate) B.corpoEl.animate([
-        { transform: 'translateX(' + (frente ? 60 : -60) + 'px)', opacity: .5 },
-        { transform: 'none', opacity: 1 },
-      ], { duration: 360, easing: MOLA });
-      setTimeout(() => { trocando = false; }, 400);
-    });
+    // sem animacao: a copia ja mostrava este chat no mesmo lugar, a troca nao aparece
+    if (alvo) centralizar(B.corpoEl, alvo.el);
+    requestAnimationFrame(() => { if (alvo) centralizar(B.corpoEl, alvo.el); setTimeout(() => { trocando = false; }, 250); });
   }
   function conferirPonte(corpo) {
     if (dedo || trocando) return;
+    // so troca de pasta quando foi o DEDO dele que deslizou. Abrir uma pasta pela aba deixa a
+    // fila no comeco por um instante (a ponte de tras fica a vista) e isso pulava de pasta sozinho.
+    if (Date.now() - ultimoToque > 2000 && !window.__mvGestoDeTeste) return;
     const A = [...abas.values()].find(x => x.corpoEl === corpo);
     if (!A || A !== abaAtiva) return;
     const c = corpo.getBoundingClientRect();
@@ -422,8 +432,8 @@
     const corpo = A.corpoEl;
     if (!corpo || corpo.__mvPonte) return;
     corpo.__mvPonte = true;
-    corpo.addEventListener('touchstart', () => { dedo = true; }, { passive: true });
-    const soltou = () => { dedo = false; clearTimeout(conferir); conferir = setTimeout(() => conferirPonte(corpo), 140); };
+    corpo.addEventListener('touchstart', () => { dedo = true; pontes(A); }, { passive: true });
+    const soltou = () => { dedo = false; ultimoToque = Date.now(); clearTimeout(conferir); conferir = setTimeout(() => conferirPonte(corpo), 140); };
     corpo.addEventListener('touchend', soltou, { passive: true });
     corpo.addEventListener('touchcancel', soltou, { passive: true });
     corpo.addEventListener('scroll', () => { clearTimeout(conferir); conferir = setTimeout(() => conferirPonte(corpo), 140); }, { passive: true });

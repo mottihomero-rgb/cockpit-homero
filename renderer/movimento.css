@@ -181,11 +181,9 @@
   /* folga nas pontas: o primeiro e o ultimo tambem conseguem ficar no meio */
   .espaco::before,.espaco::after{content:"";flex:0 0 16px}
 
-  .mv-ponte{flex:0 0 calc(100vw - 44px);scroll-snap-align:center;display:flex;flex-direction:column;
-    align-items:center;justify-content:center;gap:10px;border-radius:14px;background:var(--bg2,#1c1c1e);
-    color:var(--fg-dim,#999);text-align:center;padding:24px;box-sizing:border-box}
-  .mv-ponte.antes{border-radius:14px}
-  .mv-ponte .mv-pt-seta{font-size:28px;line-height:1;color:var(--fg,#ddd)}
-  .mv-ponte .mv-pt-nome{font-size:22px;font-weight:600;color:var(--fg-strong,#fff)}
-  .mv-ponte .mv-pt-sub{font-size:13px}
+  /* a ponte e uma copia parada do chat vizinho (movimento.js): mesma cara, sem toque */
+  .mv-ponte{flex:0 0 calc(100vw - 44px);scroll-snap-align:center;display:flex;border-radius:14px;
+    overflow:hidden;pointer-events:none;background:var(--bg1,#111)}
+  .mv-ponte > .pane{width:100% !important;min-width:0 !important;max-width:100% !important;height:100%;
+    flex:1 1 auto !important;border:none !important}
 }

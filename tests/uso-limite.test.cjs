@@ -193,7 +193,8 @@ const GEMINI_USO = {
   },
 };
 
-test('Gemini: usa o /usage do Antigravity e pega sessão e semana do grupo Gemini', async () => {
+// 10/11/2026: Gemini removido do Cockpit (a consulta de uso falhava a cada 6 min)
+test.skip('Gemini: usa o /usage do Antigravity e pega sessão e semana do grupo Gemini', async () => {
   const h = loadMain();
   h.onAgyUso(() => GEMINI_USO);
   const r = await h.call('uso:ler', 'gemini');
@@ -209,7 +210,8 @@ test('Gemini: usa o /usage do Antigravity e pega sessão e semana do grupo Gemin
   assert.doesNotMatch(JSON.stringify(c), /ya29\.|refresh_token|access_token/);
 });
 
-test('Gemini: só semana vira barra da semana, sem limite de sessão', async () => {
+// 10/11/2026: Gemini removido do Cockpit (a consulta de uso falhava a cada 6 min)
+test.skip('Gemini: só semana vira barra da semana, sem limite de sessão', async () => {
   const h = loadMain();
   h.onAgyUso(() => ({
     status: 'SUCCESS',

@@ -27,12 +27,12 @@ test('Codex nasce no Sol 6, no Alto', () => {
   assert.equal(esforcoNovo('codex'), 'high');
 });
 
-test('Claude nasce no Sonnet 5.5, no Alto, e o modelo existe na lista', () => {
-  assert.equal(modeloNovo('claude'), 'claude-sonnet-5-5');
-  assert.doesNotMatch(modeloNovo('claude'), /\[1m\]/);
+// 11/11/2026 (pedido dele): conversa nova do Claude nasce no Opus 5.5 com 1M de memória
+test('Claude nasce no Opus 5.5 (1M), no Alto, e o modelo existe na lista', () => {
+  assert.equal(modeloNovo('claude'), 'claude-opus-5-5[1m]');
   assert.equal(esforcoNovo('claude'), 'high');
   const m = MODELOS_CLAUDE.find((x) => x.id === PADRAO_NOVO.claude.model);
-  assert.ok(m, 'Sonnet 5.5 sumiu da lista do Claude');
+  assert.ok(m, 'Opus 5.5 (1M) sumiu da lista do Claude');
   assert.ok(m.efforts.includes('high'));
 });
 

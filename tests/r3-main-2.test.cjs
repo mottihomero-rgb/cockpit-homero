@@ -117,7 +117,8 @@ test('R3-018 Grok: mesma protecao contra a leitura antiga sobrescrever o cache d
     'a leitura antiga (conta anterior, 11%) sobrescreveu o cache do Grok depois da troca — devia ficar 99%');
 });
 
-test('R3-018 Gemini: mesma protecao contra a leitura antiga sobrescrever o cache depois da troca', async () => {
+// 10/11/2026: Gemini removido do Cockpit (a consulta de uso falhava a cada 6 min)
+test.skip('R3-018 Gemini: mesma protecao contra a leitura antiga sobrescrever o cache depois da troca', async () => {
   const h = loadMain();
   let chamada = 0, resolveA, resolveB;
   const esperaA = new Promise((r) => { resolveA = r; });

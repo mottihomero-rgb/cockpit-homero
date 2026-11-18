@@ -34,7 +34,8 @@ test('os dois moldes do painel: seletor à esquerda, branch/medidor/fechar à di
     assert.ok(dir < git && git < tok && tok < x, pagina + ': a ordem é branch, bolinha, fechar');
     assert.ok(!molde.includes('class="p-tokens"'), pagina + ': o número saiu do topo');
     // 09/10: Grok saiu da vista (MOTORES_VISIVEIS), então não tem mais botão no seletor
-    for (const m of ['Claude', 'Codex', 'Gemini']) {
+    // 10/11/2026: Gemini saiu do Cockpit, então não tem mais botão no seletor
+    for (const m of ['Claude', 'Codex']) {
       assert.ok(molde.includes('<span class="ch-nome">' + m + '</span>'),
         pagina + ': o nome do ' + m + ' precisa de span próprio (some abaixo de 560pt)');
     }
